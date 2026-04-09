@@ -1,0 +1,26 @@
+# FormAssist – Requirements
+#
+# This is a zero-dependency, standalone HTML application.
+# No packages need to be installed.
+#
+# ── Runtime Requirements ────────────────────────────────────────────────────
+#
+#   Browser:      Chrome 90+ | Firefox 88+ | Safari 14+ | Edge 90+
+#                 (requires ES2020+, CSS Grid, Fetch API, CSS custom properties)
+#
+#   API Key:      Anthropic API key (https://console.anthropic.com/)
+#                 Model used: claude-opus-4-5
+#
+# ── External CDN Resources (loaded at runtime) ──────────────────────────────
+#
+#   Google Fonts  DM Sans (300, 400, 500, 600) + DM Mono (400, 500)
+#                 https://fonts.googleapis.com/
+#
+#   Anthropic API POST https://api.anthropic.com/v1/messages
+#                 anthropic-version: 2023-06-01
+#
+# ── Development Requirements ─────────────────────────────────────────────────
+#
+#   No build tools required. Any text editor is sufficient.
+#   Optional: a local HTTP server to avoid browser CORS restrictions during
+#   development (e.g. `python3 -m http.server 8080` or VS Code Live Server).
