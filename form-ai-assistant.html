@@ -842,7 +842,7 @@
           <a href="https://console.anthropic.com/" target="_blank">Schlüssel erhalten →</a>
         </div>
         <div class="api-key-wrap">
-          <input type="password" id="apiKeyInput" placeholder="sk-ant-…" />
+          <input type="password" id="apiKeyInput" placeholder="AIza…" />
           <button onclick="saveApiKey()">Speichern</button>
         </div>
       </div>
@@ -868,7 +868,7 @@
 
   function saveApiKey() {
     const val = document.getElementById('apiKeyInput').value.trim();
-    if (!val.startsWith('sk-')) { alert('Bitte einen gültigen API-Schlüssel eingeben (beginnt mit sk-).'); return; }
+    if (!val.startsWith('AIza')) { alert('Bitte einen gültigen API-Schlüssel eingeben (beginnt mit AIza).'); return; }
     apiKey = val;
     document.getElementById('apiKeySection').style.display = 'none';
     document.getElementById('sendBtn').disabled = false;
@@ -923,20 +923,18 @@
     showTyping();
     const fieldCtx = activeField ? `\nAktuell fokussiertes Feld: "${activeField}"` : '';
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 200,
-          system: SYSTEM_PROMPT + fieldCtx,
-          messages: [{ role: 'user', content: question }]
+          contents: [{ parts: [{ text: question + fieldCtx }] }],
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
         })
       });
       const data = await res.json();
       removeTyping();
-      if (data.content && data.content[0]) {
-        addMessage('ai', data.content[0].text.replace(/\n/g, '<br/>'));
+      if (data.candidates && data.candidates[0]) {
+        addMessage('ai', data.candidates[0].content.parts[0].text.replace(/\n/g, '<br/>'));
       } else {
         addMessage('ai', 'Fehler: ' + (data.error?.message || 'Unbekannter Fehler.'));
       }
