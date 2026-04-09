@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FormAssist – KI-gestützter Formular-Assistent</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f4f2ee;
+      --surface: #ffffff;
+      --surface2: #f9f8f6;
+      --border: #e2dfd8;
+      --border2: #ccc9c0;
+      --text: #1a1917;
+      --text2: #5c5a55;
+      --text3: #9b9890;
+      --accent: #2d5be3;
+      --accent-light: #eef2fd;
+      --accent-border: #b8c9f8;
+      --success: #1a7a4a;
+      --success-bg: #edf7f2;
+      --warn: #b45309;
+      --warn-bg: #fef3e2;
+      --error: #c0392b;
+      --error-bg: #fdf0ee;
+      --tag-bg: #e8e5de;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.05);
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg { width: 16px; height: 16px; fill: white; }
+
+    .header-badge {
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--accent-light);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+
+    .main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 0;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 2rem;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    /* ── FORM PANEL ── */
+    .form-panel {
+      background: var(--surface);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .form-header {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .form-header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      margin-bottom: 4px;
+    }
+
+    .form-header p {
+      font-size: 13px;
+      color: var(--text2);
+    }
+
+    .progress-bar-wrap {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .progress-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+
+    .progress-label {
+      font-size: 12px;
+      color: var(--text3);
+      font-family: 'DM Mono', monospace;
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .form-body { padding: 2rem; }
+
+    .form-section {
+      margin-bottom: 2rem;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text3);
+      margin-bottom: 1rem;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .form-grid.three { grid-template-columns: 2fr 1fr 1fr; }
+    .form-grid.full { grid-template-columns: 1fr; }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .field.span2 { grid-column: span 2; }
+
+    label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text2);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    label .required {
+      color: var(--error);
+      font-size: 12px;
+    }
+
+    label .help-icon {
+      width: 15px;
+      height: 15px;
+      background: var(--border);
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text3);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    label .help-icon:hover { background: var(--accent-border); color: var(--accent); }
+
+    input, select, textarea {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      padding: 9px 12px;
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+      width: 100%;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(45,91,227,0.1);
+    }
+
+    input.error { border-color: var(--error); background: var(--error-bg); }
+    input.ok { border-color: var(--success); }
+
+    .field-hint {
+      font-size: 11px;
+      color: var(--text3);
+    }
+
+    .field-error {
+      font-size: 11px;
+      color: var(--error);
+      display: none;
+    }
+
+    .field-error.visible { display: block; }
+
+    select { cursor: pointer; }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin-top: 1px;
+      flex-shrink: 0;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .radio-item input[type="radio"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      margin-top: 1rem;
+    }
+
+    .btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover { background: #1f46b8; }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text2);
+      border: 1px solid var(--border2);
+    }
+
+    .btn-secondary:hover { background: var(--surface2); }
+
+    /* ── CHAT PANEL ── */
+    .chat-panel {
+      background: var(--surface);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 104px);
+      position: sticky;
+      top: 72px;
+    }
+
+    .chat-header {
+      padding: 1.25rem 1.25rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ai-avatar {
+      width: 34px;
+      height: 34px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .ai-avatar svg { width: 18px; height: 18px; fill: white; }
+
+    .chat-header-info h3 {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .chat-header-info p {
+      font-size: 11px;
+      color: var(--text3);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background: #22c55e;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    .msg {
+      display: flex;
+      gap: 8px;
+      animation: fadeIn 0.25s ease;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .msg.user { flex-direction: row-reverse; }
+
+    .msg-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--tag-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+      color: var(--text2);
+    }
+
+    .msg.ai .msg-avatar {
+      background: var(--accent);
+      color: white;
+    }
+
+    .msg-bubble {
+      max-width: calc(100% - 44px);
+      font-size: 13px;
+      line-height: 1.55;
+      padding: 9px 12px;
+      border-radius: 10px;
+    }
+
+    .msg.ai .msg-bubble {
+      background: var(--accent-light);
+      border: 1px solid var(--accent-border);
+      color: var(--text);
+      border-radius: 2px 10px 10px 10px;
+    }
+
+    .msg.user .msg-bubble {
+      background: var(--accent);
+      color: white;
+      border-radius: 10px 2px 10px 10px;
+    }
+
+    .msg-bubble strong { font-weight: 600; }
+
+    .quick-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .chip {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--accent-border);
+      background: var(--surface);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .chip:hover { background: var(--accent-light); }
+
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 12px 14px;
+      background: var(--accent-light);
+      border: 1px solid var(--accent-border);
+      border-radius: 2px 10px 10px 10px;
+      width: fit-content;
+    }
+
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: typing 1.2s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typing {
+      0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+      40% { transform: scale(1.2); opacity: 1; }
+    }
+
+    .chat-input-area {
+      padding: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .api-key-notice {
+      font-size: 11px;
+      background: var(--warn-bg);
+      border: 1px solid #fcd29e;
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--warn);
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .api-key-notice a { color: var(--accent); text-decoration: none; }
+
+    .api-key-wrap {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .api-key-wrap input {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      padding: 7px 10px;
+    }
+
+    .api-key-wrap button {
+      flex-shrink: 0;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 7px 14px;
+      border-radius: 7px;
+      border: none;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .api-key-wrap button:hover { background: #1f46b8; }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .chat-textarea {
+      flex: 1;
+      resize: none;
+      min-height: 40px;
+      max-height: 120px;
+      font-size: 13px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border2);
+    }
+
+    .send-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      border: none;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+
+    .send-btn:hover { background: #1f46b8; }
+    .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+    .send-btn svg { width: 16px; height: 16px; fill: white; }
+
+    .context-tag {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 6px;
+    }
+
+    .context-tag span {
+      background: var(--tag-bg);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+    </div>
+    FormAssist
+  </div>
+  <span class="header-badge">KI-Assistent Prototyp</span>
+</header>
+
+<div class="main">
+
+  <!-- FORM -->
+  <div class="form-panel">
+    <div class="form-header">
+      <h1>Antrag auf Ummeldung des Wohnsitzes</h1>
+      <p>Bitte füllen Sie alle Pflichtfelder aus. Bei Fragen hilft Ihnen der KI-Assistent.</p>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+        <span class="progress-label" id="progressLabel">0%</span>
+      </div>
+    </div>
+
+    <div class="form-body">
+      <form id="mainForm" novalidate>
+
+        <!-- SECTION 1: Person -->
+        <div class="form-section">
+          <div class="section-title">Persönliche Daten</div>
+          <div class="form-grid">
+            <div class="field">
+              <label>Anrede <span class="required">*</span></label>
+              <select id="anrede" data-label="Anrede">
+                <option value="">Bitte wählen…</option>
+                <option>Frau</option>
+                <option>Herr</option>
+                <option>Divers</option>
+                <option>Keine Angabe</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Titel
+                <span class="help-icon" data-field="Titel" title="Hilfe">?</span>
+              </label>
+              <input type="text" id="titel" placeholder="Dr., Prof., …" data-label="Titel"/>
+            </div>
+            <div class="field">
+              <label>Vorname <span class="required">*</span></label>
+              <input type="text" id="vorname" placeholder="z. B. Maria" data-label="Vorname"/>
+              <span class="field-error" id="err-vorname">Bitte geben Sie Ihren Vornamen ein.</span>
+            </div>
+            <div class="field">
+              <label>Nachname <span class="required">*</span></label>
+              <input type="text" id="nachname" placeholder="z. B. Mustermann" data-label="Nachname"/>
+              <span class="field-error" id="err-nachname">Bitte geben Sie Ihren Nachnamen ein.</span>
+            </div>
+            <div class="field">
+              <label>Geburtsdatum <span class="required">*</span>
+                <span class="help-icon" data-field="Geburtsdatum">?</span>
+              </label>
+              <input type="date" id="geburtsdatum" data-label="Geburtsdatum"/>
+              <span class="field-hint">Format: TT.MM.JJJJ</span>
+              <span class="field-error" id="err-geburtsdatum">Bitte geben Sie Ihr Geburtsdatum ein.</span>
+            </div>
+            <div class="field">
+              <label>Geburtsort</label>
+              <input type="text" id="geburtsort" placeholder="Stadt, Land" data-label="Geburtsort"/>
+            </div>
+            <div class="field">
+              <label>Staatsangehörigkeit <span class="required">*</span>
+                <span class="help-icon" data-field="Staatsangehörigkeit">?</span>
+              </label>
+              <select id="staatsangehoerigkeit" data-label="Staatsangehörigkeit">
+                <option value="">Bitte wählen…</option>
+                <option selected>Deutsch</option>
+                <option>Österreichisch</option>
+                <option>Schweizerisch</option>
+                <option>Andere (EU)</option>
+                <option>Andere (Nicht-EU)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Familienstand
+                <span class="help-icon" data-field="Familienstand">?</span>
+              </label>
+              <select id="familienstand" data-label="Familienstand">
+                <option value="">Bitte wählen…</option>
+                <option>Ledig</option>
+                <option>Verheiratet</option>
+                <option>Eingetragene Lebenspartnerschaft</option>
+                <option>Geschieden</option>
+                <option>Verwitwet</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 2: Alte Adresse -->
+        <div class="form-section">
+          <div class="section-title">Bisherige Wohnanschrift</div>
+          <div class="form-grid">
+            <div class="field span2">
+              <label>Straße und Hausnummer <span class="required">*</span></label>
+              <input type="text" id="alt-strasse" placeholder="z. B. Musterstraße 12" data-label="Bisherige Straße"/>
+            </div>
+            <div class="field">
+              <label>PLZ <span class="required">*</span>
+                <span class="help-icon" data-field="PLZ">?</span>
+              </label>
+              <input type="text" id="alt-plz" placeholder="z. B. 80331" maxlength="5" data-label="Bisherige PLZ"/>
+              <span class="field-error" id="err-alt-plz">PLZ muss 5 Ziffern haben.</span>
+            </div>
+            <div class="field">
+              <label>Ort <span class="required">*</span></label>
+              <input type="text" id="alt-ort" placeholder="z. B. München" data-label="Bisheriger Ort"/>
+            </div>
+            <div class="field">
+              <label>Land <span class="required">*</span></label>
+              <select id="alt-land" data-label="Bisheriges Land">
+                <option>Deutschland</option>
+                <option>Österreich</option>
+                <option>Schweiz</option>
+                <option>Anderes</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Einzugsdatum <span class="required">*</span>
+                <span class="help-icon" data-field="Einzugsdatum">?</span>
+              </label>
+              <input type="date" id="alt-einzug" data-label="Einzugsdatum bisherige Wohnung"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 3: Neue Adresse -->
+        <div class="form-section">
+          <div class="section-title">Neue Wohnanschrift</div>
+          <div class="form-grid">
+            <div class="field span2">
+              <label>Straße und Hausnummer <span class="required">*</span></label>
+              <input type="text" id="neu-strasse" placeholder="z. B. Neue Straße 5" data-label="Neue Straße"/>
+            </div>
+            <div class="field">
+              <label>PLZ <span class="required">*</span></label>
+              <input type="text" id="neu-plz" placeholder="z. B. 10115" maxlength="5" data-label="Neue PLZ"/>
+            </div>
+            <div class="field">
+              <label>Ort <span class="required">*</span></label>
+              <input type="text" id="neu-ort" placeholder="z. B. Berlin" data-label="Neuer Ort"/>
+            </div>
+            <div class="field span2">
+              <label>Art der Wohnung
+                <span class="help-icon" data-field="Art der Wohnung">?</span>
+              </label>
+              <div class="radio-group">
+                <label class="radio-item"><input type="radio" name="wohnart" value="hauptwohnung" checked/> Hauptwohnung</label>
+                <label class="radio-item"><input type="radio" name="wohnart" value="nebenwohnung"/> Nebenwohnung</label>
+                <label class="radio-item"><input type="radio" name="wohnart" value="einzige"/> Einzige Wohnung</label>
+              </div>
+            </div>
+            <div class="field">
+              <label>Umzugsdatum <span class="required">*</span>
+                <span class="help-icon" data-field="Umzugsdatum">?</span>
+              </label>
+              <input type="date" id="neu-einzug" data-label="Umzugsdatum"/>
+              <span class="field-hint">Muss innerhalb von 14 Tagen liegen.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 4: Zusatz -->
+        <div class="form-section">
+          <div class="section-title">Weitere Angaben</div>
+          <div class="form-grid full">
+            <div class="field">
+              <label>Wohnungsgeberbescheinigung
+                <span class="help-icon" data-field="Wohnungsgeberbescheinigung">?</span>
+              </label>
+              <select id="wohnungsgeber" data-label="Wohnungsgeberbescheinigung">
+                <option value="">Bitte wählen…</option>
+                <option>Liegt vor (wird eingereicht)</option>
+                <option>Wird nachgereicht</option>
+                <option>Eigentümer der Wohnung</option>
+              </select>
+              <span class="field-hint">Pflicht gemäß § 19 BMG – Vermieter muss Einzug bestätigen.</span>
+            </div>
+            <div class="field">
+              <label>Weitere Personen im Haushalt
+                <span class="help-icon" data-field="Weitere Personen">?</span>
+              </label>
+              <div class="checkbox-group">
+                <label class="checkbox-item"><input type="checkbox"/> Ehepartner / Lebenspartner</label>
+                <label class="checkbox-item"><input type="checkbox"/> Minderjährige Kinder</label>
+                <label class="checkbox-item"><input type="checkbox"/> Andere Personen (separate Anmeldung nötig)</label>
+              </div>
+            </div>
+            <div class="field">
+              <label>Anmerkungen</label>
+              <textarea id="anmerkungen" placeholder="Optionale Hinweise für die Behörde…" data-label="Anmerkungen"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary">Zurück</button>
+          <button type="submit" class="btn btn-primary">Antrag einreichen →</button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="chat-panel">
+    <div class="chat-header">
+      <div class="ai-avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 010 2h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 010-2h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2zM9 11a5 5 0 100 10A5 5 0 009 11zm6 0a5 5 0 100 10 5 5 0 000-10zM9 13a1 1 0 110 2 1 1 0 010-2zm6 0a1 1 0 110 2 1 1 0 010-2z"/></svg>
+      </div>
+      <div class="chat-header-info">
+        <h3>FormAssist KI</h3>
+        <p><span class="status-dot"></span>Bereit – ich helfe bei jedem Feld</p>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      <div class="msg ai">
+        <div class="msg-avatar">KI</div>
+        <div class="msg-bubble">
+          Hallo! Ich bin Ihr KI-Formularassistent. Ich helfe Ihnen bei der korrekten Ausfüllung dieses <strong>Ummeldungsantrags</strong>.<br><br>
+          Klicken Sie auf das <strong>?</strong> neben einem Feld, oder fragen Sie mich direkt:
+          <div class="quick-chips">
+            <span class="chip" onclick="sendChip(this)">Was ist die Wohnungsgeberbescheinigung?</span>
+            <span class="chip" onclick="sendChip(this)">Welche Frist gilt für die Ummeldung?</span>
+            <span class="chip" onclick="sendChip(this)">Was ist der Unterschied Haupt-/Nebenwohnung?</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <div id="apiKeySection">
+        <div class="api-key-notice">
+          Bitte geben Sie Ihren Anthropic API-Schlüssel ein, um den KI-Assistenten zu aktivieren.
+          <a href="https://console.anthropic.com/" target="_blank">Schlüssel erhalten →</a>
+        </div>
+        <div class="api-key-wrap">
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-…" />
+          <button onclick="saveApiKey()">Speichern</button>
+        </div>
+      </div>
+      <div class="input-row">
+        <textarea class="chat-textarea" id="userInput" placeholder="Frage zu einem Feld stellen…" rows="1"
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+          <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+      <div class="context-tag" id="contextTag" style="display:none;">
+        Aktuelles Feld: <span id="activeFieldName">–</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let apiKey = '';
+  let activeField = null;
+  const SYSTEM_PROMPT = `Du bist ein freundlicher Formular-Assistent für einen deutschen Ummeldungsantrag (Wohnsitzanmeldung beim Einwohnermeldeamt). Du hilfst Nutzern dabei, das Formular korrekt auszufüllen. Gib kurze, präzise Antworten auf Deutsch. Erkläre Felder verständlich, nenne rechtliche Grundlagen wenn relevant (z.B. § 17 BMG für die Anmeldefrist), und weise auf häufige Fehler hin. Antworte in max. 3 Sätzen, es sei denn es ist mehr nötig.`;
+
+  function saveApiKey() {
+    const val = document.getElementById('apiKeyInput').value.trim();
+    if (!val.startsWith('sk-')) { alert('Bitte einen gültigen API-Schlüssel eingeben (beginnt mit sk-).'); return; }
+    apiKey = val;
+    document.getElementById('apiKeySection').style.display = 'none';
+    document.getElementById('sendBtn').disabled = false;
+    addMessage('ai', 'API-Schlüssel gespeichert. Der Assistent ist jetzt aktiv!');
+  }
+
+  function addMessage(role, html, chips) {
+    const wrap = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    const avatar = document.createElement('div');
+    avatar.className = 'msg-avatar';
+    avatar.textContent = role === 'ai' ? 'KI' : 'Sie';
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.innerHTML = html;
+    if (chips && chips.length) {
+      const chipsDiv = document.createElement('div');
+      chipsDiv.className = 'quick-chips';
+      chips.forEach(c => {
+        const s = document.createElement('span');
+        s.className = 'chip';
+        s.textContent = c;
+        s.onclick = () => sendChip(s);
+        chipsDiv.appendChild(s);
+      });
+      bubble.appendChild(chipsDiv);
+    }
+    div.appendChild(avatar);
+    div.appendChild(bubble);
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  function showTyping() {
+    const wrap = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'msg ai';
+    div.id = 'typing';
+    div.innerHTML = `<div class="msg-avatar">KI</div><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('typing');
+    if (t) t.remove();
+  }
+
+  async function askAI(question) {
+    if (!apiKey) { addMessage('ai', 'Bitte geben Sie zuerst Ihren API-Schlüssel ein.'); return; }
+    showTyping();
+    const fieldCtx = activeField ? `\nAktuell fokussiertes Feld: "${activeField}"` : '';
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({
+          model: 'claude-opus-4-5',
+          max_tokens: 400,
+          system: SYSTEM_PROMPT + fieldCtx,
+          messages: [{ role: 'user', content: question }]
+        })
+      });
+      const data = await res.json();
+      removeTyping();
+      if (data.content && data.content[0]) {
+        addMessage('ai', data.content[0].text.replace(/\n/g, '<br/>'));
+      } else {
+        addMessage('ai', 'Fehler: ' + (data.error?.message || 'Unbekannter Fehler.'));
+      }
+    } catch (e) {
+      removeTyping();
+      addMessage('ai', 'Verbindungsfehler. Bitte API-Schlüssel und Internetverbindung prüfen.');
+    }
+  }
+
+  function sendMessage() {
+    const inp = document.getElementById('userInput');
+    const text = inp.value.trim();
+    if (!text) return;
+    addMessage('user', text);
+    inp.value = '';
+    autoResize(inp);
+    askAI(text);
+  }
+
+  function sendChip(el) { const t = el.textContent; addMessage('user', t); askAI(t); }
+  function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+  function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
+
+  // Help icons trigger AI
+  document.querySelectorAll('.help-icon').forEach(icon => {
+    icon.addEventListener('click', () => {
+      const field = icon.dataset.field;
+      activeField = field;
+      document.getElementById('contextTag').style.display = 'block';
+      document.getElementById('activeFieldName').textContent = field;
+      const q = `Erkläre mir das Feld "${field}" in diesem Ummeldungsformular: Was muss ich eintragen, und was sind häufige Fehler?`;
+      addMessage('user', `Hilfe zum Feld: <strong>${field}</strong>`);
+      askAI(q);
+    });
+  });
+
+  // Track focused field
+  document.querySelectorAll('input[data-label], select[data-label], textarea[data-label]').forEach(el => {
+    el.addEventListener('focus', () => {
+      activeField = el.dataset.label;
+      document.getElementById('contextTag').style.display = 'block';
+      document.getElementById('activeFieldName').textContent = el.dataset.label;
+    });
+  });
+
+  // Progress tracking
+  function updateProgress() {
+    const required = document.querySelectorAll('[required], input[id="vorname"], input[id="nachname"], input[id="geburtsdatum"], select[id="anrede"], select[id="staatsangehoerigkeit"], input[id="alt-strasse"], input[id="alt-plz"], input[id="alt-ort"], input[id="neu-strasse"], input[id="neu-plz"], input[id="neu-ort"], input[id="alt-einzug"], input[id="neu-einzug"]');
+    const ids = ['vorname','nachname','geburtsdatum','anrede','staatsangehoerigkeit','alt-strasse','alt-plz','alt-ort','alt-einzug','neu-strasse','neu-plz','neu-ort','neu-einzug'];
+    let filled = 0;
+    ids.forEach(id => { const el = document.getElementById(id); if (el && el.value.trim()) filled++; });
+    const pct = Math.round((filled / ids.length) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = pct + '%';
+  }
+
+  document.querySelectorAll('input, select, textarea').forEach(el => el.addEventListener('input', updateProgress));
+
+  // Inline PLZ validation
+  document.getElementById('alt-plz').addEventListener('blur', function() {
+    const err = document.getElementById('err-alt-plz');
+    if (this.value && !/^\d{5}$/.test(this.value)) { err.classList.add('visible'); this.classList.add('error'); }
+    else { err.classList.remove('visible'); this.classList.remove('error'); if(this.value) this.classList.add('ok'); }
+  });
+
+  document.getElementById('mainForm').addEventListener('submit', e => {
+    e.preventDefault();
+    addMessage('ai', '✅ <strong>Formular wurde (simuliert) eingereicht.</strong><br/>In einem echten System würde jetzt eine PDF-Quittung erzeugt und ein Termin beim Einwohnermeldeamt gebucht.');
+  });
+</script>
+</body>
+</html>
