@@ -1,116 +1,43 @@
-# FormAssist – KI-gestützter Formular-Assistent
+# FormAssist - Chrome Extension
 
-A single-page AI assistant prototype that helps users fill out a German residential registration change form (*Ummeldung des Wohnsitzes*) using the Claude API.
+FormAssist ist eine Manifest-V3-Extension, die auf Formularseiten eine KI-Assistenz als Sidebar einblendet.
 
-![KI-Assistent Prototyp](https://img.shields.io/badge/Status-Prototyp-blue) ![HTML](https://img.shields.io/badge/Stack-HTML%20%2F%20CSS%20%2F%20JS-orange) ![Claude](https://img.shields.io/badge/AI-Claude%20Opus-blueviolet)
+## Projektstruktur
 
----
+- manifest.json - Extension-Konfiguration
+- state.js - Shared State, Utilities, API-Key-Laden
+- ui.js - Panel-UI, Drag/Resize, Feldscan, Nachrichten-Rendering
+- api.js - KI-Request-Logik und API-Fehlerbehandlung
+- bootstrap.js - Startlogik und Initial-Injection
+- content.css - Styling der Sidebar
+- api-key.txt - lokale Key-Datei
+- icon128.svg - Extension-Icon
 
-## Overview
+## Lokales Setup
 
-FormAssist is a fully self-contained HTML prototype — no build step, no server, no npm. Open the file in any modern browser and you're done. A sidebar chat powered by **Claude claude-opus-4-5** guides users through the form in real time, answering field-specific questions in natural German.
+1. In api-key.txt den Platzhalter mit deinem Groq API-Key ersetzen.
+2. Chrome oeffnen und chrome://extensions aufrufen.
+3. Entwicklermodus aktivieren.
+4. Entpackte Erweiterung laden und diesen Ordner auswaehlen.
 
-The form covers the standard German *Einwohnermeldeamt* registration change workflow, including legal references (e.g. § 17 BMG registration deadline).
+## Nutzung
 
----
+1. Webseite mit Formular oeffnen.
+2. Sidebar erscheint automatisch.
+3. Feld auswaehlen oder fokussieren.
+4. Frage stellen und Antwort direkt im Chat erhalten.
 
-## Features
+## Konfigurierbare Stellen
 
-| Feature | Description |
-|---|---|
-| **AI Chat Sidebar** | Conversational assistant answers questions about every form field |
-| **Contextual Help** | Clicking the `?` icon next to a field automatically asks the AI to explain that field |
-| **Field Focus Context** | The AI knows which field is currently active and tailors its answers accordingly |
-| **Progress Bar** | Real-time completion tracking across all required fields |
-| **Inline Validation** | PLZ (postal code) format validation with visual feedback |
-| **Quick-Reply Chips** | Pre-built question chips for common queries (deadlines, documents, etc.) |
-| **Simulated Submission** | Submit button triggers a confirmation message (no real backend) |
-| **Responsive Layout** | Two-column grid (form + chat), adapts to the viewport |
+- Prompt und Basistexte in state.js
+- Modell und API-Parameter in api.js
+- Layout und Design in content.css
 
----
+## Team-Workflow (wichtig)
 
-## Form Sections
+- Vor Demo: Extension in chrome://extensions neu laden.
+- Bei API-Fehlern: Key in api-key.txt pruefen und Seite hart neu laden.
 
-1. **Persönliche Daten** — Anrede, Titel, Vor-/Nachname, Geburtsdatum/-ort, Staatsangehörigkeit, Familienstand
-2. **Bisherige Wohnanschrift** — Straße, Hausnummer, PLZ, Ort, Einzugsdatum
-3. **Neue Wohnanschrift** — same fields for the new address + move-in date
-4. **Zusätzliche Angaben** — Wohnungsgeberbestätigung, Mitziehende Personen, Bemerkungen
+## Security-Hinweis
 
----
-
-## Getting Started
-
-### Prerequisites
-
-- A modern web browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+)
-- An **Anthropic API key** — get one at [console.anthropic.com](https://console.anthropic.com/)
-
-### Running the App
-
-```bash
-# Clone the repository
-git clone https://github.com/ujjwalmak/form-ai-assistant.git
-cd form-ai-assistant
-
-# Just open the file — no install step needed
-open form-ai-assistant.html   # macOS
-xdg-open form-ai-assistant.html  # Linux
-start form-ai-assistant.html  # Windows
-```
-
-Or simply drag `form-ai-assistant.html` into your browser.
-
-### API Key
-
-On first load, the chat sidebar prompts for your Anthropic API key (`sk-ant-…`). The key is stored only in memory for the session — it is never persisted to localStorage or sent anywhere other than the Anthropic API.
-
-> **Note:** The app uses the `anthropic-dangerous-direct-browser-access` header, which is required for direct browser-to-API calls. This is intentional for a prototype but should be replaced by a backend proxy in production.
-
----
-
-## Architecture
-
-```
-form-ai-assistant.html
-├── <style>          Embedded CSS (CSS custom properties, responsive grid)
-├── <body>
-│   ├── <header>     Logo + badge
-│   ├── .form-panel  The registration change form (4 sections)
-│   └── .chat-panel  AI chat sidebar (message list + input + chips)
-└── <script>         Vanilla JS — API calls, validation, progress, event wiring
-```
-
-**External dependencies (CDN only, no npm):**
-- [DM Sans & DM Mono](https://fonts.google.com/) — typography via Google Fonts
-- [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) — `POST /v1/messages`
-
-**Model used:** `claude-opus-4-5`  
-**System prompt language:** German  
-**Max response length:** ~3 sentences (enforced via system prompt)
-
----
-
-## Configuration
-
-All tuneable values live at the top of the `<script>` block:
-
-| Variable | Default | Description |
-|---|---|---|
-| `SYSTEM_PROMPT` | see file | German system prompt for the assistant persona |
-| `model` | `claude-opus-4-5` | Anthropic model ID |
-| `max_tokens` | `300` | Maximum tokens per AI response |
-
----
-
-## Limitations & Production Considerations
-
-- **No backend:** The API key is entered by the user and sent directly from the browser. For production, use a server-side proxy to keep your key secret.
-- **No persistence:** Form data and chat history are lost on page reload.
-- **Simulated submission:** The submit button does not send data anywhere.
-- **Single form:** The prototype covers only *Ummeldung des Wohnsitzes*. Other form types would require adapting the system prompt and field definitions.
-
----
-
-## License
-
-MIT
+Die Key-Datei liegt weiterhin clientseitig in der Extension. Das ist fuer einen Prototyp okay, aber nicht fuer Produktion. Fuer produktive Nutzung sollte ein Backend-Proxy eingesetzt werden.
