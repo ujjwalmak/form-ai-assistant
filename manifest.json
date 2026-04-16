@@ -1,26 +1,22 @@
-﻿{
+{
   "manifest_version": 3,
-  "name": "FormAssist",
-  "description": "KI-Formularassistent für Webseiten",
+  "name": "FormAssist – KI Formular-Assistent",
+  "description": "KI-gestützter Assistent für jedes Online-Formular",
   "version": "1.0",
-  "icons": {
-    "128": "icon128.svg"
-  },
-  "action": {
-    "default_title": "FormAssist"
-  },
+  "icons": { "128": "icon.svg" },
+  "action": { "default_title": "FormAssist", "default_icon": { "128": "icon.svg" } },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["state.js", "ui.js", "api.js", "bootstrap.js"],
-      "css": ["content.css"],
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
       "run_at": "document_idle"
     }
   ],
+  "host_permissions": ["https://api.groq.com/*"],
   "web_accessible_resources": [
     {
       "resources": ["api-key.txt"],
-      "matches": ["http://*/*", "https://*/*"]
+      "matches": ["<all_urls>"]
     }
   ]
 }
