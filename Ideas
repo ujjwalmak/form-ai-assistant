@@ -1,1 +1,10 @@
-Fake Filler: Macht auf shady Seiten fake Daten
+
+1. Live Fehler-Erkennung per KI
+Während du tippst, analysiert die KI deine Eingabe und warnt sofort — z.B. "Diese PLZ existiert nicht in Bayern" oder "Dein Einzugsdatum liegt zu weit in der Vergangenheit"
+2. Sprachsteuerung
+Felder per Sprache ausfüllen — Mikrofon-Button → Web Speech API → KI versteht und füllt das richtige Feld aus. Kein Tippen nötig.
+3. Formular-Foto Upload
+Altes Dokument (Personalausweis, alter Meldeschein) als Bild hochladen → KI liest die Daten und füllt das Formular automatisch aus
+4. KI erklärt Fehler bevor du submitten kannst
+Beim Absenden checkt die KI ALLE Felder auf logische Fehler (z.B. Umzugsdatum vor Einzugsdatum) und gibt eine strukturierte Zusammenfassung
+5. Fake Filler: Macht auf shady Seiten fake Daten
