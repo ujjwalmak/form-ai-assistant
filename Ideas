@@ -8,3 +8,14 @@ Altes Dokument (Personalausweis, alter Meldeschein) als Bild hochladen → KI li
 4. KI erklärt Fehler bevor du submitten kannst
 Beim Absenden checkt die KI ALLE Felder auf logische Fehler (z.B. Umzugsdatum vor Einzugsdatum) und gibt eine strukturierte Zusammenfassung
 5. Fake Filler: Macht auf shady Seiten fake Daten
+
+Auto-fill button — AI suggests a value for the focused field, one click inserts it
+Proactive error watching — detect when a field goes invalid, automatically pop up with help
+Personal data memory — save name/address/email to localStorage, offer to pre-fill on any form
+Guided mode — AI asks you questions conversationally and types the answers into the form for you
+Keyboard shortcut — Ctrl+Shift+F to open/close without clicking the trigger
+Dark mode — auto-detect system preference
+Position + size memory — remember where the panel was left between page loads
+Page language detection — automatically respond in the language of the page
+Form summary — "explain this form to me in plain language before I start"
+Copy button on every AI response
