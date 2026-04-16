@@ -308,15 +308,38 @@
     }
     .sidebar.open       { transform: translateX(0); }
     .sidebar.no-animate { transition: none !important; }
-    .sidebar.minimized  { bottom: auto; height: 56px; overflow: hidden; }
+    .sidebar.minimized  { overflow: hidden; }
+    .sidebar.minimized .resize-s, .sidebar.minimized .resize-sw { display: none; }
 
-    /* ── Resize handle ── */
-    .resize-handle {
-      position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
-      cursor: ew-resize; z-index: 10; border-radius: 4px 0 0 4px;
-      transition: background 0.15s;
+    /* ── Resize handles ── */
+    .resize-w {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 8px;
+      cursor: ew-resize; z-index: 10;
     }
-    .resize-handle:hover { background: rgba(45,91,227,0.15); }
+    .resize-w::after {
+      content: '';
+      position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+      width: 3px; height: 40px; border-radius: 3px;
+      background: var(--border2); opacity: 0; transition: opacity 0.2s;
+    }
+    .resize-w:hover::after, .sidebar:hover .resize-w::after { opacity: 1; }
+
+    .resize-s {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 8px;
+      cursor: ns-resize; z-index: 10;
+    }
+    .resize-s::after {
+      content: '';
+      position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
+      height: 3px; width: 40px; border-radius: 3px;
+      background: var(--border2); opacity: 0; transition: opacity 0.2s;
+    }
+    .resize-s:hover::after, .sidebar:hover .resize-s::after { opacity: 1; }
+
+    .resize-sw {
+      position: absolute; bottom: 0; left: 0; width: 16px; height: 16px;
+      cursor: sw-resize; z-index: 11;
+    }
 
     /* ── Header ── */
     .header {
@@ -413,7 +436,9 @@
       <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
     </button>
     <div class="sidebar" id="fa-sidebar">
-      <div class="resize-handle" id="fa-resize"></div>
+      <div class="resize-w"  id="fa-resize-w"></div>
+      <div class="resize-s"  id="fa-resize-s"></div>
+      <div class="resize-sw" id="fa-resize-sw"></div>
       <div class="header" id="fa-header">
         <div class="logo">
           <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><path d="M9 12h6M9 16h4"/></svg></div>
@@ -448,7 +473,9 @@
   const triggerBtn  = $('fa-trigger');
   const sidebar     = $('fa-sidebar');
   const header      = $('fa-header');
-  const resizeEl    = $('fa-resize');
+  const resizeW     = $('fa-resize-w');
+  const resizeS     = $('fa-resize-s');
+  const resizeSW    = $('fa-resize-sw');
   const messagesEl  = $('fa-messages');
   const inputEl     = $('fa-input');
   const fieldTag    = $('fa-field-tag');
@@ -496,51 +523,75 @@
   header.addEventListener('pointercancel', () => { dragStart = null; });
 
   // ═══════════════════════════════════════════════════════════════════════
-  // RESIZE
+  // RESIZE (width + height + corner)
   // ═══════════════════════════════════════════════════════════════════════
 
-  let resizeStart = null;
-
-  resizeEl.addEventListener('pointerdown', e => {
-    if (isMinimized) return;
-    const rect = sidebar.getBoundingClientRect();
+  function undock() {
     if (isDocked) {
       isDocked = false;
+      const rect = sidebar.getBoundingClientRect();
       sidebar.classList.add('no-animate');
       sidebar.style.right  = 'auto';
-      sidebar.style.top    = rect.top  + 'px';
-      sidebar.style.left   = rect.left + 'px';
+      sidebar.style.left   = rect.left   + 'px';
+      sidebar.style.top    = rect.top    + 'px';
       sidebar.style.bottom = 'auto';
       sidebar.style.height = rect.height + 'px';
       sidebar.style.transform = 'none';
     }
-    resizeStart = { x: e.clientX, left: rect.left, right: rect.right, width: rect.width };
-    resizeEl.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
+  }
 
-  resizeEl.addEventListener('pointermove', e => {
-    if (!resizeStart) return;
-    const dx      = e.clientX - resizeStart.x;
-    const newLeft = Math.max(20, Math.min(resizeStart.right - 300, resizeStart.left + dx));
-    const newW    = resizeStart.right - newLeft;
-    sidebar.style.left  = newLeft + 'px';
-    sidebar.style.width = newW   + 'px';
-  });
+  function bindResize(el, mode) {
+    let start = null;
+    el.addEventListener('pointerdown', e => {
+      if (isMinimized) return;
+      undock();
+      const rect = sidebar.getBoundingClientRect();
+      start = { x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, w: rect.width, h: rect.height };
+      el.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    el.addEventListener('pointermove', e => {
+      if (!start) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (mode === 'w' || mode === 'sw') {
+        const newLeft = Math.max(20, Math.min(start.right - 300, start.left + dx));
+        sidebar.style.left  = newLeft + 'px';
+        sidebar.style.width = (start.right - newLeft) + 'px';
+      }
+      if (mode === 's' || mode === 'sw') {
+        const maxH = window.innerHeight - start.top - 20;
+        sidebar.style.height = Math.max(300, Math.min(maxH, start.h + dy)) + 'px';
+      }
+    });
+    el.addEventListener('pointerup',     () => { start = null; });
+    el.addEventListener('pointercancel', () => { start = null; });
+  }
 
-  resizeEl.addEventListener('pointerup',     () => { resizeStart = null; });
-  resizeEl.addEventListener('pointercancel', () => { resizeStart = null; });
+  bindResize(resizeW,  'w');
+  bindResize(resizeS,  's');
+  bindResize(resizeSW, 'sw');
 
   // ═══════════════════════════════════════════════════════════════════════
   // MINIMIZE
   // ═══════════════════════════════════════════════════════════════════════
 
-  let isMinimized = false;
+  let isMinimized  = false;
+  let savedHeight  = null;
   const minBtn = $('fa-minimize');
 
   minBtn.addEventListener('click', () => {
     isMinimized = !isMinimized;
     sidebar.classList.toggle('minimized', isMinimized);
+    if (isMinimized) {
+      savedHeight = sidebar.style.height || null;
+      sidebar.style.height = '56px';        // override any inline height from drag
+      sidebar.style.bottom = 'auto';
+    } else {
+      sidebar.style.height = savedHeight || (isDocked ? '' : sidebar.style.height);
+      if (isDocked) sidebar.style.bottom = '0';
+    }
     minBtn.querySelector('svg path').setAttribute('d',
       isMinimized ? 'M5 12h14M12 5l7 7-7 7' : 'M5 12h14'
     );
