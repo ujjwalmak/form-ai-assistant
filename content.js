@@ -493,18 +493,8 @@
 
   header.addEventListener('pointerdown', e => {
     if (e.target.closest('button') || isMinimized) return;
-    const rect = sidebar.getBoundingClientRect();
-    if (isDocked) {
-      isDocked = false;
-      sidebar.classList.add('no-animate');
-      sidebar.style.right  = 'auto';
-      sidebar.style.top    = rect.top  + 'px';
-      sidebar.style.left   = rect.left + 'px';
-      sidebar.style.bottom = 'auto';
-      sidebar.style.height = rect.height + 'px';
-      sidebar.style.transform = 'none';
-    }
-    dragStart = { x: e.clientX, y: e.clientY, left: parseFloat(sidebar.style.left), top: parseFloat(sidebar.style.top) };
+    undock();
+    dragStart = { x: e.clientX, y: e.clientY, left: parseFloat(sidebar.style.left), top: parseFloat(sidebar.style.top), w: sidebar.offsetWidth, h: sidebar.offsetHeight };
     header.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
@@ -513,10 +503,8 @@
     if (!dragStart) return;
     const dx = e.clientX - dragStart.x;
     const dy = e.clientY - dragStart.y;
-    const w  = sidebar.offsetWidth;
-    const h  = sidebar.offsetHeight;
-    sidebar.style.left = Math.max(0, Math.min(window.innerWidth  - w,  dragStart.left + dx)) + 'px';
-    sidebar.style.top  = Math.max(0, Math.min(window.innerHeight - h,  dragStart.top  + dy)) + 'px';
+    sidebar.style.left = Math.max(0, Math.min(window.innerWidth  - dragStart.w, dragStart.left + dx)) + 'px';
+    sidebar.style.top  = Math.max(0, Math.min(window.innerHeight - dragStart.h, dragStart.top  + dy)) + 'px';
   });
 
   header.addEventListener('pointerup',     () => { dragStart = null; });
@@ -546,7 +534,7 @@
       if (isMinimized) return;
       undock();
       const rect = sidebar.getBoundingClientRect();
-      start = { x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, w: rect.width, h: rect.height };
+      start = { x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, right: rect.right, w: rect.width, h: rect.height };
       el.setPointerCapture(e.pointerId);
       e.preventDefault();
       e.stopPropagation();
@@ -586,10 +574,10 @@
     sidebar.classList.toggle('minimized', isMinimized);
     if (isMinimized) {
       savedHeight = sidebar.style.height || null;
-      sidebar.style.height = '56px';        // override any inline height from drag
+      sidebar.style.height = '56px';
       sidebar.style.bottom = 'auto';
     } else {
-      sidebar.style.height = savedHeight || (isDocked ? '' : sidebar.style.height);
+      sidebar.style.height = savedHeight || '';
       if (isDocked) sidebar.style.bottom = '0';
     }
     minBtn.querySelector('svg path').setAttribute('d',
