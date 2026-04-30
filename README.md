@@ -1,22 +1,51 @@
 # FormAssist - Chrome Extension
 
-FormAssist ist eine Manifest-V3-Extension, die auf Formularseiten eine KI-Assistenz als Sidebar einblendet.
+FormAssist ist eine Manifest-V3-Extension, die auf Formularseiten eine KI-Assistenz als Sidebar einblendet. Die aktuelle Implementierung ist bewusst als Single-File-Lösung in `content.js` umgesetzt und rendert die komplette UI im Shadow DOM.
 
-## Projektstruktur
+## Aktuelle Architektur
 
-- manifest.json - Extension-Konfiguration
-- state.js - Shared State, Utilities, API-Key-Laden
-- ui.js - Panel-UI, Drag/Resize, Feldscan, Nachrichten-Rendering
-- api.js - KI-Request-Logik und API-Fehlerbehandlung
-- bootstrap.js - Startlogik und Initial-Injection
-- content.css - Styling der Sidebar
-- api-key.txt - lokale Key-Datei
-- icon128.svg - Extension-Icon
+- `manifest.json` - Extension-Konfiguration
+- `content.js` - aktive Logik fuer UI, Feldanalyse, Drag/Resize und KI-Interaktionen
+- `api-key.txt` - lokale Key-Datei fuer den Groq API-Key
+- Die frueheren Multifile-Dateien wurden entfernt; der aktive Code lebt nur noch in `content.js`
+
+## Was die Sidebar jetzt kann
+
+### Intelligente Feldterkennung & Auto-Fill
+- Formularfelder semantisch erkennen (Labels, Autocomplete-Attribute, Keywords)
+- Profile-Felder automatisch erkennen (Vorname, Email, Adresse, IBAN, etc.)
+- Texteingaben, Selects, Checkboxen und Radio-Gruppen richtig unterscheiden
+- Schnelles Eintragen über Auto-Fill (Profile-Daten lokal speichern)
+
+### Profilmanagement
+- **Profil bearbeiten**: Button im Header öffnet Profil-Editor (16 Standardfelder)
+- Profile lokal speichern (Chrome Storage) — bleiben auch nach Browser-Neustart erhalten
+- Schneller Zugriff auf gespeicherte Daten beim nächsten Besuch
+
+### Geführter Modus (Step-by-Step)
+- **Geführter Modus**: KI fragt nacheinander nur noch leere Felder ab — statt auf Fragen warten
+- Du antwortest kurz; die KI trägt automatisch ein
+- Mit Fortschrittsanzeige (z.B. "5/12")
+- Buttons zum Überspringen oder Beenden einzelner Felder
+- Am Ende: Zusammenfassung aller Eingaben
+
+### KI-Assistenz
+- Antworten per Button kopieren
+- Formular vor dem Absenden zusammenfassen und plausibilisieren
+- Bei erkannten Eingabeproblemen proaktiv Hilfestellung geben
+
+### Bedienung & UI
+- **Quick-Action Buttons**: "Formular erklären" (Kurzübersicht vor dem Start) + "Geführter Modus" (Step-by-Step)
+- **Dark Mode Toggle**: Icon im Header — UI passt sich an dunkle/helle Umgebung an
+- Sidebar frei verschieben und an allen Seiten sowie Ecken resizen
+- Minimize-Button zum Platzzusparen
+- Oberfläche mit modernem Layout und Farb-Design
+- Tastenkombination `Ctrl+Shift+F` zum Oeffnen und Schliessen der Sidebar
 
 ## Lokales Setup
 
-1. In api-key.txt den Platzhalter mit deinem Groq API-Key ersetzen.
-2. Chrome oeffnen und chrome://extensions aufrufen.
+1. In `api-key.txt` deinen eigenen Groq API-Key eintragen.
+2. Chrome oeffnen und `chrome://extensions` aufrufen.
 3. Entwicklermodus aktivieren.
 4. Entpackte Erweiterung laden und diesen Ordner auswaehlen.
 
@@ -24,20 +53,15 @@ FormAssist ist eine Manifest-V3-Extension, die auf Formularseiten eine KI-Assist
 
 1. Webseite mit Formular oeffnen.
 2. Sidebar erscheint automatisch.
-3. Feld auswaehlen oder fokussieren.
-4. Frage stellen und Antwort direkt im Chat erhalten.
+3. Im Chat direkt eine Frage stellen oder eine der Schnellaktionen verwenden.
+4. Bei Bedarf gezielt ein Feld auswaehlen, den gefuehrten Modus nutzen oder vor dem Absenden die Pruefung starten.
 
-## Konfigurierbare Stellen
+## Wichtige Hinweise fuer die Entwicklung
 
-- Prompt und Basistexte in state.js
-- Modell und API-Parameter in api.js
-- Layout und Design in content.css
-
-## Team-Workflow (wichtig)
-
-- Vor Demo: Extension in chrome://extensions neu laden.
-- Bei API-Fehlern: Key in api-key.txt pruefen und Seite hart neu laden.
+- Neue UI- oder Prompt-Aenderungen werden aktuell in `content.js` umgesetzt.
+- Die alten Dateien bleiben nur zur Referenz im Repo; sie werden vom aktuellen Manifest nicht geladen.
+- Nach groesseren Aenderungen die Extension in `chrome://extensions` neu laden.
 
 ## Security-Hinweis
 
-Die Key-Datei liegt weiterhin clientseitig in der Extension. Das ist fuer einen Prototyp okay, aber nicht fuer Produktion. Fuer produktive Nutzung sollte ein Backend-Proxy eingesetzt werden.
+Die Key-Datei liegt weiterhin clientseitig in der Extension. Das ist fuer einen Prototyp okay, aber nicht fuer Produktion. Fuer produktive Nutzung sollte ein Backend-Proxy eingesetzt werden. Den Key nie in Source-Dateien oder Dokumentation eintragen.

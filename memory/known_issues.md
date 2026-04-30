@@ -5,16 +5,16 @@
 ## Issue: Verwaiste Multifile-Dateien im Repo
 
 **Problem:**
-`state.js`, `ui.js`, `api.js`, `bootstrap.js`, `content.css` liegen im Repo, werden aber vom aktuellen `manifest.json` nicht geladen. Sie beschreiben eine ältere Architektur.
+Die alten Multifile-Dateien wurden vom Repo entfernt; das Problem ist erledigt.
 
 **Ursache:**
 Merge der beiden Codelinien (Kollege + Claude) hat die aktive Architektur auf Single-File umgestellt, die alten Dateien aber nicht entfernt.
 
 **Lösung:**
-Dateien entfernen und README aktualisieren. Noch nicht durchgeführt.
+Dateien entfernt und README aktualisiert.
 
 **Vermeidung:**
-Nach Architektur-Entscheidungen sofort verwaiste Dateien aufräumen.
+Nach Architektur-Entscheidungen verwaiste Dateien sofort aufräumen.
 
 ---
 
@@ -27,7 +27,7 @@ Nach Architektur-Entscheidungen sofort verwaiste Dateien aufräumen.
 Kollege hat README in einem eigenen Commit aktualisiert, bevor der Merge stattfand.
 
 **Lösung:**
-README auf aktuelle Single-File-Architektur aktualisieren.
+README auf aktuelle Single-File-Architektur aktualisieren. Erledigt am 2026-04-30.
 
 **Vermeidung:**
 README immer im gleichen Commit wie Architektur-Änderungen aktualisieren.

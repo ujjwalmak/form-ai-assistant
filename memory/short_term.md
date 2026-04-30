@@ -1,51 +1,82 @@
 # Short-Term Memory — FormAssist
 
-_Last updated: 2026-04-23_
+_Last updated: 2026-04-30_
 
-## Aktueller Stand
+## Aktueller Stand (30.04.2026)
 
 FormAssist ist eine Chrome-Extension (Manifest V3), die auf jeder Seite mit Formularfeldern eine KI-Sidebar einblendet.  
-Das Projekt hat zwei Codelinien, die zuletzt gemergt wurden:
+**Code-Refactoring heute abgeschlossen:** Große Verbesserungen an Feldterkennung, Profile-System, und UI.
 
-| Datei | Herkunft | Funktion |
+| Datei | Funktion | Status |
 |---|---|---|
-| `content.js` | Claude (lokal) | Haupt-Logik: Shadow DOM, Kontext-Extraktion, AI-Call, Drag/Resize/Minimize |
-| `manifest.json` | Claude (lokal) | MV3, single content-script, host_permissions Groq |
-| `state.js`, `ui.js`, `api.js`, `bootstrap.js`, `content.css` | Kollege (GitHub) | Ältere Multifile-Architektur — aktuell NICHT aktiv geladen |
-| `api-key.txt` | lokal, gitignored | Groq API-Key (gsk_…) |
-| `icon.svg` | Claude | Extension-Icon |
+| `content.js` | Haupt-Logik: Profile-Matching, erweiterte Feldterkennung, AI-Calls, Drag/Resize/Minimize | ✅ Heute überarbeitet |
+| `manifest.json` | MV3 mit Icons (16/32/48/128px), content-script, Groq API | ✅ Icons aktualisiert |
+| `api-key.txt` | Groq API-Key (gsk_…) — gitignored, lokal-only | ✓ |
 
-**Aktive Architektur:** Alles läuft über `content.js` (Shadow DOM, Single File).  
-Die Dateien `state.js`, `ui.js`, `api.js`, `bootstrap.js`, `content.css` liegen im Repo, werden aber vom aktuellen `manifest.json` NICHT geladen.
+**Aktive Architektur:** Alles in `content.js` (Shadow DOM, Single File).  
+Alle verwaisten Multifile-Dateien wurden entfernt.
 
-## Implementierte Features
+## Implementierte Features (heute erweitert)
 
-- Shadow DOM Sidebar (kein CSS-Konflikt mit Host-Seiten)
-- Reichhaltige Formular-Kontext-Extraktion (Labels, aria-*, Hints, Fehler, Optionen, autocomplete, min/max)
-- System-Prompt mit Seitentitel, URL, Feldstruktur, Submit-Zweck, Anweisungen
+**Profile & Storage:**
+- `PROFILE_FIELDS` — strukturiertes Mapping von 16 Standardfeldern (Vorname, Email, IBAN, etc.)
+- `FAKE_DATA` — Testdaten für schnelles Testen
+- Chrome Storage (chrome.storage.local) für Profile, Position, Dark Mode
+- Auto-Fill: Profile-Felder werden erkannt und können schnell gefüllt werden
+
+**Feldterkennung (neu):**
+- `matchProfile()` — intelligentes Matching von Formularelementen gegen PROFILE_FIELDS
+- Autocomplete-Attribute werden erkannt und Priorität gegeben
+- Suchworte/Keywords für Feldtyp-Erkennung (z.B. 'plz', 'postleitzahl' → zip)
+- `fillField()` — überarbeitete, robuste Feldwert-Einfügung mit Event-Dispatch
+- Bessere SELECT-Option-Matching, Checkbox/Radio-Handling
+
+**UI & Styling:**
+- Shadow DOM Sidebar (vollständige CSS-Isolation)
+- **Dark Mode** — gespeichert in storage, Farbvariablen in CSS (light/dark)
+- Google Fonts (Roboto) geladen im Shadow Root
+- Modern Color Palette (Google Design Colors)
+- Extension-Icons (16, 32, 48, 128px) — jetzt im manifest definiert
+
+**Formular-Kontext:**
+- Reiche Kontext-Extraktion: Labels, aria-*, Hints, Fehler, Optionen, autocomplete, min/max
+- Open Graph Metadaten (og:title, og:description)
+- Feldgruppenbildung nach Sektionen
+- System-Prompt mit Nutzerprofil-Integration
+- Aktives-Feld-Tracking mit Hint + Fehlermeldung + aktuellem Wert
+
+**API & KI:**
 - Groq API (llama-3.1-8b-instant), max_tokens 400
 - Konversations-History (letzte 10 Nachrichten)
 - API-Key aus `api-key.txt` (via `chrome.runtime.getURL`)
-- Clickbare Feldliste im Begrüßungs-Chat (scrollt + highlightet das echte Feld)
-- Drag (Header anfassen), Width-Resize (linker Rand), Height-Resize (unterer Rand), Corner-Resize (SW-Ecke)
-- Minimize-Button (klappt auf 56px, speichert/stellt Höhe wieder her)
+
+**Bedienung:**
+- Clickbare Feldliste im Chat
+- **Geführter Modus** — KI fragt nacheinander nur leere Felder ab (mit Fortschritt "5/12"), User antwortet kurz, KI trägt ein
+- Quick-Action Buttons: "Formular erklären" (Überblick), "Geführter Modus" (Step-by-Step)
+- Dark Mode Toggle im Header
+- Profil-Editor (16 Standardfelder, lokal persistiert)
+- Clickbare Feldliste
+- Drag (Header), Resize (linke/untere Kante + SW-Ecke)
+- Minimize-Button
 - MutationObserver für SPA-Formulare
-- Aktives-Feld-Tracking mit Hint + Fehlermeldung + aktuellem Wert an AI
+- Ctrl+Shift+F Keyboard-Shortcut
 
-## Offene Probleme / bekannte Schwächen
+## Offene Probleme / Bekannte Schwächen
 
-- Multifile-Dateien (`state.js`, `ui.js` etc.) sind verwaist im Repo — sollten aufgeräumt oder entfernt werden
-- Inline-Resize nach Minimize-Restore kann in bestimmten Zustandskombinationen (docked + minimized) zu falscher Höhe führen
-- Extension lädt nicht in Chrome's nativen PDF-Viewer (Browser-Limitation)
-- API-Key liegt clientseitig in Extension — kein Produktionssetup
-- README.md beschreibt noch die alte Multifile-Architektur (vom Kollegen überschrieben)
+- Inline-Resize nach Minimize-Restore kann in bestimmten Zustandskombinationen (docked + minimized) zu falscher Höhe führen (Minor)
+- Extension lädt nicht in Chrome's nativen PDF-Viewer (Browser-Limitation, nicht behebbar)
+- API-Key liegt clientseitig in Extension — kein Produktionssetup (bekannt, für Prototyp OK)
+- Profile-System speichert aktuell keine Sicherung auf Backend (optional: könnte mit lokaler IndexedDB erweitert werden)
 
 ## Nächste sinnvolle Schritte
 
-1. Alte Multifile-Dateien aus Repo entfernen oder README korrigieren
-2. Feature: Auto-Fill (AI schlägt Feldwert vor, 1-Klick einfügen)
-3. Feature: Proaktive Fehlererkennung (bei invalid-Feldern automatisch AI-Hilfe anbieten)
-4. Feature: localStorage-Memory für persönliche Daten (Name, Adresse)
-5. Feature: Keyboard-Shortcut (Ctrl+Shift+F)
-6. Feature: Darkmode (prefers-color-scheme)
-7. Feature: Position/Größe in localStorage speichern
+1. ✅ Profile-System & Auto-Fill (erledigt heute)
+2. ✅ Dark Mode (erledigt heute)
+3. ✅ Icons in manifest (erledigt heute)
+4. ✅ Keyboard-Shortcut Ctrl+Shift+F (vorhanden)
+5. ✅ Profil-Editor UI (vorhanden, jetzt dokumentiert)
+6. ✅ Quick-Action Buttons (vorhanden, jetzt dokumentiert)
+7. Feature: Proaktive Fehlererkennung (bei invalid-Feldern automatisch AI-Hilfe)
+8. Feature: Profil-Backup/Cloud-Sync (optional, größere Arbeit)
+9. Testing: Feldterkennung auf realen Formularen testen
