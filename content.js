@@ -352,7 +352,11 @@
     let   darkMode = stored.faDarkMode || false;
     const extras   = stored.faExtras   || {};
 
+<<<<<<< HEAD
+    let SYSTEM = buildSystemPrompt(ctx, profile);
+=======
     const SYSTEM = buildSystemPrompt(ctx, profile, extras);
+>>>>>>> 9f1dbf9 (Update project files)
 
     // ── Shadow DOM ────────────────────────────────────────────────────
     const hostEl = document.createElement('div');
