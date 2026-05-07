@@ -1,11 +1,11 @@
 # Short-Term Memory — FormAssist
 
-_Last updated: 2026-04-30_
+_Last updated: 2026-05-07_
 
-## Aktueller Stand (30.04.2026)
+## Aktueller Stand (07.05.2026)
 
 FormAssist ist eine Chrome-Extension (Manifest V3), die auf jeder Seite mit Formularfeldern eine KI-Sidebar einblendet.  
-**Code-Refactoring heute abgeschlossen:** Große Verbesserungen an Feldterkennung, Profile-System, und UI.
+**Agent Auto-Fill heute implementiert:** Live Sequential Fill, faExtras-Speicher, Extras im Profil-Panel.
 
 | Datei | Funktion | Status |
 |---|---|---|
@@ -62,21 +62,40 @@ Alle verwaisten Multifile-Dateien wurden entfernt.
 - MutationObserver für SPA-Formulare
 - Ctrl+Shift+F Keyboard-Shortcut
 
+## Neu implementiert (07.05.2026)
+
+**Agent Auto-Fill — Live Sequential Mode:**
+
+- `agentFill()` — iteriert alle Felder einzeln, eine KI-Anfrage pro unbekanntem Feld
+- Live-Status-Bubble im Chat: Spinner → ✓/? mit Wert + Badge (`[Profil]` grün / `[KI]` gelb)
+- Matching-Priorität: Profile → Extras (lokal, kein API) → KI → Nutzer fragen
+
+**faExtras-Speicher:**
+
+- `faExtras` in chrome.storage.local — Key-Value für alle Felder außerhalb PROFILE_FIELDS
+- `matchExtras()` — fuzzy matching (includes) damit "Webseite (optional)" auf "Webseite" matched
+- Beim Beantworten unbekannter Felder: automatisch in faProfile oder faExtras gespeichert
+
+**Profil-Panel erweitert:**
+
+- `renderExtrasInProfile()` — faExtras-Einträge unterhalb der Standardfelder
+- Jeder Extras-Eintrag editierbar + einzeln löschbar (× Button)
+- Speichern-Button sichert Profile + Extras in einem Schritt
+
 ## Offene Probleme / Bekannte Schwächen
 
 - Inline-Resize nach Minimize-Restore kann in bestimmten Zustandskombinationen (docked + minimized) zu falscher Höhe führen (Minor)
 - Extension lädt nicht in Chrome's nativen PDF-Viewer (Browser-Limitation, nicht behebbar)
 - API-Key liegt clientseitig in Extension — kein Produktionssetup (bekannt, für Prototyp OK)
-- Profile-System speichert aktuell keine Sicherung auf Backend (optional: könnte mit lokaler IndexedDB erweitert werden)
 
 ## Nächste sinnvolle Schritte
 
-1. ✅ Profile-System & Auto-Fill (erledigt heute)
-2. ✅ Dark Mode (erledigt heute)
-3. ✅ Icons in manifest (erledigt heute)
-4. ✅ Keyboard-Shortcut Ctrl+Shift+F (vorhanden)
-5. ✅ Profil-Editor UI (vorhanden, jetzt dokumentiert)
-6. ✅ Quick-Action Buttons (vorhanden, jetzt dokumentiert)
-7. Feature: Proaktive Fehlererkennung (bei invalid-Feldern automatisch AI-Hilfe)
-8. Feature: Profil-Backup/Cloud-Sync (optional, größere Arbeit)
-9. Testing: Feldterkennung auf realen Formularen testen
+1. ✅ Profile-System & Auto-Fill
+2. ✅ Dark Mode
+3. ✅ Icons in manifest
+4. ✅ Keyboard-Shortcut Ctrl+Shift+F
+5. ✅ Profil-Editor UI
+6. ✅ Quick-Action Buttons
+7. ✅ Agent Auto-Fill (Live Sequential, faExtras, Badge-System)
+8. Testing: Agent auf realen Formularen validieren (Matching-Qualität, Edge Cases)
+9. Feature: Profil-Backup/Cloud-Sync (optional, größere Arbeit)

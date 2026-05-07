@@ -19,8 +19,17 @@ FormAssist ist eine Manifest-V3-Extension, die auf Formularseiten eine KI-Assist
 
 ### Profilmanagement
 - **Profil bearbeiten**: Button im Header öffnet Profil-Editor (16 Standardfelder)
+- **Weitere gespeicherte Daten**: Felder die beim Auto-Fill gelernt wurden (Webseite, Steuernummer, etc.) erscheinen ebenfalls im Profil — editierbar und einzeln löschbar
 - Profile lokal speichern (Chrome Storage) — bleiben auch nach Browser-Neustart erhalten
-- Schneller Zugriff auf gespeicherte Daten beim nächsten Besuch
+
+### KI Auto-Fill (Agent)
+
+- **"✦ KI Auto-Fill"** Button befüllt das gesamte Formular live Feld für Feld
+- Bekannte Felder (Profil + gespeicherte Extras) werden sofort eingetragen — kein API-Call
+- Für unbekannte Felder: eigene KI-Anfrage pro Feld, Nutzer sieht Spinner → ✓ in Echtzeit
+- Felder die die KI nicht kennt: werden im Chat nachgefragt und automatisch gespeichert
+- Badge-System: `[Profil]` (grün) = aus gespeicherten Daten, `[KI]` (gelb) = KI-Inferenz
+- Nach dem ersten Ausfüllen sind neue Felder für alle zukünftigen Formulare bekannt
 
 ### Geführter Modus (Step-by-Step)
 - **Geführter Modus**: KI fragt nacheinander nur noch leere Felder ab — statt auf Fragen warten

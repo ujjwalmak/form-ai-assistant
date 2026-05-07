@@ -19,3 +19,6 @@ Position + size memory — remember where the panel was left between page loads
 Page language detection — automatically respond in the language of the page
 Form summary — "explain this form to me in plain language before I start"
 Copy button on every AI response
+
+
+Agent (KI), welche die Webseite scannt, ausliest und dann erklären, und live aufüllen kann.

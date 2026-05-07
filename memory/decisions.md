@@ -122,6 +122,70 @@ Auto-Fill brauchte eine systematische Feldterkennung. PROFILE_FIELDS mit Keyword
 
 ---
 
+## [2026-05-07] Entscheidung: Ein API-Call pro Feld statt ein Batch-Call
+
+**Kontext:**
+Agent Auto-Fill brauchte KI-Vorschläge für alle Formularfelder. Zwei Optionen: ein Batch-Call mit JSON-Antwort, oder ein Call pro Feld.
+
+**Entscheidung:**
+Ein API-Call pro Feld (max_tokens: 80). Nutzer sieht live wie jedes Feld befüllt wird.
+
+**Alternativen:**
+
+- Batch-Call mit JSON: schneller, aber keine visuelle Progression, KI-Antwort muss geparst werden
+- Streaming: komplexer, kein Mehrwert für kurze Feldwerte
+
+**Konsequenzen:**
+
+- N API-Calls pro Formular (N = Felder ohne lokalen Match), aber Groq Free Tier ist großzügig
+- Sichtbarer Fortschritt macht die UX deutlich befriedigender
+- Jede Anfrage ist minimal (80 Tokens) → schnell
+
+---
+
+## [2026-05-07] Entscheidung: faExtras als separater Storage-Key
+
+**Kontext:**
+Felder wie "Webseite", "Steuernummer", "Fax" passen nicht in PROFILE_FIELDS. Optionen: PROFILE_FIELDS dynamisch erweitern, oder separates Key-Value-Store.
+
+**Entscheidung:**
+`faExtras` als separater `chrome.storage.local`-Key. Schema: `{ "Webseite": "https://...", "Fax": "+49 ..." }`.
+
+**Alternativen:**
+
+- PROFILE_FIELDS dynamisch erweitern: komplexer, bricht die statische Struktur
+- IndexedDB: zu viel Overhead für einfache Key-Value-Paare
+- faProfile mit beliebigen Keys erweitern: vermischt Schema mit freien Einträgen
+
+**Konsequenzen:**
+
+- faExtras ist einfach zu lesen, zu schreiben und anzuzeigen
+- matchExtras() macht fuzzy-matching damit leicht abweichende Labels trotzdem treffen
+- Profil-Panel zeigt beides getrennt — klare UX-Trennung
+
+---
+
+## [2026-05-07] Entscheidung: Lokales Matching vor KI-Call
+
+**Kontext:**
+Frühere Version schickte alle Felder an die KI und hoffte, dass sie faExtras aus dem System-Prompt nutzt. Das hat nicht zuverlässig funktioniert (KI gab trotzdem null zurück).
+
+**Entscheidung:**
+Zwei-Phasen-Matching: erst lokal (matchProfile + matchExtras), dann KI nur für wirklich unbekannte Felder.
+
+**Alternativen:**
+
+- Alles an KI schicken: unzuverlässig, KI ignoriert manchmal gespeicherte Daten
+- Nur lokales Matching: zu begrenzt, KI kann aus Kontext sinnvolle Werte ableiten
+
+**Konsequenzen:**
+
+- Gespeicherte Daten werden garantiert verwendet — kein Verlassen auf KI-Interpretation
+- Kürzere KI-Anfragen (nur unbekannte Felder)
+- Klare Trennung von Verantwortlichkeiten
+
+---
+
 ## [2026-04-30] Entscheidung: Dark Mode als Preference speichern
 
 **Kontext:**

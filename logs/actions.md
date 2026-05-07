@@ -84,6 +84,32 @@ Die verwaisten Multifile-Dateien aus dem Repo entfernen und die Doku auf den neu
 
 ---
 
+## [2026-05-07] Agent Auto-Fill — Live Sequential Mode
+
+**Ziel:**
+Einen semi-autonomen KI-Agenten bauen, der Formulare live Feld für Feld befüllt — mit sichtbarem Fortschritt im Chat, automatischem Lernen unbekannter Felder und persistenter Speicherung neuer Daten.
+
+**Aktionen:**
+
+1. **`agentFill()` — Live Sequential Mode:** KI schickt pro Feld eine eigene Anfrage (max_tokens: 80). Nutzer sieht in Echtzeit wie jedes Feld befüllt wird (Spinner → ✓).
+2. **`faExtras` Storage:** Neuer chrome.storage.local-Key für Felder außerhalb von PROFILE_FIELDS (z.B. "Webseite", "Steuernummer", "Fax"). Wird bei Antwort auf unbekannte Felder automatisch befüllt.
+3. **`matchExtras()` Helper:** Fuzzy-Matching von Feldlabels gegen `faExtras`-Keys (includes-basiert). Verhindert dass die KI für bekannte Extras erneut gefragt wird.
+4. **Zwei-Phasen-Matching:** Profile-Match (kein API-Call) → Extras-Match (kein API-Call) → KI (API-Call). Lokale Matches sind garantiert stabil.
+5. **`agentMode` State Machine:** Unbekannte Felder werden nach dem Live-Fill nacheinander per Chat abgefragt. Antworten werden direkt in Feld eingetragen + gespeichert (faProfile oder faExtras).
+6. **Badge-System in Preview:** `[Profil]` (grün) = aus gespeicherten Daten, `[KI]` (gelb) = aus KI-Inferenz.
+7. **Extras im Profil-Panel:** `renderExtrasInProfile()` zeigt alle faExtras-Einträge unterhalb der Standardfelder — editierbar und einzeln löschbar. Speichern-Button sichert beides.
+8. **`buildSystemPrompt()` erweitert:** Extras werden als `=== WEITERE GESPEICHERTE DATEN ===` Sektion in den System-Prompt aufgenommen.
+
+**Ergebnis:**
+
+- Nutzer klickt "✦ KI Auto-Fill" → sieht live wie Felder befüllt werden
+- Bekannte Felder (Profil + Extras): sofort, kein API-Call
+- Unbekannte Felder: KI antwortet oder fragt nach → wird gespeichert
+- Nach dem ersten Ausfüllen sind neue Felder für alle zukünftigen Formulare bekannt
+- Profil-Panel zeigt jetzt vollständiges Bild aller gespeicherten Daten
+
+---
+
 ## [2026-04-30] Code-Refactoring — Profile-System & Feldterkennung
 
 **Ziel:**
