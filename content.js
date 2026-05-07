@@ -274,7 +274,7 @@
     return { page, forms };
   }
 
-  function buildSystemPrompt(ctx, profile) {
+  function buildSystemPrompt(ctx, profile, extras = {}) {
     const { page, forms } = ctx;
     const lines = [
       'Du bist ein intelligenter KI-Formularassistent. Du hilfst Nutzern dabei, Online-Formulare korrekt, vollständig und fehlerfrei auszufüllen.',
@@ -291,6 +291,11 @@
     if (filledFields.length) {
       lines.push('', '=== NUTZERPROFIL ===');
       filledFields.forEach(pf => lines.push(`${pf.label}: ${profile[pf.key]}`));
+    }
+    const extraEntries = Object.entries(extras).filter(([, v]) => v);
+    if (extraEntries.length) {
+      lines.push('', '=== WEITERE GESPEICHERTE DATEN ===');
+      extraEntries.forEach(([k, v]) => lines.push(`${k}: ${v}`));
     }
     lines.push('');
     forms.forEach(form => {
@@ -341,12 +346,13 @@
   // INIT — load storage before building UI
   // ═══════════════════════════════════════════════════════════════════════
 
-  chrome.storage.local.get(['faProfile', 'faPosition', 'faDarkMode'], stored => {
+  chrome.storage.local.get(['faProfile', 'faPosition', 'faDarkMode', 'faExtras'], stored => {
     const profile  = stored.faProfile  || {};
     const savedPos = stored.faPosition || null;
     let   darkMode = stored.faDarkMode || false;
+    const extras   = stored.faExtras   || {};
 
-    let SYSTEM = buildSystemPrompt(ctx, profile);
+    const SYSTEM = buildSystemPrompt(ctx, profile, extras);
 
     // ── Shadow DOM ────────────────────────────────────────────────────
     const hostEl = document.createElement('div');
@@ -594,6 +600,14 @@
       .profile-actions .btn-danger { color: var(--danger); border-color: var(--danger); }
       .profile-actions .btn-danger:hover { background: var(--danger-l); }
 
+      .pf-extras-hdr { grid-column: 1 / -1; font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--border); }
+      .pf-extras-empty { grid-column: 1 / -1; font-size: 11.5px; color: var(--text3); font-style: italic; }
+      .pf-extra-row { display: flex; gap: 6px; align-items: center; }
+      .pf-extra-row input { flex: 1; min-width: 0; font-family: var(--font); font-size: 12.5px; padding: 7px 8px; border: 1px solid var(--border2); border-radius: 8px; background: var(--surface2); color: var(--text); outline: none; transition: border-color 0.14s, box-shadow 0.14s; }
+      .pf-extra-row input:focus { border-color: var(--accent); box-shadow: var(--focus); background: var(--surface); }
+      .pf-del { background: transparent; border: 1px solid transparent; color: var(--text3); cursor: pointer; padding: 4px 7px; border-radius: 6px; font-size: 14px; line-height: 1; flex-shrink: 0; transition: color 0.14s, background 0.14s, border-color 0.14s; }
+      .pf-del:hover { color: var(--danger); background: var(--danger-l); border-color: rgba(180,35,24,0.2); }
+
       .review-status { display: inline-flex; align-items: center; gap: 5px; margin-bottom: 8px; padding: 3px 7px; border-radius: 7px; font-size: 10.5px; font-weight: 650; border: 1px solid var(--border); color: var(--text2); background: var(--surface); }
       .review-status.ok { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
       .review-status.warn { color: #a16207; background: #fffbeb; border-color: #fde68a; }
@@ -616,6 +630,35 @@
       /* ── Toast ── */
       .toast { position: absolute; top: 66px; left: 50%; max-width: calc(100% - 32px); transform: translateX(-50%) translateY(-6px); background: var(--text); color: var(--surface); font-family: var(--font); font-size: 12px; padding: 7px 12px; border-radius: 8px; opacity: 0; transition: opacity 0.18s, transform 0.18s; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 20; box-shadow: 0 10px 24px rgba(15,23,42,0.18); }
       .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+      /* ── Agent preview ── */
+      .agent-preview { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+      .agent-field-row { display: flex; align-items: center; gap: 9px; padding: 7px 9px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: border-color 0.14s, background 0.14s; }
+      .agent-field-row:has(input:checked) { border-color: var(--accent-b); background: var(--accent-l); }
+      .agent-field-row input[type="checkbox"] { flex-shrink: 0; width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+      .agent-field-row label { flex: 1; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; }
+      .agent-field-label { font-size: 10.5px; color: var(--text3); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .agent-field-value { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .agent-actions { display: flex; gap: 7px; margin-top: 6px; flex-wrap: wrap; }
+      .agent-confirm { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 7px 13px; font-size: 12px; font-family: var(--font); cursor: pointer; transition: background 0.14s, box-shadow 0.14s; }
+      .agent-confirm:hover { background: var(--accent-h); }
+      .agent-confirm:focus-visible { outline: none; box-shadow: var(--focus); }
+      .agent-cancel { background: var(--surface); color: var(--text2); border: 1px solid var(--border2); border-radius: 8px; padding: 7px 13px; font-size: 12px; font-family: var(--font); cursor: pointer; transition: background 0.14s; }
+      .agent-cancel:hover { background: var(--bg); color: var(--text); }
+      .agent-cancel:focus-visible { outline: none; box-shadow: var(--focus); }
+      .agent-select-all { background: transparent; color: var(--accent); border: none; font-size: 11px; font-family: var(--font); cursor: pointer; padding: 0; margin-left: auto; text-decoration: underline; }
+      @keyframes fa-spin { to { transform: rotate(360deg); } }
+      .fa-spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: fa-spin 0.65s linear infinite; flex-shrink: 0; }
+      .live-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
+      .live-row-icon { flex-shrink: 0; width: 16px; text-align: center; font-style: normal; }
+      .live-row-label { flex: 1; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+      .live-row-value { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; flex-shrink: 0; }
+      .live-summary { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text3); }
+      .badge { display: inline-flex; align-items: center; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px; padding: 2px 6px; border-radius: 5px; flex-shrink: 0; }
+      .badge-profile { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+      .badge-ai      { background: #fffbeb; color: #a16207; border: 1px solid #fde68a; }
+      :host(.dark) .badge-profile { background: #052e1a; color: #86efac; border-color: #166534; }
+      :host(.dark) .badge-ai      { background: #422006; color: #fde68a; border-color: #854d0e; }
 
       @media (max-width: 420px) {
         .trigger { right: 16px; bottom: 16px; }
@@ -757,9 +800,56 @@
       });
     }
 
+    function renderExtrasInProfile() {
+      profileGrid.querySelectorAll('.pf-extras-hdr, .pf-extras-empty, .pf-extra').forEach(e => e.remove());
+
+      const hdr = document.createElement('div');
+      hdr.className = 'pf-extras-hdr';
+      hdr.textContent = 'Weitere gespeicherte Daten';
+      profileGrid.appendChild(hdr);
+
+      const extraEntries = Object.entries(extras);
+      if (!extraEntries.length) {
+        const empty = document.createElement('div');
+        empty.className = 'pf-extras-empty';
+        empty.textContent = 'Noch keine weiteren Daten — werden automatisch beim Ausfüllen gespeichert.';
+        profileGrid.appendChild(empty);
+        return;
+      }
+
+      extraEntries.forEach(([key, value]) => {
+        const div = document.createElement('div');
+        div.className = 'pf pf-extra full';
+        div.dataset.extraKey = key;
+        const lbl = document.createElement('label');
+        lbl.textContent = key;
+        const row = document.createElement('div');
+        row.className = 'pf-extra-row';
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = value;
+        inp.placeholder = key;
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'pf-del';
+        delBtn.title = `"${key}" löschen`;
+        delBtn.textContent = '×';
+        delBtn.addEventListener('click', () => {
+          delete extras[key];
+          chrome.storage.local.set({ faExtras: extras });
+          div.remove();
+          showToast(`"${key}" gelöscht`);
+        });
+        row.append(inp, delBtn);
+        div.append(lbl, row);
+        profileGrid.appendChild(div);
+      });
+    }
+
     let profileVisible = false;
     function showProfile() {
       profileVisible = true;
+      renderExtrasInProfile();
       profilePanel.classList.add('visible');
       messagesEl.style.display = 'none';
       $('fa-profile-btn').classList.add('active');
@@ -776,10 +866,21 @@
     $('fa-pf-save').addEventListener('click', () => {
       const p = getProfileFromInputs();
       PROFILE_FIELDS.forEach(pf => { if (p[pf.key]) profile[pf.key] = p[pf.key]; else delete profile[pf.key]; });
+<<<<<<< HEAD
       chrome.storage.local.set({ faProfile: profile }, () => {
         SYSTEM = buildSystemPrompt(ctx, profile);
         showToast('Profil gespeichert');
       });
+=======
+      chrome.storage.local.set({ faProfile: profile });
+
+      profileGrid.querySelectorAll('.pf-extra').forEach(div => {
+        const key = div.dataset.extraKey;
+        const val = div.querySelector('input')?.value.trim();
+        if (key) { if (val) extras[key] = val; else delete extras[key]; }
+      });
+      chrome.storage.local.set({ faExtras: extras }, () => showToast('Profil gespeichert'));
+>>>>>>> 9f1dbf9 (Update project files)
     });
 
     $('fa-pf-fake').addEventListener('click', () => loadProfileIntoInputs(FAKE_DATA));
@@ -1112,7 +1213,12 @@
       guidedBtn.className = 'quick-action';
       guidedBtn.textContent = 'Geführter Modus';
       guidedBtn.addEventListener('click', startGuidedMode);
-      quickActions.append(summaryBtn, guidedBtn);
+      const agentBtn = document.createElement('button');
+      agentBtn.type = 'button';
+      agentBtn.className = 'quick-action';
+      agentBtn.textContent = '✦ KI Auto-Fill';
+      agentBtn.addEventListener('click', agentFill);
+      quickActions.append(summaryBtn, guidedBtn, agentBtn);
       bubble.appendChild(quickActions);
 
       const list = document.createElement('div');
@@ -1153,6 +1259,7 @@
     let history       = [];
     let activeFieldEl = null;
     const guidedMode = { active: false, fields: [], index: 0 };
+    const agentMode  = { active: false, unknowns: [], idx: 0, knownMatches: [] };
 
     function createStreamBubble() {
       const div = document.createElement('div');
@@ -1253,10 +1360,8 @@
       if (!t) return;
       addMsg('user', t);
       inputEl.value = ''; inputEl.style.height = 'auto';
-      if (guidedMode.active) {
-        handleGuidedAnswer(t);
-        return;
-      }
+      if (guidedMode.active) { handleGuidedAnswer(t); return; }
+      if (agentMode.active)  { handleAgentAnswer(t);  return; }
       askAI(t);
     }
 
@@ -1371,6 +1476,341 @@
       }
       guidedMode.index += 1;
       askGuidedQuestion();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // AGENT AUTO-FILL — live sequential fill, one AI call per field
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function matchExtras(field) {
+      const fl = field.label.toLowerCase().trim();
+      const key = Object.keys(extras).find(k => {
+        const kl = k.toLowerCase().trim();
+        return kl === fl || fl.includes(kl) || kl.includes(fl);
+      });
+      return key ? extras[key] : null;
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function agentFill() {
+      if (profileVisible) hideProfile();
+      open();
+
+      const candidateFields = allFields.filter(f => {
+        if (!f.el || !isVisible(f.el)) return false;
+        const type = (f.el.type || '').toLowerCase();
+        return !SKIP_TYPES.has(type) && type !== 'password' && type !== 'file';
+      });
+
+      if (!candidateFields.length) {
+        addMsg('ai', 'Keine ausfüllbaren Felder gefunden.');
+        return;
+      }
+
+      const key = await loadKey();
+      if (!key) {
+        addMsg('ai', 'API-Schlüssel nicht gefunden. Bitte <code>api-key.txt</code> befüllen.');
+        return;
+      }
+
+      addMsg('user', '✦ KI Auto-Fill');
+
+      // Live status bubble
+      const statusDiv = document.createElement('div');
+      statusDiv.className = 'msg ai';
+      const statusBubble = document.createElement('div');
+      statusBubble.className = 'bubble';
+      const statusList = document.createElement('div');
+      statusList.style.cssText = 'display:flex;flex-direction:column;gap:5px;';
+      statusBubble.appendChild(statusList);
+      statusDiv.appendChild(statusBubble);
+      messagesEl.appendChild(statusDiv);
+
+      function makeRow(label) {
+        const row = document.createElement('div');
+        row.className = 'live-row';
+        const icon = document.createElement('span');
+        icon.className = 'live-row-icon';
+        icon.innerHTML = '<div class="fa-spinner"></div>';
+        const lbl = document.createElement('span');
+        lbl.className = 'live-row-label';
+        lbl.textContent = label;
+        row.append(icon, lbl);
+        statusList.appendChild(row);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return {
+          done(value, source) {
+            icon.innerHTML = '✓';
+            icon.style.color = 'var(--accent)';
+            if (value) {
+              const val = document.createElement('span');
+              val.className = 'live-row-value';
+              val.textContent = value;
+              row.appendChild(val);
+            }
+            if (source) {
+              const badge = document.createElement('span');
+              badge.className = `badge badge-${source === 'profile' ? 'profile' : 'ai'}`;
+              badge.textContent = source === 'profile' ? 'Profil' : 'KI';
+              row.appendChild(badge);
+            }
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          },
+          ask() {
+            icon.innerHTML = '?';
+            icon.style.color = 'var(--text3)';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          },
+        };
+      }
+
+      const unknownFields = [];
+      let filledCount = 0;
+
+      for (const field of candidateFields) {
+        if (field.el) {
+          field.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          highlightField(field.el);
+          activeFieldEl = field.el;
+          fieldNameEl.textContent = field.label;
+          fieldTag.classList.add('visible');
+        }
+
+        const row = makeRow(field.label);
+
+        // 1. Profile match (instant, no API)
+        const pf = matchProfile(field.el, profile);
+        if (pf && profile[pf.key]) {
+          await sleep(120);
+          fillField(field.el, profile[pf.key]);
+          row.done(profile[pf.key], 'profile');
+          filledCount++;
+          continue;
+        }
+
+        // 2. Extras match (instant, no API)
+        const extrasVal = matchExtras(field);
+        if (extrasVal) {
+          await sleep(120);
+          fillField(field.el, extrasVal);
+          row.done(extrasVal, 'profile');
+          filledCount++;
+          continue;
+        }
+
+        // 3. Ask AI for this specific field
+        const fieldPrompt = [
+          `Feld: "${field.label}" (${field.type})${field.required ? ' [Pflichtfeld]' : ''}`,
+          field.hint            ? `Hinweis: ${field.hint}` : '',
+          field.options?.length ? `Optionen: ${field.options.join(', ')}` : '',
+          '',
+          'Gib NUR den einzutragenden Wert zurück — kein JSON, kein Erklärtext.',
+          'Wenn du keinen sicheren Wert kennst: antworte exakt mit NULL',
+        ].filter(Boolean).join('\n');
+
+        try {
+          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+            body: JSON.stringify({
+              model: MODEL,
+              max_tokens: 80,
+              messages: [
+                { role: 'system', content: SYSTEM },
+                { role: 'user',   content: fieldPrompt },
+              ],
+            }),
+          });
+          const data = await res.json();
+          const reply = (data.choices?.[0]?.message?.content || '').trim();
+
+          if (!reply || reply.toUpperCase() === 'NULL') {
+            row.ask();
+            unknownFields.push(field);
+          } else {
+            fillField(field.el, reply);
+            row.done(reply, 'ai');
+            filledCount++;
+          }
+        } catch {
+          row.ask();
+          unknownFields.push(field);
+        }
+      }
+
+      const summary = document.createElement('div');
+      summary.className = 'live-summary';
+      summary.textContent = `${filledCount} von ${candidateFields.length} Feldern ausgefüllt${unknownFields.length ? ` · ${unknownFields.length} unbekannt` : ''}`;
+      statusBubble.appendChild(summary);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      if (unknownFields.length) {
+        await sleep(300);
+        addMsg('ai', `Für ${unknownFields.length} Feld${unknownFields.length !== 1 ? 'er' : ''} brauche ich deine Hilfe:`);
+        agentMode.active = true;
+        agentMode.unknowns = unknownFields;
+        agentMode.idx = 0;
+        agentMode.knownMatches = [];
+        agentModeAskNext();
+      } else {
+        showToast(`${filledCount} Felder ausgefüllt`);
+      }
+    }
+
+    function agentModeAskNext() {
+      if (agentMode.idx >= agentMode.unknowns.length) {
+        agentMode.active = false;
+        addMsg('ai', 'Alle Felder wurden ausgefüllt.');
+        return;
+      }
+
+      const field = agentMode.unknowns[agentMode.idx];
+      const parts = [];
+      if (field.hint)            parts.push(field.hint);
+      if (field.options?.length) parts.push(`Optionen: ${field.options.join(', ')}`);
+
+      const progress = `${agentMode.idx + 1}/${agentMode.unknowns.length}`;
+      addMsg(
+        'ai',
+        `(${progress}) Was soll ich bei <strong>${escapeHtml(field.label)}</strong> eintragen?${field.required ? ' <span class="review-note">(Pflichtfeld)</span>' : ''}${parts.length ? `<br><span class="review-note">${escapeHtml(parts.join(' · '))}</span>` : ''}`,
+        ['Überspringen', 'Beenden'],
+        {}
+      );
+
+      if (field.el) {
+        field.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        highlightField(field.el);
+        activeFieldEl = field.el;
+        fieldNameEl.textContent = field.label;
+        fieldTag.classList.add('visible');
+      }
+    }
+
+    function handleAgentAnswer(text) {
+      const normalized = text.toLowerCase().trim();
+      if (['beenden', 'abbrechen', 'stop', 'stopp'].includes(normalized)) {
+        agentMode.active = false;
+        if (agentMode.knownMatches.length) {
+          addMsg('ai', 'Beendet. Hier sind die Vorschläge für die bekannten Felder:');
+          addAgentPreview(agentMode.knownMatches);
+        } else {
+          addMsg('ai', 'Auto-Fill beendet.');
+        }
+        return;
+      }
+
+      const field = agentMode.unknowns[agentMode.idx];
+      if (!field) { agentMode.active = false; return; }
+
+      if (!['überspringen', 'ueberspringen', 'skip'].includes(normalized)) {
+        fillField(field.el, text);
+        showToast(`${field.label} ausgefüllt`);
+
+        const pf = matchProfile(field.el, profile);
+        if (pf) {
+          profile[pf.key] = text;
+          chrome.storage.local.set({ faProfile: profile });
+          addMsg('ai', `In deinem Profil als <strong>${escapeHtml(pf.label)}</strong> gespeichert.`, null, {});
+        } else {
+          extras[field.label] = text;
+          chrome.storage.local.set({ faExtras: extras });
+          addMsg('ai', `<strong>${escapeHtml(field.label)}</strong> gespeichert — wird auf zukünftigen Formularen automatisch vorgeschlagen.`, null, {});
+        }
+
+        agentMode.knownMatches.push({ field, label: field.label, value: text, source: 'profile' });
+      }
+
+      agentMode.idx++;
+      agentModeAskNext();
+    }
+
+    function addAgentPreview(matches) {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;';
+      header.innerHTML = `<strong>KI-Vorschläge (${matches.length} Felder)</strong>`;
+      const selectAllBtn = document.createElement('button');
+      selectAllBtn.className = 'agent-select-all';
+      selectAllBtn.textContent = 'Alle ab-/auswählen';
+      header.appendChild(selectAllBtn);
+
+      const note = document.createElement('div');
+      note.className = 'review-note';
+      note.textContent = 'Wähle die Felder aus, die übernommen werden sollen, und bestätige.';
+
+      const preview = document.createElement('div');
+      preview.className = 'agent-preview';
+
+      const checkboxes = [];
+      matches.forEach((m, i) => {
+        const row = document.createElement('div');
+        row.className = 'agent-field-row';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = `fa-agent-cb-${i}`;
+        cb.checked = true;
+        const lbl = document.createElement('label');
+        lbl.htmlFor = `fa-agent-cb-${i}`;
+        const badge = m.source === 'profile'
+          ? `<span class="badge badge-profile">Profil</span>`
+          : `<span class="badge badge-ai">KI</span>`;
+        lbl.innerHTML = `<span class="agent-field-label">${escapeHtml(m.label)}</span><span class="agent-field-value">${escapeHtml(m.value)}</span>`;
+        row.append(cb, lbl);
+        const badgeEl = document.createElement('div');
+        badgeEl.innerHTML = badge;
+        row.appendChild(badgeEl.firstChild);
+        preview.appendChild(row);
+        checkboxes.push({ cb, match: m });
+      });
+
+      let allChecked = true;
+      selectAllBtn.addEventListener('click', () => {
+        allChecked = !allChecked;
+        checkboxes.forEach(({ cb }) => { cb.checked = allChecked; });
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'agent-actions';
+
+      const confirmBtn = document.createElement('button');
+      confirmBtn.className = 'agent-confirm';
+      confirmBtn.textContent = 'Ausfüllen';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'agent-cancel';
+      cancelBtn.textContent = 'Abbrechen';
+
+      confirmBtn.addEventListener('click', () => {
+        let filled = 0;
+        checkboxes.forEach(({ cb, match }) => {
+          if (cb.checked && match.field?.el) {
+            fillField(match.field.el, match.value);
+            filled++;
+          }
+        });
+        confirmBtn.disabled = true;
+        cancelBtn.disabled = true;
+        actions.innerHTML = `<span class="review-note">${filled} Felder wurden ausgefüllt.</span>`;
+        showToast(`${filled} Felder automatisch ausgefüllt`);
+      });
+
+      cancelBtn.addEventListener('click', () => {
+        bubble.style.opacity = '0.55';
+        actions.innerHTML = '<span class="review-note">Abgebrochen.</span>';
+      });
+
+      actions.append(confirmBtn, cancelBtn);
+      preview.appendChild(actions);
+
+      bubble.append(header, note, preview);
+      div.appendChild(bubble);
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     // ═══════════════════════════════════════════════════════════════════════

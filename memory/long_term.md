@@ -40,6 +40,7 @@ Label-Extraktion in dieser Priorität:
 
 **Storage (chrome.storage.local):**
 - `faProfile` — Nutzerprofil (Vorname, Email, etc.)
+- `faExtras` — Zusätzliche Felder die nicht in PROFILE_FIELDS sind (z.B. "Webseite", "Steuernummer", "Fax"). Key = Feldlabel, Value = Wert.
 - `faPosition` — Sidebar Position (left, top, width, height)
 - `faDarkMode` — Boolean für Dark Mode Preference
 
@@ -102,6 +103,18 @@ Anweisungen: "..."
 - 16 Input-Felder (firstName, lastName, email, phone, etc.)
 - "Speichern" Button speichert in `chrome.storage.local` unter Key `faProfile`
 - Profil wird beim Start geladen und kann überall Auto-Fill verwenden
+
+**Agent Auto-Fill (Live Sequential Mode) — neu 2026-05-07:**
+
+- `agentFill()` — iteriert Felder sequenziell, eine KI-Anfrage pro Feld (max_tokens: 80)
+- Matching-Hierarchie: 1. `matchProfile()` → 2. `matchExtras()` → 3. KI-Call → 4. Nutzer fragen
+- `matchExtras(field)` — fuzzy matching (includes) von Feldlabels gegen faExtras-Keys
+- `agentMode` State Object: `{ active, unknowns[], idx, knownMatches[] }` — gleiche Struktur wie guidedMode
+- `agentModeAskNext()` — fragt unbekannte Felder nacheinander ab, speichert Antworten
+- `handleAgentAnswer()` — füllt Feld, matched gegen Profile (→ faProfile) oder neu (→ faExtras)
+- Live-Status-Bubble im Chat: Spinner → ✓/? pro Feld mit `[Profil]`/`[KI]` Badge
+- `sleep(ms)` Helper für die visuelle Verzögerung bei lokalen Matches
+- `renderExtrasInProfile()` — rendert faExtras dynamisch im Profil-Panel (editierbar, löschbar)
 
 **Weitere Modes:**
 - Formular-Zusammenfassung: `askFormSummary()` — zeigt Zweck, Pflichtangaben, Stolperstellen
