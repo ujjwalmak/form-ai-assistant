@@ -346,7 +346,7 @@
     const savedPos = stored.faPosition || null;
     let   darkMode = stored.faDarkMode || false;
 
-    const SYSTEM = buildSystemPrompt(ctx, profile);
+    let SYSTEM = buildSystemPrompt(ctx, profile);
 
     // ── Shadow DOM ────────────────────────────────────────────────────
     const hostEl = document.createElement('div');
@@ -776,7 +776,10 @@
     $('fa-pf-save').addEventListener('click', () => {
       const p = getProfileFromInputs();
       PROFILE_FIELDS.forEach(pf => { if (p[pf.key]) profile[pf.key] = p[pf.key]; else delete profile[pf.key]; });
-      chrome.storage.local.set({ faProfile: profile }, () => showToast('Profil gespeichert'));
+      chrome.storage.local.set({ faProfile: profile }, () => {
+        SYSTEM = buildSystemPrompt(ctx, profile);
+        showToast('Profil gespeichert');
+      });
     });
 
     $('fa-pf-fake').addEventListener('click', () => loadProfileIntoInputs(FAKE_DATA));
@@ -990,6 +993,31 @@
       return escapeHtml(text).replace(/\n/g, '<br>');
     }
 
+    function renderMarkdown(raw) {
+      function fmt(s) {
+        s = escapeHtml(s);
+        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+        s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        return s;
+      }
+      const parts = [];
+      let listItems = [];
+      function flushList() {
+        if (!listItems.length) return;
+        parts.push(`<ul style="margin:5px 0 5px 14px;padding:0;list-style:disc">${listItems.map(li => `<li style="margin:2px 0">${li}</li>`).join('')}</ul>`);
+        listItems = [];
+      }
+      for (const line of raw.split('\n')) {
+        const li = line.match(/^[\-\*•] (.+)/) || line.match(/^\d+\. (.+)/);
+        if (li) { listItems.push(fmt(li[1])); continue; }
+        flushList();
+        parts.push(line.trim() === '' ? '<br>' : fmt(line));
+      }
+      flushList();
+      return parts.join('<br>');
+    }
+
     function copyText(text) {
       const value = String(text || '').trim();
       if (!value) return;
@@ -1126,33 +1154,97 @@
     let activeFieldEl = null;
     const guidedMode = { active: false, fields: [], index: 0 };
 
+    function createStreamBubble() {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      div.appendChild(bubble);
+      messagesEl.appendChild(div);
+      return { div, bubble };
+    }
+
     async function askAI(userText, opts = {}) {
       const key = await loadKey();
-      if (!key) { addMsg('ai', 'API-Schlüssel nicht gefunden. Bitte <code>api-key.txt</code> mit deinem Groq API-Key befüllen.'); return; }
+      if (!key) { addMsg('ai', 'API-Schlüssel nicht gefunden. Bitte <code>api-key.txt</code> mit deinem Groq API-Key befüllen.'); return ''; }
       const content = userText + (opts.includeActive === false ? '' : getActiveFieldContext(activeFieldEl));
       history.push({ role: 'user', content });
       showTyping();
+
+      const useStream = opts.render !== false;
+
       try {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-          body: JSON.stringify({ model: MODEL, max_tokens: opts.maxTokens || 400, messages: [{ role: 'system', content: SYSTEM }, ...history.slice(-10)] }),
+          body: JSON.stringify({
+            model: MODEL, max_tokens: opts.maxTokens || 400, stream: useStream,
+            messages: [{ role: 'system', content: SYSTEM }, ...history.slice(-10)],
+          }),
         });
-        const data = await res.json();
-        removeTyping();
-        if (!res.ok) { addMsg('ai', 'Fehler: ' + (data.error?.message || `HTTP ${res.status}`)); history.pop(); return ''; }
-        const reply = data.choices?.[0]?.message?.content?.trim();
-        if (reply) {
-          history.push({ role: 'assistant', content: reply });
-          if (opts.render !== false) addMsg('ai', textToHtml(reply), null, { copyText: reply });
-          return reply;
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          removeTyping();
+          addMsg('ai', 'Fehler: ' + (data.error?.message || `HTTP ${res.status}`));
+          history.pop(); return '';
         }
-        else       { addMsg('ai', 'Unbekannter Fehler.'); history.pop(); return ''; }
+
+        // ── Non-streaming path (submit review) ───────────────────────
+        if (!useStream) {
+          const data = await res.json();
+          removeTyping();
+          const reply = data.choices?.[0]?.message?.content?.trim();
+          if (reply) { history.push({ role: 'assistant', content: reply }); return reply; }
+          addMsg('ai', 'Unbekannter Fehler.'); history.pop(); return '';
+        }
+
+        // ── Streaming path ────────────────────────────────────────────
+        removeTyping();
+        const { div: msgDiv, bubble: streamBubble } = createStreamBubble();
+        let rawText = '';
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        outer: while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const payload = line.slice(6).trim();
+            if (payload === '[DONE]') break outer;
+            try {
+              const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
+              if (delta) {
+                rawText += delta;
+                streamBubble.innerHTML = renderMarkdown(rawText);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+              }
+            } catch { /* malformed chunk */ }
+          }
+        }
+
+        const fullText = rawText.trim();
+        if (fullText) {
+          history.push({ role: 'assistant', content: fullText });
+          streamBubble.innerHTML = renderMarkdown(fullText);
+          streamBubble.classList.add('copyable');
+          addCopyButton(streamBubble, fullText);
+        } else {
+          msgDiv.remove();
+          addMsg('ai', 'Unbekannter Fehler.'); history.pop();
+        }
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return fullText;
+
       } catch {
         removeTyping();
         addMsg('ai', 'Verbindungsfehler. Bitte Internetverbindung prüfen.');
-        history.pop();
-        return '';
+        history.pop(); return '';
       }
     }
 
@@ -1373,7 +1465,7 @@
       div.className = 'msg ai';
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      bubble.innerHTML = `<div class="review-status ${status.cls}">${status.label}</div>${textToHtml(reply)}<div class="review-actions"></div><div class="review-note">FormAssist prüft nur Plausibilität und ersetzt keine verbindliche Rechts- oder Fachprüfung.</div>`;
+      bubble.innerHTML = `<div class="review-status ${status.cls}">${status.label}</div>${renderMarkdown(reply)}<div class="review-actions"></div><div class="review-note">FormAssist prüft nur Plausibilität und ersetzt keine verbindliche Rechts- oder Fachprüfung.</div>`;
       const actions = bubble.querySelector('.review-actions');
       const recheck = document.createElement('button');
       recheck.type = 'button';
