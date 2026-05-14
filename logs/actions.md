@@ -147,3 +147,23 @@ Erweiterte Feldterkennung mit Profile-System für Auto-Fill. Bessere Feldtyp-Erk
 - Dark Mode verbessert UI auf verschiedenen Webseiten
 - Feldterkennung 10x genauer durch strukturiertes Matching
 - Extension sieht professioneller mit Icons aus
+
+---
+
+## [2026-05-14] Dokumentation-Sync auf Code-Stand
+
+**Ziel:**
+Die Projektdokumentation auf den real implementierten Funktionsumfang angleichen.
+
+**Aktionen:**
+
+1. README aktualisiert (Featureliste, Sicherheitshinweise, korrekte Feldanzahl)
+2. `memory/short_term.md` komplett auf aktuellen Runtime-Stand gebracht
+3. `memory/long_term.md` korrigiert (15 Profilfelder, kein Minimize, Submit-Review/Fehlerhilfe, Datenschutzhinweis)
+4. `memory/known_issues.md` auf aktive, reale Probleme reduziert
+5. `memory/decisions.md` um historische Kennzeichnungen und neue Entscheidungen erweitert
+
+**Ergebnis:**
+
+- Doku entspricht wieder dem Verhalten in `content.js`, `background.js`, `options.js`
+- Veraltete Aussagen (`api-key.txt`, Guided Mode, Minimize als aktives Feature) sind entfernt bzw. historisch markiert

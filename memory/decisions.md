@@ -22,23 +22,21 @@ Single-File (`content.js`) mit Shadow DOM wird als aktive Architektur verwendet.
 
 ---
 
-## [2026-04-23] Entscheidung: API-Key in api-key.txt statt hardcoded
+## [2026-04-23] Entscheidung: API-Key nicht hardcoden (historisch)
 
 **Kontext:**
 User wollte Key hardcoden. GitHub Push Protection blockierte den Push mit detektiertem Groq-Key in content.js.
 
-**Entscheidung:**
-Key wird aus `api-key.txt` via `chrome.runtime.getURL` geladen. Datei ist in `.gitignore`. Lokal vorhanden, nie committed.
+**Entscheidung (damals):**
+Key wurde aus dem Code ausgelagert, um Push-Protection-Blocker zu umgehen.
 
 **Alternativen:**
 
 - GitHub-Secret bypassen via Link (erlaubt für diesen Key): abgelehnt, schlechte Praxis
 - Key im User weiterhin im Chat teilen: bereits passiert, Key ist als kompromittiert zu betrachten
 
-**Konsequenzen:**
-
-- Extension braucht `api-key.txt` im Extension-Ordner
-- Bei neuem Entwickler: Datei muss manuell erstellt werden (in README dokumentieren)
+**Status heute:**
+Abgeloest durch Optionen-Seite + `chrome.storage.sync` (`faApiKey`).
 
 ---
 
@@ -82,7 +80,7 @@ Groq mit `llama-3.1-8b-instant` — kostenloser Free Tier, sehr schnell, OpenAI-
 
 ---
 
-## [2026-04-23] Entscheidung: Minimize-Fix via inline style statt CSS-Klasse allein
+## [2026-04-23] Entscheidung: Minimize-Fix via inline style statt CSS-Klasse allein (historisch)
 
 **Kontext:**
 Minimize-Button funktionierte nicht wenn Panel im free-Modus war (gedraggt), weil `sidebar.style.height` (inline) die CSS-Klasse `.minimized { height: 56px }` überschreibt.
@@ -95,9 +93,8 @@ Minimize-Handler setzt `sidebar.style.height = '56px'` direkt in JS und speicher
 - `!important` in CSS: funktioniert nicht gegen inline styles
 - Transition zu reiner JS-Höhensteuerung ohne CSS-Klasse: möglich, aber mehr Code
 
-**Konsequenzen:**
-
-- Konsistentes Verhalten in docked und free Modus
+**Status heute:**
+Der Minimize-Button ist in der aktuellen UI nicht mehr Teil des aktiven Feature-Sets.
 
 ---
 
@@ -107,7 +104,7 @@ Minimize-Handler setzt `sidebar.style.height = '56px'` direkt in JS und speicher
 Auto-Fill brauchte eine systematische Feldterkennung. PROFILE_FIELDS mit Keywords und autocomplete-Attributen erlauben intelligentes Matching.
 
 **Entscheidung:**
-16 Standard-Profilfelder werden strukturiert definiert mit Keywords, Autocomplete-Werten und Labels. matchProfile() matched Formularfelder dagegen. FAKE_DATA für Prototyping.
+Standard-Profilfelder werden strukturiert mit Keywords, Autocomplete-Werten und Labels definiert. `matchProfile()` matched Formularfelder dagegen. `FAKE_DATA` bleibt fuer Prototyping.
 
 **Alternativen:**
 
@@ -122,7 +119,7 @@ Auto-Fill brauchte eine systematische Feldterkennung. PROFILE_FIELDS mit Keyword
 
 ---
 
-## [2026-05-07] Entscheidung: Ein API-Call pro Feld statt ein Batch-Call
+## [2026-05-07] Entscheidung: Ein API-Call pro Feld statt ein Batch-Call (historisch)
 
 **Kontext:**
 Agent Auto-Fill brauchte KI-Vorschläge für alle Formularfelder. Zwei Optionen: ein Batch-Call mit JSON-Antwort, oder ein Call pro Feld.
@@ -135,11 +132,8 @@ Ein API-Call pro Feld (max_tokens: 80). Nutzer sieht live wie jedes Feld befüll
 - Batch-Call mit JSON: schneller, aber keine visuelle Progression, KI-Antwort muss geparst werden
 - Streaming: komplexer, kein Mehrwert für kurze Feldwerte
 
-**Konsequenzen:**
-
-- N API-Calls pro Formular (N = Felder ohne lokalen Match), aber Groq Free Tier ist großzügig
-- Sichtbarer Fortschritt macht die UX deutlich befriedigender
-- Jede Anfrage ist minimal (80 Tokens) → schnell
+**Status heute:**
+Der aktive Agent erzeugt pro Schritt einen strukturierten Aktionsplan (JSON-Array) und fuehrt ihn nach User-Preview aus.
 
 ---
 
@@ -218,3 +212,34 @@ PNG Icons (16, 32, 48, 128px) werden im manifest definiert und sollten im Root d
 
 - Professionelleres Erscheinungsbild
 - Chrome zeigt Icons in verschiedenen Größen an
+
+---
+
+## [2026-05-14] Entscheidung: API-Key-Verwaltung via Optionen + storage.sync
+
+**Kontext:**
+Die dokumentierte `api-key.txt`-Loesung war nicht mehr der aktive Stand.
+
+**Entscheidung:**
+API-Key wird in der Optionen-Seite gepflegt und in `chrome.storage.sync` als `faApiKey` gespeichert.
+
+**Konsequenzen:**
+
+- Kein Key im Repository
+- Einheitlicher Setup-Flow fuer Nutzer
+- Fuer Produktion weiterhin Backend-Proxy erforderlich
+
+---
+
+## [2026-05-14] Entscheidung: Doku auf aktiven Feature-Stand synchronisieren
+
+**Kontext:**
+Mehrere Dokumente enthielten veraltete Aussagen (u.a. Guided Mode, Minimize, `api-key.txt`, falsche Feldanzahl).
+
+**Entscheidung:**
+README, Short-/Long-Term-Memory und Known-Issues wurden auf den aktuellen Code-Stand gebracht.
+
+**Konsequenzen:**
+
+- Weniger Onboarding-Reibung
+- Klarere Erwartung, was wirklich implementiert ist

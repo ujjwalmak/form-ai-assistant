@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FormAssist – Einstellungen</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+      --font:     'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --primary:  #0b57d0;
+      --primary-h:#0842a0;
+      --on-primary: #ffffff;
+      --primary-container: #d3e3fd;
+      --on-primary-container: #041e49;
+      --surface:  #f8fafd;
+      --surface-card: #ffffff;
+      --surface-variant: #eef3fd;
+      --outline:  #c4c7c5;
+      --outline-soft: #d3d9e3;
+      --text:     #1f1f1f;
+      --text2:    #444746;
+      --text3:    #5f6368;
+      --success:  #137333;
+      --error:    #b3261e;
+      --focus:    0 0 0 3px rgba(11, 87, 208, 0.24);
+      --shadow:   0 2px 8px rgba(32,33,36,0.14), 0 12px 28px rgba(32,33,36,0.10);
+      --radius-xl: 28px;
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary:  #a8c7fa;
+        --primary-h:#d3e3fd;
+        --on-primary: #062e6f;
+        --primary-container: #22324d;
+        --on-primary-container: #d3e3fd;
+        --surface:  #1b1c1e;
+        --surface-card: #232427;
+        --surface-variant: #2b2d31;
+        --outline:  #5f6368;
+        --outline-soft: #44484f;
+        --text:     #e8eaed;
+        --text2:    #c4c7c5;
+        --text3:    #9aa0a6;
+        --success:  #81c995;
+        --error:    #f28b82;
+        --focus:    0 0 0 3px rgba(168, 199, 250, 0.30);
+        --shadow:   0 8px 24px rgba(0,0,0,0.34), 0 2px 8px rgba(0,0,0,0.26);
+      }
+    }
+
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(1200px 420px at 100% -10%, var(--primary-container) 0%, transparent 60%),
+        var(--surface);
+    }
+
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 34px 20px 68px;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      border: 1px solid var(--outline-soft);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+      flex-shrink: 0;
+    }
+
+    .top-title {
+      font-size: 28px;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      font-size: 14px;
+      color: var(--text3);
+    }
+
+    .settings-card {
+      background: var(--surface-card);
+      border: 1px solid var(--outline-soft);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .desc {
+      margin: 8px 0 16px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text3);
+    }
+
+    .desc a { color: var(--primary); text-decoration: none; }
+    .desc a:hover { text-decoration: underline; }
+
+    .field-label {
+      display: inline-block;
+      font-size: 12px;
+      line-height: 1.2;
+      font-weight: 600;
+      color: var(--text2);
+      margin-bottom: 8px;
+    }
+
+    .input-row { display: flex; gap: 10px; }
+
+    input[type="text"],
+    input[type="password"],
+    select {
+      width: 100%;
+      min-height: 46px;
+      border: 1.5px solid var(--outline);
+      border-radius: var(--radius-sm);
+      background: var(--surface-variant);
+      color: var(--text);
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+    }
+
+    input::placeholder { color: var(--text3); }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: var(--focus);
+      background: var(--surface-card);
+    }
+
+    button {
+      min-height: 42px;
+      border-radius: 999px;
+      border: 1.5px solid var(--outline);
+      background: transparent;
+      color: var(--text2);
+      padding: 0 16px;
+      font: 600 13px/1 var(--font);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.1s ease;
+    }
+
+    button:hover { border-color: var(--primary); color: var(--primary); }
+    button:active { transform: scale(0.98); }
+    button:focus-visible { outline: none; box-shadow: var(--focus); }
+
+    .btn-filled {
+      border-color: transparent;
+      background: var(--primary);
+      color: var(--on-primary);
+      min-height: 46px;
+      padding: 0 24px;
+      font-size: 14px;
+      border-radius: 999px;
+    }
+
+    .btn-filled:hover { background: var(--primary-h); color: var(--on-primary); border-color: transparent; }
+
+    .status,
+    .save-status {
+      min-height: 20px;
+      margin-top: 9px;
+      font-size: 12px;
+      color: var(--text3);
+    }
+
+    .status.ok,
+    .save-status.ok { color: var(--success); }
+    .status.error { color: var(--error); }
+
+    .shortcuts { display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--outline-soft);
+      border-radius: var(--radius-md);
+      background: var(--surface-variant);
+      font-size: 13px;
+      color: var(--text2);
+    }
+
+    kbd {
+      border-radius: 999px;
+      border: 1px solid var(--outline);
+      background: var(--surface-card);
+      color: var(--text);
+      padding: 5px 10px;
+      font: 600 11.5px/1 'Cascadia Code', 'SF Mono', Consolas, monospace;
+      white-space: nowrap;
+    }
+
+    .link-small {
+      display: inline-block;
+      font-size: 12.5px;
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    .link-small:hover { text-decoration: underline; }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 640px) {
+      .page { padding-left: 14px; padding-right: 14px; }
+      .top-title { font-size: 24px; }
+      .settings-card { padding: 18px; border-radius: 20px; }
+      .actions { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .btn-filled { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <header class="top-bar">
+      <div class="brand-mark" aria-hidden="true">✦</div>
+      <div>
+        <h1 class="top-title">FormAssist</h1>
+        <p class="subtitle">Einstellungen</p>
+      </div>
+    </header>
+
+    <!-- API Key -->
+    <section class="settings-card">
+      <h2 class="card-title">Provider &amp; API-Schlüssel</h2>
+      <p class="desc">
+        Wähle den LLM-Anbieter und hinterlege den passenden API-Key.
+      </p>
+      <label class="field-label" for="provider">Provider</label>
+      <select id="provider">
+        <option value="groq">Groq</option>
+        <option value="openrouter">OpenRouter</option>
+      </select>
+      <p class="desc" id="providerHelp"></p>
+      <label class="field-label" for="apiKey" id="apiKeyLabel">Groq API-Key</label>
+      <div class="input-row">
+        <input type="password" id="apiKey" placeholder="gsk_…" autocomplete="off" spellcheck="false">
+        <button id="toggleKey" type="button">Anzeigen</button>
+      </div>
+      <div id="keyStatus" class="status"></div>
+    </section>
+
+    <!-- Model -->
+    <section class="settings-card">
+      <h2 class="card-title">KI-Modell</h2>
+      <label class="field-label" for="model">Aktives Modell</label>
+      <select id="model"></select>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="card-title">Assistent-Modus</h2>
+      <p class="desc">Steuert, wie der Agent mit dir interagiert (klassische Vorschau oder kontextuell-autonom).</p>
+      <label class="field-label" for="assistantMode">Standardmodus</label>
+      <select id="assistantMode">
+        <option value="hybrid">Empfohlen</option>
+        <option value="classic">Mit Vorschau</option>
+        <option value="context">Automatisch</option>
+      </select>
+    </section>
+
+    <!-- Shortcuts -->
+    <section class="settings-card">
+      <h2 class="card-title">Tastenkürzel</h2>
+      <div class="shortcuts">
+        <div class="shortcut-row">
+          <span>Assistent öffnen / schließen</span>
+          <kbd>Alt + Shift + F</kbd>
+        </div>
+        <div class="shortcut-row">
+          <span>Agent starten</span>
+          <kbd>Alt + Shift + S</kbd>
+        </div>
+      </div>
+      <a class="link-small" href="chrome://extensions/shortcuts" target="_blank">
+        Tastenkürzel anpassen →
+      </a>
+    </section>
+
+    <div class="actions">
+      <button id="save" class="btn-filled">Einstellungen speichern</button>
+      <div id="saveStatus" class="save-status"></div>
+    </div>
+
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>
