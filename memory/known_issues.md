@@ -1,81 +1,51 @@
 # Known Issues — FormAssist
 
----
-
-## Issue: Verwaiste Multifile-Dateien im Repo
+## Issue: Keine Injection im nativen Chrome PDF Viewer
 
 **Problem:**
-Die alten Multifile-Dateien wurden vom Repo entfernt; das Problem ist erledigt.
+Content Scripts laufen nicht im nativen Chrome-PDF-Viewer.
 
 **Ursache:**
-Merge der beiden Codelinien (Kollege + Claude) hat die aktive Architektur auf Single-File umgestellt, die alten Dateien aber nicht entfernt.
+Der Viewer laeuft in einem isolierten `chrome-extension://`-Kontext, auf den `<all_urls>` nicht angewendet wird.
 
-**Lösung:**
-Dateien entfernt und README aktualisiert.
-
-**Vermeidung:**
-Nach Architektur-Entscheidungen verwaiste Dateien sofort aufräumen.
+**Auswirkung:**
+FormAssist funktioniert dort nicht, in web-basierten PDF-Viewern jedoch oft schon.
 
 ---
 
-## Issue: README beschreibt falsche Architektur
+## Issue: Cross-Origin iFrames sind nicht analysierbar
 
 **Problem:**
-`README.md` wurde vom Kollegen überschrieben und beschreibt die Multifile-Architektur (state.js, ui.js etc.), die nicht mehr aktiv ist.
+Formularfelder in fremden iFrames werden nicht ausgelesen.
 
 **Ursache:**
-Kollege hat README in einem eigenen Commit aktualisiert, bevor der Merge stattfand.
+Same-Origin-Policy verhindert Zugriff auf `iframe.contentDocument`.
 
-**Lösung:**
-README auf aktuelle Single-File-Architektur aktualisieren. Erledigt am 2026-04-30.
-
-**Vermeidung:**
-README immer im gleichen Commit wie Architektur-Änderungen aktualisieren.
+**Auswirkung:**
+Agent/Chat sehen nur Hauptdokument und same-origin-iFrames.
 
 ---
 
-## Issue: GitHub Push Protection blockiert hardcodierte API-Keys
+## Issue: Datenschutz-/Consent-Luecke fuer Produktivbetrieb
 
 **Problem:**
-Groq API-Key (`gsk_…`) wurde direkt in `content.js` hardcodiert. GitHub Push Protection hat den Push blockiert.
+Fuer KI-Funktionen werden Formular- und ggf. Profildaten an Groq gesendet, ohne expliziten per-Form-Consent-Flow.
 
 **Ursache:**
-GitHub scannt automatisch Commits auf bekannte Secret-Formate (Groq, Anthropic, AWS etc.).
+Prototyp-Fokus auf UX/Funktion statt auf rechtlicher Operationalisierung.
 
-**Lösung:**
-Key in `api-key.txt` ausgelagert (gitignored), wird via `chrome.runtime.getURL` zur Laufzeit geladen.
-
-**Vermeidung:**
-Nie API-Keys direkt in Source-Dateien schreiben. Immer `.gitignore` + Laufzeit-Laden.
+**Auswirkung:**
+Fuer echte Produktion fehlen noch verbindliche Privacy- und Compliance-Mechaniken.
 
 ---
 
-## Issue: Minimize funktionierte nicht im free (gedraggten) Modus
+## Issue: Clientseitiger API-Key ist nur Prototyp-tauglich
 
 **Problem:**
-CSS-Klasse `.minimized { height: 56px }` wurde durch `sidebar.style.height` (inline, gesetzt beim Drag) überschrieben. Minimize-Button hatte keine sichtbare Wirkung.
+API-Key liegt im Browser (`chrome.storage.sync`) statt in einem Backend-Proxy.
 
 **Ursache:**
-CSS-Klassen haben niedrigere Spezifität als inline styles. Nach dem ersten Drag hat das Panel eine inline-Höhe.
+Direkte Integration wurde fuer schnelles Prototyping priorisiert.
 
-**Lösung:**
-Minimize-Handler setzt `sidebar.style.height = '56px'` direkt in JS. Vorherige Höhe wird in `savedHeight` gespeichert und beim Expand wiederhergestellt.
-
-**Vermeidung:**
-Wenn inline styles für Dimensionen gesetzt werden (bei Drag/Resize), müssen alle Zustandsänderungen (minimize, etc.) ebenfalls über inline styles gesteuert werden, nicht über CSS-Klassen.
-
----
-
-## Issue: Extension funktioniert nicht in Chrome Native PDF Viewer
-
-**Problem:**
-Content Scripts können nicht in den nativen Chrome PDF Viewer injiziert werden.
-
-**Ursache:**
-Der Chrome PDF Viewer läuft als isolierter Extension-Context (`chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/...`). Content Scripts mit `<all_urls>` matchen nicht auf Extension-URLs.
-
-**Lösung:**
-Nicht behebbar ohne fundamentalen Ansatzwechsel (z.B. PDF-Download intercepten, eigenen Viewer bauen).
-
-**Vermeidung:**
-Funktioniert für web-basierte PDF-Viewer (PDF.js, Adobe Acrobat Online) — nur nativer Chrome-Viewer ist betroffen.
+**Auswirkung:**
+Betriebsmodell ist fuer lokale Nutzung ok, fuer produktiven Rollout aber nicht ausreichend.

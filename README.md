@@ -1,76 +1,118 @@
-# FormAssist - Chrome Extension
+# FormAssist – KI Formular-Assistent
 
-FormAssist ist eine Manifest-V3-Extension, die auf Formularseiten eine KI-Assistenz als Sidebar einblendet. Die aktuelle Implementierung ist bewusst als Single-File-Lösung in `content.js` umgesetzt und rendert die komplette UI im Shadow DOM.
+Chrome Extension (Manifest V3), die auf Seiten mit Formularen eine KI-Sidebar einblendet. Der Agent analysiert Felder, schlägt Werte vor und kann Formulare weitgehend automatisiert oder geführt ausfüllen.
 
-## Aktuelle Architektur
+## Architektur
 
-- `manifest.json` - Extension-Konfiguration
-- `content.js` - aktive Logik fuer UI, Feldanalyse, Drag/Resize und KI-Interaktionen
-- `api-key.txt` - lokale Key-Datei fuer den Groq API-Key
-- Die frueheren Multifile-Dateien wurden entfernt; der aktive Code lebt nur noch in `content.js`
+| Datei | Zweck |
+| --- | --- |
+| `content.js` | Gesamte Laufzeitlogik: Shadow-DOM-UI, Feldanalyse, Agent, Guided Mode, Profil, Submit-Review |
+| `background.js` | LLM-Transport (Groq + OpenRouter, Retry/Timeout, Streaming + Non-Streaming) via Service Worker |
+| `options.js/html` | Einstellungsseite: Provider, API-Keys, Modell, Assistent-Modus |
+| `manifest.json` | MV3-Konfiguration, Berechtigungen, Tastenkürzel |
 
-## Was die Sidebar jetzt kann
+Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-Konflikt mit Host-Seiten).
 
-### Intelligente Feldterkennung & Auto-Fill
-- Formularfelder semantisch erkennen (Labels, Autocomplete-Attribute, Keywords)
-- Profile-Felder automatisch erkennen (Vorname, Email, Adresse, IBAN, etc.)
-- Texteingaben, Selects, Checkboxen und Radio-Gruppen richtig unterscheiden
-- Schnelles Eintragen über Auto-Fill (Profile-Daten lokal speichern)
+## Features
 
-### Profilmanagement
-- **Profil bearbeiten**: Button im Header öffnet Profil-Editor (16 Standardfelder)
-- **Weitere gespeicherte Daten**: Felder die beim Auto-Fill gelernt wurden (Webseite, Steuernummer, etc.) erscheinen ebenfalls im Profil — editierbar und einzeln löschbar
-- Profile lokal speichern (Chrome Storage) — bleiben auch nach Browser-Neustart erhalten
+### KI-Agent
 
-### KI Auto-Fill (Agent)
+- **⚡ Agent** erstellt einen Aktionsplan fuer erkannte Felder und fuehrt ihn aus
+- **Hybrid-Modus** (Standard): direkt aus Profil, KI nur fuer unbekannte Felder
+- **Klassisch**: editierbare Vorschau vor jeder Ausfuehrung
+- **Automatisch**: kontextuell-autonom ohne Rueckfragen
 
-- **"✦ KI Auto-Fill"** Button befüllt das gesamte Formular live Feld für Feld
-- Bekannte Felder (Profil + gespeicherte Extras) werden sofort eingetragen — kein API-Call
-- Für unbekannte Felder: eigene KI-Anfrage pro Feld, Nutzer sieht Spinner → ✓ in Echtzeit
-- Felder die die KI nicht kennt: werden im Chat nachgefragt und automatisch gespeichert
-- Badge-System: `[Profil]` (grün) = aus gespeicherten Daten, `[KI]` (gelb) = KI-Inferenz
-- Nach dem ersten Ausfüllen sind neue Felder für alle zukünftigen Formulare bekannt
+#### Guided Mode
 
-### Geführter Modus (Step-by-Step)
-- **Geführter Modus**: KI fragt nacheinander nur noch leere Felder ab — statt auf Fragen warten
-- Du antwortest kurz; die KI trägt automatisch ein
-- Mit Fortschrittsanzeige (z.B. "5/12")
-- Buttons zum Überspringen oder Beenden einzelner Felder
-- Am Ende: Zusammenfassung aller Eingaben
+- Vollautonomes Ausfuellen: Agent navigiert selbstständig durch mehrseitige Formulare
+- Felder mit Konfidenz ≥ 0.6 werden direkt ausgefuellt
+- Unsichere Felder werden als Frage gestellt (mit KI-Vorschlag als Chip)
+- Nutzerantworten werden als `sessionAnswers` gespeichert und auf allen Folgeseiten wiederverwendet
+- Auto-Navigate-Toggle: Weiter-/Submit-Buttons werden automatisch geklickt
+- Fortschrittsbalken zeigt gebeantwortete Fragen
 
-### KI-Assistenz
-- Antworten per Button kopieren
-- Formular vor dem Absenden zusammenfassen und plausibilisieren
-- Bei erkannten Eingabeproblemen proaktiv Hilfestellung geben
+#### Agent-Details
 
-### Bedienung & UI
-- **Quick-Action Buttons**: "Formular erklären" (Kurzübersicht vor dem Start) + "Geführter Modus" (Step-by-Step)
-- **Dark Mode Toggle**: Icon im Header — UI passt sich an dunkle/helle Umgebung an
-- Sidebar frei verschieben und an allen Seiten sowie Ecken resizen
-- Minimize-Button zum Platzzusparen
-- Oberfläche mit modernem Layout und Farb-Design
-- Tastenkombination `Ctrl+Shift+F` zum Oeffnen und Schliessen der Sidebar
+- Quellen-Badges: kein Badge = Profil, **Abgeleitet** (blau) = logisch hergeleitet, **KI-Vorschlag** (gelb) = Kontextschätzung
+- Automatische Korrektur-Runde bei Validierungsfehlern nach dem Fuellen
+- Weiterfuehrung ueber mehrseitige Formulare (Navigation + Resume mit `faAgentResume`)
+- `waitForFields()` — wartet bis zu 4 Sekunden auf dynamisch geladene Felder
+- Streaming-Antwort mit Tipp-Animation
 
-## Lokales Setup
+### Formularhilfe
 
-1. In `api-key.txt` deinen eigenen Groq API-Key eintragen.
-2. Chrome oeffnen und `chrome://extensions` aufrufen.
-3. Entwicklermodus aktivieren.
-4. Entpackte Erweiterung laden und diesen Ordner auswaehlen.
+- **Formular erklaeren**: Zweck, Pflichtfelder, Stolperstellen in Kurzform
+- **Submit-Review vor Absenden** mit Status (`OK`, `Warnung`, `Fehlt`)
+- **Proaktive Fehlerhilfe** bei invaliden Feldern (kurze, konkrete Korrekturhinweise)
 
-## Nutzung
+### Profil & Daten
 
-1. Webseite mit Formular oeffnen.
-2. Sidebar erscheint automatisch.
-3. Im Chat direkt eine Frage stellen oder eine der Schnellaktionen verwenden.
-4. Bei Bedarf gezielt ein Feld auswaehlen, den gefuehrten Modus nutzen oder vor dem Absenden die Pruefung starten.
+- **15** Standardfelder (Person, Adresse, Kontakt, Bank, Beruf)
+- Zusatzdaten (`faExtras`) fuer gelernte Freitext-Felder, im Profil bearbeitbar/loeschbar
+- **Mehrere Profile** — Switcher, Anlegen, Loeschen
+- **Import/Export** als JSON
+- Speicherung lokal in `chrome.storage.local`
 
-## Wichtige Hinweise fuer die Entwicklung
+### Formularerkennung
 
-- Neue UI- oder Prompt-Aenderungen werden aktuell in `content.js` umgesetzt.
-- Die alten Dateien bleiben nur zur Referenz im Repo; sie werden vom aktuellen Manifest nicht geladen.
-- Nach groesseren Aenderungen die Extension in `chrome://extensions` neu laden.
+- Shadow DOM: erkennt Felder in Web Components und Custom Elements
+- Nav-Filter: ignoriert Felder in `nav`, `header`, `footer`, `[role=search]`
+- Datepicker-Support: Flatpickr, Pikaday, jQuery UI Datepicker, Bootstrap DateTimePicker
+- Radio-Button-Fix: nutzt `click()` statt `checked = true` fuer React/Vue-Kompatibilitaet
 
-## Security-Hinweis
+### History
 
-Die Key-Datei liegt weiterhin clientseitig in der Extension. Das ist fuer einen Prototyp okay, aber nicht fuer Produktion. Fuer produktive Nutzung sollte ein Backend-Proxy eingesetzt werden. Den Key nie in Source-Dateien oder Dokumentation eintragen.
+- Agent-Verlaufspanel mit den letzten 30 Sitzungen (Domain, Titel, Feldanzahl, Datum)
+- Per Klick loeschbar
+
+### UI
+
+- Rechts gedockte Sidebar, per Drag loesbar und frei positionierbar
+- Resize an allen Seiten und Ecken
+- Dark-Mode-Toggle im Header
+- Fokusbezogener Auto-Fill-Tipp fuer das aktive Feld
+- Toast-Benachrichtigungen (z. B. bei automatischem Provider-Fallback)
+- Tastenkurzbefehle: `Alt+Shift+F` (oeffnen/schliessen), `Alt+Shift+S` (Agent starten)
+
+## Setup
+
+1. `chrome://extensions` → Entwicklermodus → "Entpackte Erweiterung laden" → diesen Ordner
+2. In den FormAssist-Einstellungen Provider waehlen und API-Key eintragen:
+   - Groq: [console.groq.com](https://console.groq.com) — `gsk_...`
+   - OpenRouter: [openrouter.ai/keys](https://openrouter.ai/keys) — `sk-or-v1-...`
+3. Optional: zweiten Provider als Backup eintragen (Fallback bei Fehler/Rate-Limit)
+4. Auf einer Seite mit Formular die Sidebar oeffnen und **⚡ Agent** starten
+
+## API & Provider
+
+| | Groq | OpenRouter |
+| --- | --- | --- |
+| Endpunkt | `https://api.groq.com/openai/v1/chat/completions` | `https://openrouter.ai/api/v1/chat/completions` |
+| Standard-Modell | `llama-3.3-70b-versatile` | `openrouter/auto` |
+| Fallback-Modell | — | `meta-llama/llama-3.3-70b-instruct:free` |
+
+**Automatischer Fallback:** Wenn Groq mit 429 (Rate Limit) oder 5xx (Server-Fehler) antwortet und ein OpenRouter-Key gespeichert ist, wird die Anfrage automatisch ueber OpenRouter wiederholt. Der Nutzer sieht einen kurzen Toast.
+
+Alle Requests laufen via `background.js` (Service Worker) als CSP-sicheres Routing. Der Service Worker unterstuetzt sowohl Streaming (`llm-stream` Port) als auch Non-Streaming (`llm-fetch` Message).
+
+## Storage-Keys
+
+| Key | Store | Inhalt |
+| --- | --- | --- |
+| `faProvider` | sync | `'groq'` oder `'openrouter'` |
+| `faGroqApiKey` | sync | Groq API-Key |
+| `faOpenRouterApiKey` | sync | OpenRouter API-Key |
+| `faModel` | sync | Gewaehltes Modell |
+| `faAssistantMode` | sync | `'hybrid'`, `'classic'` oder `'context'` |
+| `faProfiles` | local | Array aller Profile `[{id, name, profile, extras}]` |
+| `faActiveProfileId` | local | ID des aktiven Profils |
+| `faHistory` | local | Array der letzten 30 Agent-Sitzungen |
+| `faPosition` | local | Sidebar-Position |
+| `faDarkMode` | local | Boolean |
+| `faAgentResume` | session | Agent-State fuer Weiterführung nach Navigation |
+
+## Sicherheit
+
+- API-Keys liegen in `chrome.storage.sync` (nicht im Repository)
+- Profil- und Formularinhalte werden fuer KI-Funktionen an den gewaehlten Provider uebertragen
+- Fuer produktiven Einsatz: Backend-Proxy + explizite Consent-/Datenschutz-Mechanik je Formular einplanen

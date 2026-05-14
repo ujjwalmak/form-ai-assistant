@@ -1,18 +1,68 @@
 (function () {
   'use strict';
 
-  const MODEL = 'llama-3.1-8b-instant';
-  let _apiKey = '';
+  let _model    = 'llama-3.3-70b-versatile';
+  let _apiKey   = '';
+  let _provider = 'groq';
+  let _assistantMode = 'hybrid';
   let _keyPromise = null;
+  let _onProviderFallback = null;
+  function normalizeProvider(value) {
+    return String(value || '').toLowerCase() === 'openrouter' ? 'openrouter' : 'groq';
+  }
+  function providerLabel(provider = _provider) {
+    return normalizeProvider(provider) === 'openrouter' ? 'OpenRouter' : 'Groq';
+  }
+  function getDefaultModel(provider = _provider) {
+    return normalizeProvider(provider) === 'openrouter' ? 'openrouter/free' : 'llama-3.3-70b-versatile';
+  }
+  function normalizeAssistantMode(value) {
+    const v = String(value || '').toLowerCase();
+    if (v === 'classic' || v === 'context') return v;
+    return 'hybrid';
+  }
   function loadKey() {
     if (_apiKey) return Promise.resolve(_apiKey);
     if (_keyPromise) return _keyPromise;
-    _keyPromise = fetch(chrome.runtime.getURL('api-key.txt'), { cache: 'no-store' })
-      .then(r => { if (!r.ok) throw new Error(); return r.text(); })
-      .then(t => { _apiKey = t.trim(); return _apiKey; })
-      .catch(() => '')
-      .finally(() => { _keyPromise = null; });
+    _keyPromise = new Promise(resolve => {
+      chrome.storage.sync.get(['faProvider', 'faApiKey', 'faGroqApiKey', 'faOpenRouterApiKey'], stored => {
+        _provider = normalizeProvider(stored.faProvider);
+        const key = _provider === 'openrouter'
+          ? (stored.faOpenRouterApiKey || stored.faApiKey || '')
+          : (stored.faGroqApiKey || stored.faApiKey || '');
+        _apiKey = String(key || '').trim();
+        resolve(_apiKey);
+      });
+    }).finally(() => { _keyPromise = null; });
     return _keyPromise;
+  }
+
+  // ── CSP-safe API helpers (routed via background service worker) ──────
+  function groqRequest(key, body) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type: 'llm-fetch', provider: _provider, key, body }, resp => {
+        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+        if (!resp?.ok) reject(new Error(resp?.error || 'Unbekannter Fehler'));
+        else {
+          if (resp.usedFallback) _onProviderFallback?.();
+          resolve(resp.data);
+        }
+      });
+    });
+  }
+
+  function groqStream(key, body, onChunk) {
+    return new Promise((resolve, reject) => {
+      const port = chrome.runtime.connect({ name: 'llm-stream' });
+      port.postMessage({ provider: _provider, key, body });
+      port.onMessage.addListener(msg => {
+        if (msg.type === 'chunk')    onChunk(msg.chunk);
+        else if (msg.type === 'fallback') _onProviderFallback?.();
+        else if (msg.type === 'done')    { port.disconnect(); resolve(); }
+        else if (msg.type === 'error')   { port.disconnect(); reject(new Error(msg.error)); }
+      });
+      port.onDisconnect.addListener(() => resolve());
+    });
   }
 
   if (window !== window.top) return;
@@ -49,6 +99,23 @@
   };
 
   const FULL_WIDTH_KEYS = new Set(['email', 'street', 'iban']);
+  const AGENT_SELECTOR_ATTR = 'data-fa-selector-id';
+  const AGENT_AUTO_SELECT_CONFIDENCE = 0.82;
+  const GUIDED_MIN_CONFIDENCE = 0.6; // below this: ask user instead of auto-fill
+  let selectorSeq = 0;
+
+  function getAgentSelector(el) {
+    if (!el) return '';
+    if (el.id) return `[id="${CSS.escape(el.id)}"]`;
+    const name = el.getAttribute('name');
+    if (name) return `[name="${CSS.escape(name)}"]`;
+    let selectorId = el.getAttribute(AGENT_SELECTOR_ATTR);
+    if (!selectorId) {
+      selectorId = `fa-${(++selectorSeq).toString(36)}`;
+      el.setAttribute(AGENT_SELECTOR_ATTR, selectorId);
+    }
+    return `[${AGENT_SELECTOR_ATTR}="${CSS.escape(selectorId)}"]`;
+  }
 
   function matchProfile(el, profile) {
     if (!el) return null;
@@ -62,9 +129,120 @@
     return null;
   }
 
+  function parseDateToISO(text) {
+    // DD.MM.YYYY → YYYY-MM-DD
+    const m1 = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+    // MM/DD/YYYY → YYYY-MM-DD
+    const m2 = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m2) return `${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`;
+    // YYYY-MM-DD — already correct
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    return null;
+  }
+
+  function isKendoWidget(el) {
+    if (!el) return null;
+    const rawRole = (el.getAttribute('data-role') || '').toLowerCase();
+    if (!rawRole) return null;
+    const role = rawRole === 'dropdown' ? 'dropdownlist' : rawRole;
+    const valid = new Set(['datepicker', 'autocomplete', 'combobox', 'multiselect', 'dropdownlist']);
+    return valid.has(role) ? role : null;
+  }
+
+  function getKendoWidget(el, role) {
+    if (!el || !role) return null;
+    const jq = window.kendo?.jQuery?.(el);
+    if (!jq?.data) return null;
+    const map = {
+      datepicker: 'kendoDatePicker',
+      autocomplete: 'kendoAutoComplete',
+      combobox: 'kendoComboBox',
+      multiselect: 'kendoMultiSelect',
+      dropdownlist: 'kendoDropDownList',
+    };
+    const key = map[role];
+    return key ? jq.data(key) : null;
+  }
+
+  function getElementTextValue(el) {
+    return clean(el?.textContent || el?.value || el?.getAttribute?.('aria-label') || '');
+  }
+
+  function findButtonByText(root, selector, texts) {
+    const els = root ? Array.from(root.querySelectorAll(selector)) : [];
+    return els.find(b => {
+      if (b.disabled) return false;
+      const txt = getElementTextValue(b).toLowerCase();
+      return texts.some(t => txt.includes(t.toLowerCase()));
+    });
+  }
+
+  function setKendoValue(el, value) {
+    const role = isKendoWidget(el);
+    if (!role) return false;
+    try {
+      const widget = getKendoWidget(el, role);
+      if (!widget) return false;
+      if (role === 'datepicker') {
+        const iso = parseDateToISO(String(value));
+        if (!iso) return false;
+        widget.value(new Date(`${iso}T00:00:00`));
+      } else {
+        widget.value(String(value));
+      }
+      widget.trigger?.('change');
+      return true;
+    } catch { return false; }
+  }
+
+  function tryDatePickerLib(el, text) {
+    // Flatpickr
+    if (el._flatpickr) {
+      try { el._flatpickr.setDate(text, true); return true; } catch {}
+    }
+    // Pikaday
+    if (el._pikaday) {
+      try {
+        const iso = parseDateToISO(text);
+        const d = iso ? new Date(iso) : new Date(text);
+        if (!isNaN(d)) { el._pikaday.setDate(d, true); return true; }
+      } catch {}
+    }
+    // jQuery-based pickers (Bootstrap Datepicker, jQuery UI)
+    try {
+      const $ = window.jQuery || window.$;
+      if (typeof $ === 'function') {
+        const $el = $(el);
+        if ($el.data('datepicker') || $el.data('ui-datepicker')) { $el.datepicker('setDate', text); return true; }
+        if ($el.data('DateTimePicker'))                           { $el.data('DateTimePicker').date(text); return true; }
+        if ($el.data('datetimepicker'))                          { $el.data('datetimepicker').setDate(new Date(text)); return true; }
+      }
+    } catch {}
+    // Air Datepicker / custom widgets that expose an API on the element
+    if (el.datepicker && typeof el.datepicker.setDate === 'function') {
+      try { el.datepicker.setDate(text); return true; } catch {}
+    }
+    return false;
+  }
+
   function fillField(el, value) {
-    const text = String(value ?? '').trim();
-    const type = (el.type || '').toLowerCase();
+    let text = String(value ?? '').trim();
+    const kendoRole = isKendoWidget(el);
+    if (kendoRole) {
+      if (setKendoValue(el, text)) {
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
+    }
+    const elType = (el.type || '').toLowerCase();
+    if ((elType !== 'date' && elType !== 'time' && el.getAttribute('data-datepicker') !== null) || el._flatpickr || el._pikaday) {
+      if (tryDatePickerLib(el, text)) {
+        el.dispatchEvent(new Event('input',  { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
+    }
 
     if (el.tagName === 'SELECT') {
       const wanted = text.toLowerCase();
@@ -75,20 +253,21 @@
       }) : null;
       if (option) el.value = option.value;
       else if (text) el.value = text;
-    } else if (type === 'checkbox') {
+    } else if (elType === 'checkbox') {
       el.checked = /^(ja|yes|true|1|x|ok|checked|ausgewählt)$/i.test(text);
-    } else if (type === 'radio') {
+    } else if (elType === 'radio') {
       const root = el.form || document;
-      const options = el.name ? Array.from(root.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`)) : [el];
+      const radios = el.name ? Array.from(root.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`)) : [el];
       const wanted = text.toLowerCase();
-      const match = options.find(opt => {
+      const match = radios.find(opt => {
         const label = getLabel(opt).toLowerCase();
         const val = String(opt.value || '').toLowerCase();
         return label === wanted || val === wanted || label.includes(wanted) || wanted.includes(label);
-      }) || options[0];
-      if (match) match.checked = true;
+      }) || radios[0];
+      if (match && !match.checked) match.click();
       el = match || el;
     } else {
+      if (elType === 'date') { const iso = parseDateToISO(text); if (iso) text = iso; }
       try {
         const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -107,6 +286,12 @@
   const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
 
   function clean(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
+  function formatBytes(bytes) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n <= 0) return '';
+    const mb = Math.round(n / (1024 * 1024));
+    return mb > 0 ? `${mb} MB` : `${n} B`;
+  }
 
   function isVisible(el) {
     if (el.disabled) return false;
@@ -114,23 +299,29 @@
     return s.display !== 'none' && s.visibility !== 'hidden' && el.offsetWidth > 0;
   }
 
+  function textFromEl(el) {
+    if (!el) return '';
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('input,select,textarea,button').forEach(e => e.remove());
+    clone.querySelectorAll('.accessibility,.required-mark,[aria-hidden="true"]').forEach(e => e.remove());
+    return clean(clone.textContent).replace(/\s*[*†‡]\s*$/, '');
+  }
+
   function getLabel(el) {
     let v = clean(el.getAttribute('aria-label'));
     if (v) return v;
     const lblBy = el.getAttribute('aria-labelledby');
     if (lblBy) {
-      v = clean(lblBy.split(' ').map(id => document.getElementById(id)?.textContent).filter(Boolean).join(' '));
+      v = clean(lblBy.split(' ').map(id => textFromEl(document.getElementById(id))).filter(Boolean).join(' '));
       if (v) return v;
     }
     if (el.id) {
       const lbl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-      if (lbl) return clean(lbl.textContent).replace(/\s*[*†‡]\s*$/, '');
+      if (lbl) return textFromEl(lbl);
     }
     const wl = el.closest('label');
     if (wl) {
-      const clone = wl.cloneNode(true);
-      clone.querySelectorAll('input,select,textarea,button').forEach(e => e.remove());
-      v = clean(clone.textContent).replace(/\s*[*†‡]\s*$/, '');
+      v = textFromEl(wl);
       if (v) return v;
     }
     if (el.title)       return clean(el.title);
@@ -140,11 +331,40 @@
     return '';
   }
 
+  function getGroupLabel(el) {
+    const group = el?.closest?.('[role="group"]');
+    const lblBy = group?.getAttribute('aria-labelledby');
+    if (lblBy) {
+      const v = clean(lblBy.split(' ').map(id => textFromEl(document.getElementById(id))).filter(Boolean).join(' '));
+      if (v) return v;
+    }
+    const formline = el?.closest?.('.formline');
+    if (formline) {
+      const pseudo = formline.querySelector('.pseudoLabel, label');
+      const v = textFromEl(pseudo);
+      if (v) return v;
+    }
+    return '';
+  }
+
+  function isFileWidget(el) {
+    if (!el || el.tagName !== 'INPUT') return false;
+    const type = (el.type || '').toLowerCase();
+    if (type !== 'submit' && type !== 'button') return false;
+    return !!(el.closest('.inputFile') || el.dataset.postUrl || el.dataset.allowedTypes || el.getAttribute('data-allowed-types'));
+  }
+
   function getHint(el) {
     const descBy = el.getAttribute('aria-describedby');
     if (descBy) {
       const v = clean(descBy.split(' ').map(id => document.getElementById(id)?.textContent).filter(Boolean).join(' '));
       if (v) return v;
+    }
+    const block = el.closest('.block');
+    if (block) {
+      const intro = block.querySelector('.field-intro');
+      const v = clean(intro?.textContent);
+      if (v && v.length < 500) return v;
     }
     const container = el.closest(
       '.field,.form-group,.form-field,.form-item,.form-row,.input-wrapper,.field-wrapper,[class*="field"],[class*="form-group"]'
@@ -180,22 +400,63 @@
   }
 
   function extractField(el) {
-    if (SKIP_TYPES.has(el.type) || !isVisible(el)) return null;
-    const label = getLabel(el);
+    const fileWidget = isFileWidget(el);
+    if (!isVisible(el)) return null;
+    if (!fileWidget && SKIP_TYPES.has(el.type)) return null;
+    
+    const kendoRole = isKendoWidget(el);
+    let label = getLabel(el);
+    if (!kendoRole && (el.type || '').toLowerCase() === 'radio') {
+      const groupLabel = getGroupLabel(el);
+      if (groupLabel) label = groupLabel;
+    }
     if (!label) return null;
+    
     const info = {
       label,
-      type:         el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' : (el.type || 'text'),
-      required:     el.required || el.getAttribute('aria-required') === 'true',
+      type:         fileWidget ? 'file' : kendoRole ? kendoRole : el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' : (el.type || 'text'),
+      required:     el.required || el.getAttribute('aria-required') === 'true' || !!el.closest('.required') || !!el.closest('.formline')?.querySelector('.required-mark'),
       autocomplete: (el.getAttribute('autocomplete') || '').replace(/^(on|off)$/, ''),
       hint:         getHint(el),
+      selector:     getAgentSelector(el),
       options:      [],
       el,
     };
+    
+    if (!kendoRole && info.type === 'radio' && el.name) {
+      const root = el.form || document;
+      info.options = Array.from(root.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`))
+        .map(opt => getLabel(opt)).filter(Boolean);
+    }
     if (el.tagName === 'SELECT') info.options = Array.from(el.options).filter(o => o.value && clean(o.text)).slice(0, 10).map(o => clean(o.text));
+    
+    if (kendoRole === 'combobox' || kendoRole === 'dropdownlist' || kendoRole === 'multiselect') {
+      try {
+        const widget = getKendoWidget(el, kendoRole);
+        if (widget?.dataSource?.data) {
+          const items = widget.dataSource.data();
+          info.options = (Array.isArray(items) ? items : [])
+            .map(item => item?.text || item?.label || String(item))
+            .filter(Boolean)
+            .slice(0, 10);
+        }
+      } catch {}
+    }
+    
     if (el.min)                  info.min = el.min;
     if (el.max)                  info.max = el.max;
     if (el.maxLength > 0 && el.maxLength < 9999) info.maxLength = el.maxLength;
+    if (fileWidget) {
+      const allowed = el.dataset.allowedTypes || el.getAttribute('data-allowed-types');
+      const totalLimit = el.dataset.overallAttachmentSizeLimit || el.getAttribute('data-overall-attachment-size-limit');
+      const bits = [];
+      if (allowed) bits.push(`Dateiformate: ${allowed}`);
+      if (totalLimit) {
+        const formatted = formatBytes(totalLimit);
+        if (formatted) bits.push(`Max. Gesamtgröße: ${formatted}`);
+      }
+      if (bits.length) info.hint = info.hint ? `${info.hint} (${bits.join(' · ')})` : bits.join(' · ');
+    }
     return info;
   }
 
@@ -204,6 +465,7 @@
     let current = { title: '', fields: [] };
     const HEADS = new Set(['H1','H2','H3','H4','H5','LEGEND']);
     const INPUTS = new Set(['INPUT','SELECT','TEXTAREA']);
+    const seenRadio = new Set();
     function walk(node) {
       if (node.nodeType !== 1) return;
       if (HEADS.has(node.tagName)) {
@@ -216,6 +478,10 @@
         Array.from(node.children).forEach(walk); return;
       }
       if (INPUTS.has(node.tagName)) {
+        if ((node.type || '').toLowerCase() === 'radio' && node.name) {
+          if (seenRadio.has(node.name)) return;
+          seenRadio.add(node.name);
+        }
         const info = extractField(node); if (info) current.fields.push(info); return;
       }
       Array.from(node.children).forEach(walk);
@@ -246,6 +512,59 @@
     return [...new Set(bits)].slice(0, 3).join(' | ');
   }
 
+  function getFormStepInfo() {
+    const roadmap = document.querySelector('[class*="roadmap"],[role="progressbar"],[class*="wizard"],[class*="stepper"],[class*="steps"]');
+    if (!roadmap) return null;
+    
+    const steps = roadmap.querySelectorAll('[class*="step"],[role="tab"]');
+    if (steps.length === 0) return null;
+    
+    let currentIdx = -1;
+    steps.forEach((s, i) => {
+      if (s.classList.contains('active') || s.getAttribute('aria-selected') === 'true' || s.getAttribute('aria-current') === 'step') {
+        currentIdx = i;
+      }
+    });
+    
+    if (currentIdx === -1) currentIdx = 0;
+    
+    const nextBtn = findButtonByText(document, 'button[type="submit"], input[type="submit"]', ['Weiter', 'Next', 'Fortschritt']);
+    const form = nextBtn?.form || document.querySelector('form') || document.body;
+    
+    return {
+      current: currentIdx + 1,
+      total: steps.length,
+      isMultiStep: steps.length > 1,
+      nextButton: nextBtn,
+      form: form,
+    };
+  }
+
+  function advanceToNextStep(formEl) {
+    if (!formEl) return false;
+    if (typeof formEl.checkValidity === 'function' && !formEl.checkValidity()) return false;
+
+    const nextBtn = findButtonByText(formEl, 'button[type="submit"], input[type="submit"]', ['Weiter', 'Next', 'Fortschritt']);
+
+    const hidden = formEl?.querySelector('input[name*="submit"][type="hidden"]');
+    if (hidden) {
+      const submitValue = nextBtn?.getAttribute?.('data-submit-value') || nextBtn?.value || hidden.getAttribute('value') || 'next';
+      hidden.value = submitValue;
+    }
+    if (nextBtn) {
+      if (typeof formEl.requestSubmit === 'function') formEl.requestSubmit(nextBtn.form === formEl ? nextBtn : undefined);
+      else nextBtn.click();
+      return true;
+    }
+    const submitBtn = formEl?.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      if (typeof formEl.requestSubmit === 'function') formEl.requestSubmit(submitBtn);
+      else submitBtn.click();
+      return true;
+    }
+    return false;
+  }
+
   function getSubmitText(formEl) {
     return Array.from(formEl.querySelectorAll('button[type="submit"],input[type="submit"],button:not([type="button"]):not([type="reset"])'))
       .map(b => clean(b.textContent || b.value)).filter(Boolean).slice(0, 3).join(' / ');
@@ -262,15 +581,57 @@
     };
     let formEls = Array.from(document.querySelectorAll('form'));
     if (formEls.length === 0) {
-      const loose = document.querySelectorAll('input:not([type=hidden]),select,textarea');
+      // Only treat body as virtual form if inputs are not inside nav/header/footer
+      const loose = Array.from(document.querySelectorAll('input:not([type=hidden]),select,textarea'))
+        .filter(el => !el.closest('nav,header,footer,[role=search],[role=navigation]'));
       if (loose.length > 0) formEls = [document.body];
     }
     const forms = formEls.map((formEl, i) => {
       const sections  = groupIntoSections(formEl);
       const allFields = sections.flatMap(s => s.fields);
       if (allFields.length === 0) return null;
-      return { index: i + 1, submitText: getSubmitText(formEl), intro: getFormIntro(formEl), sections, allFields };
+      return { index: i + 1, formEl, submitText: getSubmitText(formEl), intro: getFormIntro(formEl), sections, allFields };
     }).filter(Boolean);
+
+    // Scan same-origin iframes (cross-origin access throws → caught silently)
+    Array.from(document.querySelectorAll('iframe')).forEach(iframe => {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc || doc === document) return;
+        let iframeFormEls = Array.from(doc.querySelectorAll('form'));
+        if (iframeFormEls.length === 0) {
+          const loose = doc.querySelectorAll('input:not([type=hidden]),select,textarea');
+          if (loose.length > 0) iframeFormEls = [doc.body];
+        }
+        iframeFormEls.forEach(formEl => {
+          const sections  = groupIntoSections(formEl);
+          const fields    = sections.flatMap(s => s.fields);
+          if (fields.length === 0) return;
+          forms.push({ index: forms.length + 1, formEl, submitText: getSubmitText(formEl), intro: getFormIntro(formEl), sections, allFields: fields });
+        });
+      } catch { /* cross-origin, skip */ }
+    });
+
+    // Scan open shadow roots in host page (Web Components, custom elements)
+    try {
+      document.querySelectorAll('*').forEach(el => {
+        if (!el.shadowRoot || el.id === 'formassist-host') return;
+        try {
+          let srForms = Array.from(el.shadowRoot.querySelectorAll('form'));
+          if (!srForms.length) {
+            const loose = el.shadowRoot.querySelectorAll('input:not([type=hidden]),select,textarea');
+            if (loose.length > 0) srForms = [el.shadowRoot];
+          }
+          srForms.forEach(formEl => {
+            const sections = groupIntoSections(formEl);
+            const fields   = sections.flatMap(s => s.fields);
+            if (!fields.length) return;
+            forms.push({ index: forms.length + 1, formEl, submitText: getSubmitText(formEl), intro: '', sections, allFields: fields });
+          });
+        } catch {}
+      });
+    } catch {}
+
     return { page, forms };
   }
 
@@ -313,7 +674,7 @@
           if (f.min || f.max) line += ` [range: ${f.min ?? ''}–${f.max ?? ''}]`;
           if (f.maxLength)    line += ` [max ${f.maxLength} Zeichen]`;
           if (f.hint)         line += ` → "${f.hint}"`;
-          if (f.options.length) line += `\n  Optionen: ${f.options.join(', ')}`;
+          if (f.options.length) line += `\n  Optionen: ${f.options.slice(0, 8).join(', ')}${f.options.length > 8 ? ', …' : ''}`;
           lines.push(line);
         });
         lines.push('');
@@ -326,37 +687,64 @@
   function getActiveFieldContext(el) {
     if (!el) return '';
     const parts = [];
-    const label = getLabel(el);
+    const label = ((el.type || '').toLowerCase() === 'radio' ? getGroupLabel(el) : '') || getLabel(el);
     if (label) parts.push(`Aktuell fokussiertes Feld: "${label}"`);
     const hint = getHint(el);  if (hint)  parts.push(`Feldhinweis: "${hint}"`);
     const err  = getError(el); if (err)   parts.push(`Aktuelle Fehlermeldung: "${err}"`);
     if (el.required) parts.push('(Pflichtfeld)');
-    const val = el.value?.trim();
-    if (val && val.length < 100) parts.push(`Aktueller Wert: "${val}"`);
+    if (!isFileWidget(el)) {
+      const val = el.value?.trim();
+      if (val && val.length < 100) parts.push(`Aktueller Wert: "${val}"`);
+    }
     return parts.length ? '\n\n' + parts.join('\n') : '';
   }
 
   // ── Run extraction ──────────────────────────────────────────────────
-  const ctx = extractRichContext();
-  if (ctx.forms.length === 0) return;
-  const allFields   = ctx.forms.flatMap(f => f.allFields);
-  const submitLabel = ctx.forms[0]?.submitText;
+  let ctx = extractRichContext();
+  let allFields   = ctx.forms.flatMap(f => f.allFields);
+  let submitLabel = ctx.forms[0]?.submitText;
+  
+  // Multi-step form state
+  let stepInfo = getFormStepInfo();
+  let autoAdvanceEnabled = false;
+  let advanceCount = 0;
 
   // ═══════════════════════════════════════════════════════════════════════
   // INIT — load storage before building UI
   // ═══════════════════════════════════════════════════════════════════════
 
-  chrome.storage.local.get(['faProfile', 'faPosition', 'faDarkMode', 'faExtras'], stored => {
-    const profile  = stored.faProfile  || {};
+  chrome.storage.sync.get(['faModel', 'faAssistantMode', 'faProvider'], syncStored => {
+    _provider = normalizeProvider(syncStored.faProvider);
+    _model = syncStored.faModel || getDefaultModel(_provider);
+    _assistantMode = normalizeAssistantMode(syncStored.faAssistantMode);
+
+  chrome.storage.local.get(['faProfile', 'faPosition', 'faDarkMode', 'faExtras', 'faProfiles', 'faActiveProfileId', 'faHistory'], stored => {
+    // ── Profile state ────────────────────────────────────────────────────
+    let profiles        = stored.faProfiles || [];
+    let activeProfileId = stored.faActiveProfileId || null;
+
+    // Migrate legacy single-profile to multi-profile on first run
+    if (!profiles.length) {
+      const legacyProfile = stored.faProfile || {};
+      const legacyExtras  = stored.faExtras  || {};
+      activeProfileId = 'default';
+      profiles = [{ id: 'default', name: 'Hauptprofil', profile: legacyProfile, extras: legacyExtras }];
+      chrome.storage.local.set({ faProfiles: profiles, faActiveProfileId: activeProfileId });
+    }
+    if (!activeProfileId || !profiles.find(p => p.id === activeProfileId)) {
+      activeProfileId = profiles[0].id;
+    }
+
+    function getActiveEntry() { return profiles.find(p => p.id === activeProfileId) || profiles[0]; }
+
+    const activeEntry = getActiveEntry();
+    const profile  = activeEntry.profile;
+    const extras   = activeEntry.extras;
     const savedPos = stored.faPosition || null;
     let   darkMode = stored.faDarkMode || false;
-    const extras   = stored.faExtras   || {};
+    let   faHistory = stored.faHistory || [];
 
-<<<<<<< HEAD
-    let SYSTEM = buildSystemPrompt(ctx, profile);
-=======
-    const SYSTEM = buildSystemPrompt(ctx, profile, extras);
->>>>>>> 9f1dbf9 (Update project files)
+    let SYSTEM = buildSystemPrompt(ctx, profile, extras);
 
     // ── Shadow DOM ────────────────────────────────────────────────────
     const hostEl = document.createElement('div');
@@ -367,7 +755,7 @@
 
     const fontLink = document.createElement('link');
     fontLink.rel = 'stylesheet';
-    fontLink.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap';
     shadow.appendChild(fontLink);
 
     // ── Styles ────────────────────────────────────────────────────────
@@ -377,69 +765,130 @@
       :host {
         --bg:       #f8fafd;
         --surface:  #ffffff;
-        --surface2: #f1f4f9;
-        --surface3: #e8f0fe;
-        --border:   #dfe3eb;
-        --border2:  #c7cedb;
-        --text:     #1f1f1f;
-        --text2:    #444746;
-        --text3:    #6f7377;
+        --surface2: #f2f6fc;
+        --surface3: #dfe9fb;
+        --border:   #c4c7c5;
+        --border2:  #9aa0a6;
+        --text:     #202124;
+        --text2:    #3c4043;
+        --text3:    #5f6368;
         --accent:   #0b57d0;
         --accent-h: #0842a0;
-        --accent-l: #e8f0fe;
-        --accent-b: #c2d7ff;
+        --accent-l: #d3e3fd;
+        --accent-b: #a8c7fa;
+        --grad:     linear-gradient(135deg, #0b57d0, #0a4cb5);
         --danger:   #b42318;
         --danger-l: #fef3f2;
-        --focus:    0 0 0 3px rgba(11, 87, 208, 0.18);
-        --shadow:   0 18px 44px rgba(60, 64, 67, 0.18), 0 2px 8px rgba(60, 64, 67, 0.10);
-        --font:     'Google Sans Text', 'Google Sans', Roboto, 'DM Sans', system-ui, -apple-system, sans-serif;
+        --focus:    0 0 0 3px rgba(11, 87, 208, 0.24);
+        --shadow:   0 14px 34px rgba(60,64,67,0.2), 0 4px 12px rgba(60,64,67,0.14);
+        --state:    rgba(11, 87, 208, 0.10);
+        --state-strong: rgba(11, 87, 208, 0.16);
+        --state-on-primary: rgba(255, 255, 255, 0.18);
+        --ok:       #047857;
+        --ok-l:     #ecfdf5;
+        --warn:     #a16207;
+        --warn-l:   #fffbeb;
+        --font:     'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         --ease:     cubic-bezier(0.4, 0, 0.2, 1);
       }
       :host(.dark) {
         --bg:       #131314;
         --surface:  #1f1f1f;
-        --surface2: #282a2d;
-        --surface3: #1d2b45;
+        --surface2: #2b2f36;
+        --surface3: #253246;
         --border:   #3c4043;
         --border2:  #5f6368;
         --text:     #e8eaed;
-        --text2:    #c4c7c5;
+        --text2:    #c7c9cc;
         --text3:    #9aa0a6;
         --accent:   #a8c7fa;
         --accent-h: #d3e3fd;
-        --accent-l: #1d2b45;
-        --accent-b: #35558a;
+        --accent-l: #2f3a4d;
+        --accent-b: #4d648f;
+        --grad:     linear-gradient(135deg, #a8c7fa, #8fb2f5);
         --danger:   #f97066;
         --danger-l: #451a1a;
-        --focus:    0 0 0 3px rgba(168, 199, 250, 0.22);
-        --shadow:   0 24px 56px rgba(0,0,0,0.50), 0 2px 10px rgba(0,0,0,0.38);
+        --focus:    0 0 0 3px rgba(168, 199, 250, 0.3);
+        --shadow:   0 18px 48px rgba(0,0,0,0.48), 0 3px 12px rgba(0,0,0,0.36);
+        --state:    rgba(168, 199, 250, 0.14);
+        --state-strong: rgba(168, 199, 250, 0.22);
+        --state-on-primary: rgba(32, 33, 36, 0.18);
+        --ok:       #86efac;
+        --ok-l:     #052e1a;
+        --warn:     #fde68a;
+        --warn-l:   #422006;
       }
 
-      /* ── Trigger ── */
-      .trigger {
-        position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px;
-        background: var(--accent); border: 1px solid rgba(255,255,255,0.18); border-radius: 14px; cursor: pointer;
-        display: flex; align-items: center; justify-content: center; pointer-events: all; z-index: 2;
-        box-shadow: 0 10px 26px rgba(37,99,235,0.26), 0 1px 4px rgba(15,23,42,0.12);
-        transition: transform 0.16s var(--ease), box-shadow 0.16s var(--ease), background 0.16s, opacity 0.2s;
+      button {
+        -webkit-tap-highlight-color: transparent;
       }
-      .trigger:hover  { transform: translateY(-1px); background: var(--accent-h); box-shadow: 0 14px 32px rgba(37,99,235,0.32), 0 2px 8px rgba(15,23,42,0.12); }
-      .trigger:active { transform: translateY(0) scale(0.98); }
-      .trigger:focus-visible { outline: none; box-shadow: var(--focus), 0 10px 26px rgba(37,99,235,0.26); }
+      button:not(:disabled) {
+        position: relative;
+        overflow: hidden;
+      }
+      button:not(:disabled)::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--state);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.14s var(--ease);
+      }
+      button:not(:disabled):hover::before { opacity: 1; }
+      button:not(:disabled):focus-visible::before { opacity: 1; }
+      button:not(:disabled):active::before { opacity: 1; background: var(--state-strong); }
+      button > * { position: relative; z-index: 1; }
+
+      /* ── Trigger ── */
+      @keyframes trigger-pulse {
+        0%, 100% { box-shadow: 0 8px 22px rgba(11,87,208,0.3), 0 0 0 0 rgba(11,87,208,0); }
+        50%       { box-shadow: 0 10px 28px rgba(11,87,208,0.36), 0 0 0 8px rgba(11,87,208,0); }
+      }
+      button.trigger {
+        position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px;
+        background: var(--accent); border: 1px solid transparent; border-radius: 20px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; pointer-events: all; z-index: 2;
+        animation: trigger-pulse 2.8s ease-in-out infinite;
+        transition: transform 0.16s var(--ease), opacity 0.2s;
+      }
+      .trigger::before, .send-btn::before, .qs-btn.qs-accent::before,
+      .profile-actions .btn-primary::before, .agent-confirm::before,
+      .review-continue::before, .autofill-btn::before { background: var(--state-on-primary); }
+      .trigger:hover  { transform: translateY(-2px) scale(1.04); animation: none; box-shadow: 0 12px 28px rgba(11,87,208,0.34), 0 0 0 6px rgba(11,87,208,0.12); }
+      .trigger:active { transform: translateY(0) scale(0.97); animation: none; }
+      .trigger:focus-visible { outline: none; box-shadow: var(--focus), 0 10px 24px rgba(11,87,208,0.3); animation: none; }
       .trigger svg    { width: 21px; height: 21px; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 
       /* ── Sidebar ── */
       .sidebar {
         position: fixed; top: 0; right: 0; bottom: 0; width: 400px; min-width: 320px;
-        background: var(--surface); border-left: 1px solid var(--border);
+        background: var(--surface);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        border-left: 1px solid var(--border);
         box-shadow: var(--shadow); display: flex; flex-direction: column;
         font-family: var(--font); pointer-events: all; z-index: 2;
         transform: translateX(calc(100% + 4px));
-        transition: transform 0.24s var(--ease);
+        transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
         user-select: none;
       }
+      .sidebar::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        width: 36px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--border2);
+        opacity: 0.72;
+        transform: translateX(-50%);
+        z-index: 12;
+      }
+      :host(.dark) .sidebar { background: var(--surface); }
       .sidebar.open       { transform: translateX(0); }
-      .sidebar.floating   { border: 1px solid var(--border); border-radius: 20px; overflow: hidden; }
+      .sidebar.floating   { border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
       .sidebar.no-animate { transition: none !important; }
 
       /* ── Resize handles ── */
@@ -471,39 +920,48 @@
 
       /* ── Header ── */
       .header {
-        padding: 0 14px 0 16px; height: 58px; border-bottom: 1px solid var(--border);
+        padding: 8px 14px 0 16px; height: 64px; border-bottom: 1px solid var(--border);
         display: flex; align-items: center; justify-content: space-between;
-        gap: 12px; background: linear-gradient(180deg, var(--surface), var(--surface2)); flex-shrink: 0; cursor: grab; touch-action: none;
+        gap: 12px;
+        background: var(--surface);
+        flex-shrink: 0; cursor: grab; touch-action: none;
+        box-shadow: 0 1px 0 rgba(60,64,67,0.04);
+        z-index: 4;
       }
       .header:active { cursor: grabbing; }
       .logo      { display: flex; align-items: center; gap: 9px; pointer-events: none; min-width: 0; }
       .logo-icon { width: 32px; height: 32px; background: var(--accent-l); color: var(--accent); border: 1px solid var(--accent-b); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
       .logo-icon svg { width: 17px; height: 17px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
       .logo-name  { font-size: 15px; font-weight: 650; color: var(--text); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .logo-text  { display: flex; flex-direction: column; gap: 1px; min-width: 0; overflow: hidden; }
+      .logo-sub   { font-size: 10.5px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .header-btns { display: flex; gap: 4px; flex-shrink: 0; }
-      .icon-btn { width: 30px; height: 30px; border: 1px solid transparent; background: transparent; cursor: pointer; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--text3); transition: background 0.14s, color 0.14s, border-color 0.14s; }
-      .icon-btn:hover  { background: var(--bg); color: var(--text); }
+      .icon-btn { width: 32px; height: 32px; border: 1px solid transparent; background: transparent; cursor: pointer; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: var(--text3); transition: color 0.14s, border-color 0.14s; }
+      .icon-btn:hover  { color: var(--text); }
       .icon-btn:focus-visible { outline: none; box-shadow: var(--focus); color: var(--accent); }
       .icon-btn.active { background: var(--accent-l); color: var(--accent); border-color: var(--accent-b); }
       .icon-btn svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; fill: none; }
 
-      /* ── Context banner ── */
-      .ctx-banner { padding: 10px 18px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-      .ctx-title  { font-size: 12.5px; font-weight: 650; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .ctx-sub    { font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-
       /* ── Messages ── */
-      .messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; background: var(--bg); }
+      .messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; background: var(--bg); transition: opacity 0.15s, transform 0.15s; }
+      .messages.fading { opacity: 0; transform: translateX(-10px); pointer-events: none; }
+      .results-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 28px; text-align: center; pointer-events: none; }
+      .re-icon { width: 52px; height: 52px; border-radius: 16px; background: var(--accent-l); border: 1.5px solid var(--accent-b); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+      .re-icon svg { width: 26px; height: 26px; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .re-title { font-size: 14.5px; font-weight: 700; color: var(--text); margin-bottom: 5px; line-height: 1.3; }
+      .re-sub { font-size: 11px; color: var(--text3); margin-bottom: 14px; font-family: var(--font); }
+      .re-hint { font-size: 12px; color: var(--text2); line-height: 1.6; max-width: 230px; }
       .messages::-webkit-scrollbar { width: 5px; }
       .messages::-webkit-scrollbar-track { background: transparent; }
       .messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 999px; }
-      .msg { display: flex; align-items: flex-end; animation: msg-in 0.2s var(--ease); }
-      @keyframes msg-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+      .msg { display: flex; align-items: flex-end; animation: msg-in 0.22s cubic-bezier(0.34, 1.3, 0.64, 1); }
+      @keyframes msg-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
       .msg.ai { justify-content: flex-start; }
       .msg.user { justify-content: flex-end; }
-      .bubble { max-width: min(330px, 88%); padding: 11px 13px; font-size: 13.5px; line-height: 1.52; color: var(--text); font-family: var(--font); overflow-wrap: anywhere; box-shadow: 0 1px 2px rgba(60,64,67,0.08); }
-      .msg.ai   .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 18px 18px 18px 6px; }
-      .msg.user .bubble { background: var(--accent); color: #fff; border-radius: 18px 18px 6px 18px; border: 1px solid transparent; }
+      .bubble { max-width: 100%; padding: 11px 14px; font-size: 13.5px; line-height: 1.52; color: var(--text); font-family: var(--font); overflow-wrap: anywhere; box-shadow: 0 1px 2px rgba(60,64,67,0.08); }
+      .msg.ai   .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+      .msg.user { justify-content: flex-start; }
+      .msg.user .bubble { background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; color: var(--text2); font-size: 12px; line-height: 1.4; box-shadow: none; max-width: calc(100% - 0px); }
       .bubble code { background: rgba(100,116,139,0.14); border-radius: 5px; padding: 1px 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
       .bubble.copyable { padding-right: 38px; position: relative; }
       .copy-btn {
@@ -516,14 +974,6 @@
       .copy-btn:focus-visible { outline: none; box-shadow: var(--focus); }
       .copy-btn svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
-      .quick-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 2px; }
-      .quick-action {
-        border: 1px solid var(--border); background: var(--surface); color: var(--text2);
-        border-radius: 8px; padding: 6px 9px; font-size: 11.5px; font-family: var(--font);
-        cursor: pointer; transition: background 0.14s, color 0.14s, border-color 0.14s, box-shadow 0.14s;
-      }
-      .quick-action:hover { background: var(--accent-l); color: var(--accent); border-color: var(--accent-b); }
-      .quick-action:focus-visible { outline: none; box-shadow: var(--focus); }
 
       /* ── Field list ── */
       .field-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 190px; overflow-y: auto; padding-right: 2px; }
@@ -531,11 +981,11 @@
       .field-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 999px; }
       .field-btn {
         width: 100%; min-height: 32px; background: var(--surface); border: 1px solid var(--border); color: var(--text2);
-        padding: 6px 9px; border-radius: 8px; font-size: 12px; cursor: pointer;
+        padding: 6px 9px; border-radius: 12px; font-size: 12px; cursor: pointer;
         text-align: left; font-family: var(--font); display: flex; align-items: center; gap: 7px;
         transition: background 0.14s, color 0.14s, border-color 0.14s, box-shadow 0.14s;
       }
-      .field-btn:hover { background: var(--accent-l); color: var(--accent); border-color: var(--accent-b); }
+      .field-btn:hover { color: var(--accent); border-color: var(--accent-b); }
       .field-btn:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--accent-b); }
       .field-btn-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
       .field-btn .req { color: var(--danger); background: var(--danger-l); border: 1px solid rgba(180,35,24,0.2); border-radius: 5px; font-size: 10px; line-height: 1; padding: 3px 5px; margin-left: auto; flex-shrink: 0; }
@@ -544,16 +994,27 @@
       /* ── Chips ── */
       .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
       .chip  { max-width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text2); padding: 5px 9px; border-radius: 8px; font-size: 11.5px; cursor: pointer; font-family: var(--font); transition: background 0.14s, border-color 0.14s, color 0.14s, box-shadow 0.14s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .chip:hover { background: var(--accent-l); border-color: var(--accent-b); color: var(--accent); }
+      .chip:hover { border-color: var(--accent-b); color: var(--accent); }
       .chip:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--accent-b); }
+
+      /* ── Welcome state ── */
+      .welcome-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 28px 20px; text-align: center; gap: 7px; min-height: 200px; transition: opacity 0.22s ease, transform 0.22s ease; }
+      .welcome-state.fading { opacity: 0; transform: translateY(-8px) scale(0.97); pointer-events: none; }
+      .wc-icon { width: 52px; height: 52px; background: var(--accent-l); border: 1px solid var(--accent-b); border-radius: 18px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+      .wc-icon svg { width: 26px; height: 26px; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .wc-title { font-size: 15px; font-weight: 650; color: var(--text); }
+      .wc-desc  { font-size: 12px; color: var(--text3); line-height: 1.5; }
+      .wc-agent { margin-top: 8px; background: var(--accent); color: #fff; border: none; border-radius: 999px; padding: 11px 26px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; box-shadow: 0 2px 6px rgba(11,87,208,0.25); transition: background 0.14s, box-shadow 0.14s; }
+      .wc-agent:hover { background: var(--accent-h); box-shadow: 0 4px 12px rgba(11,87,208,0.32); }
+      .wc-agent:focus-visible { outline: none; box-shadow: var(--focus); }
+      .wc-explain { background: transparent; border: none; color: var(--accent); font-size: 12px; font-family: var(--font); cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.14s; }
+      .wc-explain:hover { background: var(--accent-l); }
 
       /* ── Typing ── */
       .typing-row    { display: flex; gap: 9px; align-items: flex-end; }
-      .typing-bubble { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px 10px 10px 4px; padding: 11px 14px; display: flex; gap: 5px; align-items: center; }
-      .dot { width: 6px; height: 6px; background: var(--text3); border-radius: 50%; animation: bounce 1.2s ease-in-out infinite; }
-      .dot:nth-child(2) { animation-delay: 0.18s; }
-      .dot:nth-child(3) { animation-delay: 0.36s; }
-      @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-7px); } }
+      .typing-bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 16px 16px 16px 6px; padding: 13px 16px; display: flex; align-items: center; box-shadow: 0 1px 2px rgba(60,64,67,0.08); }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: fa-pulse 1.3s ease-in-out infinite; }
+      @keyframes fa-pulse { 0%,100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
 
       /* ── Input area ── */
       .input-area  { padding: 12px 16px 14px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
@@ -563,13 +1024,13 @@
       @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
       .field-tag span { font-weight: 600; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
       .input-row  { display: flex; gap: 8px; align-items: flex-end; }
-      .input-box  { flex: 1; min-width: 0; font-family: var(--font); font-size: 13.5px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 18px; background: var(--bg); color: var(--text); resize: none; outline: none; min-height: 40px; max-height: 112px; line-height: 1.45; transition: border-color 0.14s, box-shadow 0.14s, background 0.14s; }
+      .input-box  { flex: 1; min-width: 0; font-family: var(--font); font-size: 13.5px; padding: 10px 14px; border: 1.5px solid transparent; border-radius: 20px; background: var(--surface2); color: var(--text); resize: none; outline: none; min-height: 40px; max-height: 112px; line-height: 1.45; transition: border-color 0.14s, box-shadow 0.14s, background 0.14s; }
       .input-box:focus { border-color: var(--accent); box-shadow: var(--focus); background: var(--surface); }
       .input-box::placeholder { color: var(--text3); }
-      .send-btn { width: 40px; height: 40px; background: var(--accent); border: 1px solid transparent; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.14s, transform 0.1s, box-shadow 0.14s; }
-      .send-btn:hover  { background: var(--accent-h); }
-      .send-btn:focus-visible { outline: none; box-shadow: var(--focus); }
-      .send-btn:active { transform: scale(0.96); }
+      .send-btn { width: 40px; height: 40px; background: var(--accent); border: none; border-radius: 999px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.12s, box-shadow 0.14s, opacity 0.14s; box-shadow: 0 2px 6px rgba(11,87,208,0.28); }
+      .send-btn:hover  { transform: scale(1.04); box-shadow: 0 4px 12px rgba(11,87,208,0.34); }
+      .send-btn:focus-visible { outline: none; box-shadow: var(--focus), 0 2px 6px rgba(11,87,208,0.28); }
+      .send-btn:active { transform: scale(0.95); }
       .send-btn svg { width: 15px; height: 15px; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
       .footer-note { font-size: 10px; color: var(--text3); text-align: center; margin-top: 9px; font-family: var(--font); }
 
@@ -582,8 +1043,10 @@
       .autofill-btn:focus-visible { outline: none; box-shadow: var(--focus); }
 
       /* ── Profile panel ── */
+      @keyframes profile-in  { from { opacity: 0; transform: translateX(18px); } to   { opacity: 1; transform: translateX(0); } }
+      @keyframes profile-out { from { opacity: 1; transform: translateX(0); }   to   { opacity: 0; transform: translateX(18px); } }
       .profile-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; background: var(--surface); }
-      .profile-panel.visible { display: flex; }
+      .profile-panel.visible { display: flex; animation: profile-in 0.22s var(--ease) forwards; }
       .profile-hdr { padding: 11px 18px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 650; color: var(--text); flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; min-width: 0; background: var(--surface2); }
       .profile-hdr span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .profile-hdr span:last-child { font-weight: 400; color: var(--text3); font-size: 10.5px; flex-shrink: 0; max-width: 52%; }
@@ -593,21 +1056,45 @@
       .pf { display: flex; flex-direction: column; gap: 4px; }
       .pf.full { grid-column: 1 / -1; }
       .pf label { font-size: 10.5px; color: var(--text3); font-weight: 600; font-family: var(--font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .pf input { width: 100%; min-width: 0; font-family: var(--font); font-size: 12.5px; padding: 7px 8px; border: 1px solid var(--border2); border-radius: 8px; background: var(--surface2); color: var(--text); outline: none; transition: border-color 0.14s, box-shadow 0.14s, background 0.14s; }
+      .pf input { width: 100%; min-width: 0; font-family: var(--font); font-size: 12.5px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: var(--surface2); color: var(--text); outline: none; transition: border-color 0.14s, box-shadow 0.14s, background 0.14s; }
       .pf input:focus { border-color: var(--accent); box-shadow: var(--focus); background: var(--surface); }
       .profile-actions { padding: 10px 18px; border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; flex-shrink: 0; background: var(--surface2); }
       .profile-actions button { min-width: 0; padding: 7px 8px; border-radius: 8px; font-size: 11.5px; font-family: var(--font); cursor: pointer; border: 1px solid var(--border2); background: var(--surface); color: var(--text2); transition: background 0.14s, color 0.14s, border-color 0.14s, box-shadow 0.14s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .profile-actions button:hover { background: var(--bg); color: var(--text); }
+      .profile-actions button:hover { color: var(--text); }
       .profile-actions button:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--accent-b); }
       .profile-actions .btn-primary { background: var(--accent); color: #fff; border-color: transparent; }
       .profile-actions .btn-primary:hover { background: var(--accent-h); }
       .profile-actions .btn-danger { color: var(--danger); border-color: var(--danger); }
       .profile-actions .btn-danger:hover { background: var(--danger-l); }
+      .profile-actions .btn-io { color: var(--accent); border-color: var(--accent-b); background: var(--accent-l); }
+      .profile-actions .btn-io:hover { background: var(--accent-b); }
+      /* ── History panel ── */
+      .history-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+      .history-panel.visible { display: flex; }
+      .history-list { flex: 1; overflow-y: auto; padding: 10px 18px; display: flex; flex-direction: column; gap: 8px; }
+      .history-entry { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; transition: border-color 0.14s, background 0.14s; }
+      .history-entry:hover { border-color: var(--accent-b); background: var(--accent-l); }
+      .history-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--accent-l); border: 1px solid var(--accent-b); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .history-icon svg { width: 16px; height: 16px; stroke: var(--accent); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .history-info { flex: 1; min-width: 0; }
+      .history-domain { font-size: 12.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .history-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+      .history-empty { padding: 40px 20px; text-align: center; color: var(--text3); font-size: 12.5px; }
+      .history-clear { font-size: 11px; color: var(--danger); background: none; border: none; cursor: pointer; font-family: var(--font); padding: 0; }
+      .history-clear:hover { text-decoration: underline; }
+
+      /* ── Profile switcher ── */
+      .pf-switcher { display: flex; align-items: center; gap: 6px; padding: 8px 18px 0; flex-shrink: 0; }
+      .pf-select { flex: 1; min-width: 0; height: 30px; border: 1.5px solid var(--border2); border-radius: 8px; background: var(--surface); color: var(--text); font: 500 12px/1 var(--font); padding: 0 6px; cursor: pointer; appearance: auto; }
+      .pf-select:focus { outline: none; border-color: var(--accent-b); }
+      .pf-sw-btn { width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid var(--border2); background: var(--surface); color: var(--text2); font-size: 15px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.12s, border-color 0.12s, background 0.12s; }
+      .pf-sw-btn:hover { color: var(--accent); border-color: var(--accent-b); background: var(--accent-l); }
+      .pf-sw-btn.danger:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-l); }
 
       .pf-extras-hdr { grid-column: 1 / -1; font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--border); }
       .pf-extras-empty { grid-column: 1 / -1; font-size: 11.5px; color: var(--text3); font-style: italic; }
       .pf-extra-row { display: flex; gap: 6px; align-items: center; }
-      .pf-extra-row input { flex: 1; min-width: 0; font-family: var(--font); font-size: 12.5px; padding: 7px 8px; border: 1px solid var(--border2); border-radius: 8px; background: var(--surface2); color: var(--text); outline: none; transition: border-color 0.14s, box-shadow 0.14s; }
+      .pf-extra-row input { flex: 1; min-width: 0; font-family: var(--font); font-size: 12.5px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: var(--surface2); color: var(--text); outline: none; transition: border-color 0.14s, box-shadow 0.14s; }
       .pf-extra-row input:focus { border-color: var(--accent); box-shadow: var(--focus); background: var(--surface); }
       .pf-del { background: transparent; border: 1px solid transparent; color: var(--text3); cursor: pointer; padding: 4px 7px; border-radius: 6px; font-size: 14px; line-height: 1; flex-shrink: 0; transition: color 0.14s, background 0.14s, border-color 0.14s; }
       .pf-del:hover { color: var(--danger); background: var(--danger-l); border-color: rgba(180,35,24,0.2); }
@@ -631,9 +1118,71 @@
       .review-continue:active, .review-secondary:active { transform: scale(0.98); }
       .review-note { color: var(--text3); font-size: 11px; line-height: 1.4; margin-top: 8px; }
 
+      /* ── Action panel ── */
+      .action-panel { padding: 16px 16px 14px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+      .ap-primary {
+        width: 100%; height: 50px;
+        background: linear-gradient(175deg, #1b67db 0%, #0b51c5 100%);
+        color: #fff; border: none; border-radius: 14px; font: 600 14px/1 var(--font); cursor: pointer;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        box-shadow: 0 1px 2px rgba(11,87,208,0.15), 0 4px 14px rgba(11,87,208,0.32), inset 0 1px 0 rgba(255,255,255,0.14);
+        transition: opacity 0.14s, box-shadow 0.15s, transform 0.1s;
+      }
+      .ap-primary svg { width: 16px; height: 16px; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .ap-primary:hover { opacity: 0.88; box-shadow: 0 2px 4px rgba(11,87,208,0.2), 0 8px 22px rgba(11,87,208,0.4), inset 0 1px 0 rgba(255,255,255,0.14); }
+      .ap-primary:active { transform: scale(0.985); opacity: 0.95; }
+      .ap-primary:focus-visible { outline: none; box-shadow: var(--focus); }
+      .ap-primary:disabled { opacity: 0.42; cursor: not-allowed; transform: none; box-shadow: none; }
+      .ap-chips { display: flex; gap: 8px; margin-top: 10px; }
+      .ap-chip {
+        flex: 1; height: 34px;
+        border: 1.5px solid var(--accent-b); background: var(--accent-l);
+        color: var(--accent); border-radius: 999px;
+        font: 500 12px/1 var(--font); cursor: pointer;
+        display: flex; align-items: center; justify-content: center; gap: 5px;
+        transition: color 0.14s, border-color 0.14s, background 0.14s, box-shadow 0.14s;
+        white-space: nowrap; flex-shrink: 0;
+      }
+      .ap-chip svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; flex-shrink: 0; }
+      .ap-chip:hover { border-color: var(--accent); box-shadow: 0 1px 6px rgba(11,87,208,0.18); }
+      .ap-chip:active { transform: scale(0.97); }
+      .ap-chip:focus-visible { outline: none; box-shadow: var(--focus); }
+      .ap-chip.open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-b); }
+      .ap-field-list { overflow: hidden; max-height: 0; transition: max-height 0.28s cubic-bezier(0.4,0,0.2,1), padding-top 0.2s; }
+      .ap-field-list.open { max-height: 220px; padding-top: 10px; }
+      .ap-field-list .field-list { max-height: 210px; margin-top: 0; }
+      .ap-mode-select-row { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+      .ap-select {
+        width: 100%;
+        height: 34px;
+        border: 1.5px solid var(--border2);
+        border-radius: 10px;
+        background: var(--surface2);
+        color: var(--text2);
+        font: 500 12px/1 var(--font);
+        padding: 0 10px;
+        outline: none;
+      }
+      .ap-select:focus-visible {
+        border-color: var(--accent);
+        box-shadow: var(--focus);
+      }
+
       /* ── Toast ── */
       .toast { position: absolute; top: 66px; left: 50%; max-width: calc(100% - 32px); transform: translateX(-50%) translateY(-6px); background: var(--text); color: var(--surface); font-family: var(--font); font-size: 12px; padding: 7px 12px; border-radius: 8px; opacity: 0; transition: opacity 0.18s, transform 0.18s; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 20; box-shadow: 0 10px 24px rgba(15,23,42,0.18); }
       .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+      /* ── Smart Fill Preview ── */
+      .sf-preview { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+      .sf-section-title { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 0 4px; border-top: 1px solid var(--border); margin-top: 4px; }
+      .sf-section-title:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+      .sf-row { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface2); transition: border-color 0.14s, background 0.14s; }
+      .sf-row:has(.sf-cb:checked) { border-color: var(--accent-b); background: var(--accent-l); }
+      .sf-cb { width: 14px; height: 14px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+      .sf-label { font-size: 10.5px; color: var(--text3); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; flex-shrink: 0; }
+      .sf-input { flex: 1; min-width: 0; font-size: 12.5px; font-family: var(--font); border: none; background: transparent; color: var(--text); outline: none; padding: 0; cursor: text; }
+      .sf-input:focus { color: var(--accent); }
+      .sf-input::placeholder { color: var(--text3); font-style: italic; font-size: 11.5px; }
 
       /* ── Agent preview ── */
       .agent-preview { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
@@ -658,11 +1207,242 @@
       .live-row-label { flex: 1; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
       .live-row-value { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; flex-shrink: 0; }
       .live-summary { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text3); }
-      .badge { display: inline-flex; align-items: center; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px; padding: 2px 6px; border-radius: 5px; flex-shrink: 0; }
-      .badge-profile { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
-      .badge-ai      { background: #fffbeb; color: #a16207; border: 1px solid #fde68a; }
-      :host(.dark) .badge-profile { background: #052e1a; color: #86efac; border-color: #166534; }
-      :host(.dark) .badge-ai      { background: #422006; color: #fde68a; border-color: #854d0e; }
+
+      /* ── Preview row source colors ── */
+      .sf-row[data-source="profile"]    { border-left: 3px solid #22c55e; }
+      .sf-row[data-source="inferred"]   { border-left: 3px solid #3b82f6; }
+      .sf-row[data-source="suggestion"] { border-left: 3px solid #f59e0b; }
+      :host(.dark) .sf-row[data-source="profile"]    { border-left-color: #16a34a; }
+      :host(.dark) .sf-row[data-source="inferred"]   { border-left-color: #2563eb; }
+      :host(.dark) .sf-row[data-source="suggestion"] { border-left-color: #d97706; }
+
+      /* ── Preview source summary chips ── */
+      .preview-source-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+      .psr-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; border: 1px solid transparent; }
+      .psr-profile    { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+      .psr-inferred   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+      .psr-suggestion { background: #fffbeb; color: #a16207; border-color: #fde68a; }
+      :host(.dark) .psr-profile    { background: #052e16; color: #86efac; border-color: #166534; }
+      :host(.dark) .psr-inferred   { background: #0f172a; color: #93c5fd; border-color: #1e40af; }
+      :host(.dark) .psr-suggestion { background: #1c1400; color: #fde68a; border-color: #854d0e; }
+
+      /* ── Guided progress strip ── */
+      .guided-progress { margin-top: 10px; }
+      .gp-bar-wrap { height: 4px; background: var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 5px; }
+      .gp-bar { height: 100%; background: linear-gradient(90deg, #1b67db, #22c55e); border-radius: 999px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+      .gp-label { font-size: 11px; color: var(--text2); font-weight: 500; }
+
+      /* ── Auto-nav toggle ── */
+      .ap-mode-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 0 2px; }
+      .ap-mode-label { font-size: 11.5px; color: var(--text2); font-weight: 500; }
+      .ap-toggle { position: relative; display: inline-flex; align-items: center; width: 36px; height: 20px; flex-shrink: 0; cursor: pointer; }
+      .ap-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+      .ap-toggle-track { position: absolute; inset: 0; border-radius: 999px; background: var(--border2); transition: background 0.18s; }
+      .ap-toggle input:checked ~ .ap-toggle-track { background: var(--accent); }
+      .ap-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.22); transition: transform 0.18s; }
+      .ap-toggle input:checked ~ .ap-toggle-thumb { transform: translateX(16px); }
+
+      /* ── Guided question bubble ── */
+      .guided-q { padding: 2px 0; }
+      .gq-eyebrow { font-size: 10px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; display: flex; align-items: center; gap: 5px; }
+      .gq-eyebrow::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+      .gq-text { font-size: 13.5px; color: var(--text); font-weight: 500; line-height: 1.45; margin-bottom: 11px; }
+      .gq-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+      .gq-chip { padding: 6px 13px; border-radius: 999px; border: 1.5px solid var(--accent-b); background: var(--accent-l); color: var(--accent); font: 500 12px/1 var(--font); cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+      .gq-chip:hover { background: var(--accent-b); border-color: var(--accent); }
+      .gq-chip:active { transform: scale(0.96); }
+      .gq-chip.gq-selected { background: var(--accent); color: #fff; border-color: var(--accent); cursor: default; }
+      .gq-hint { font-size: 10.5px; color: var(--text3); line-height: 1.4; }
+
+      /* ── Profile progress ── */
+      .profile-progress { height: 3px; background: var(--border); flex-shrink: 0; }
+      .profile-progress-fill { height: 100%; background: var(--accent); border-radius: 0 2px 2px 0; transition: width 0.35s cubic-bezier(0.4,0,0.2,1); }
+
+      /* ── Professional polish pass ── */
+      .sidebar {
+        width: 420px;
+        background: var(--surface);
+      }
+      .sidebar::before { display: none; }
+      .header {
+        height: 66px;
+        padding: 12px 14px 11px 16px;
+        border-bottom-color: var(--border);
+        box-shadow: none;
+      }
+      .logo-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: var(--surface2);
+        border-color: var(--border);
+      }
+      .logo-name { font-size: 14.5px; font-weight: 700; }
+      .logo-sub { font-size: 11px; }
+      .icon-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+      }
+      .icon-btn:hover {
+        background: var(--surface2);
+        border-color: var(--border);
+      }
+      .action-panel {
+        padding: 14px 16px 12px;
+        background: var(--surface);
+      }
+      .ap-primary {
+        height: 44px;
+        border-radius: 9px;
+        background: var(--accent);
+        box-shadow: none;
+        font-size: 13.5px;
+      }
+      .ap-primary:hover {
+        opacity: 1;
+        background: var(--accent-h);
+        box-shadow: none;
+      }
+      .ap-chips { gap: 7px; margin-top: 9px; }
+      .ap-chip {
+        height: 32px;
+        border-radius: 8px;
+        border-color: var(--border);
+        background: var(--surface);
+        color: var(--text2);
+        font-weight: 600;
+      }
+      .ap-chip:hover,
+      .ap-chip.open {
+        border-color: var(--accent-b);
+        background: var(--accent-l);
+        color: var(--accent);
+        box-shadow: none;
+      }
+      .ap-mode-select-row { margin-top: 10px; }
+      .ap-select {
+        height: 34px;
+        border-radius: 8px;
+        background: var(--surface);
+        border-color: var(--border);
+      }
+      .ap-mode-row {
+        margin-top: 9px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg);
+      }
+      .trust-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--text3);
+        font: 500 11px/1.35 var(--font);
+      }
+      .trust-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--ok);
+        box-shadow: 0 0 0 3px var(--ok-l);
+        flex-shrink: 0;
+      }
+      .messages {
+        padding: 16px;
+        background: var(--bg);
+        gap: 10px;
+      }
+      .bubble {
+        border-radius: 10px;
+        box-shadow: none;
+      }
+      .msg.ai .bubble { border-radius: 10px; }
+      .msg.user .bubble {
+        border-radius: 10px;
+        background: var(--surface);
+      }
+      .input-area { padding: 11px 16px 12px; }
+      .input-box {
+        border-radius: 10px;
+        background: var(--surface);
+        border-color: var(--border);
+      }
+      .send-btn {
+        border-radius: 10px;
+        box-shadow: none;
+      }
+      .send-btn:hover { box-shadow: none; }
+      .footer-note {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 9px;
+        text-align: center;
+      }
+      .footer-provider {
+        color: var(--text2);
+        font-weight: 700;
+      }
+      .footer-model {
+        max-width: 210px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .footer-sep { color: var(--border2); }
+      .sf-preview { gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); }
+      .sf-row {
+        border: none;
+        border-top: 1px solid var(--border);
+        border-radius: 0;
+        background: var(--surface);
+        padding: 9px 10px;
+      }
+      .sf-section-title + .sf-row,
+      .sf-preview > .sf-row:first-child { border-top: none; }
+      .sf-row:has(.sf-cb:checked) {
+        border-color: var(--border);
+        background: var(--bg);
+      }
+      .sf-label { max-width: 104px; font-size: 11px; }
+      .source-badge {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .source-badge.inferred {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+      }
+      .source-badge.suggestion {
+        background: var(--warn-l);
+        border-color: #fde68a;
+        color: var(--warn);
+      }
+      :host(.dark) .source-badge.inferred {
+        background: #0f172a;
+        border-color: #1e40af;
+        color: #93c5fd;
+      }
+      .psr-chip {
+        border-radius: 6px;
+        padding: 3px 7px;
+        font-size: 10px;
+      }
 
       @media (max-width: 420px) {
         .trigger { right: 16px; bottom: 16px; }
@@ -671,7 +1451,8 @@
         .logo-icon { width: 28px; height: 28px; }
         .header-btns { gap: 2px; }
         .icon-btn { width: 28px; height: 28px; }
-        .ctx-banner, .messages, .profile-grid { padding-left: 14px; padding-right: 14px; }
+        .action-panel { padding-left: 14px; padding-right: 14px; }
+        .messages, .profile-grid { padding-left: 14px; padding-right: 14px; }
         .input-area, .profile-actions { padding-left: 14px; padding-right: 14px; }
         .profile-hdr { padding-left: 14px; padding-right: 14px; }
         .profile-actions { grid-template-columns: 1fr; }
@@ -698,27 +1479,84 @@
         <div class="header" id="fa-header">
           <div class="logo">
             <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><path d="M9 12h6M9 16h4"/></svg></div>
-            <span class="logo-name">FormAssist</span>
+            <div class="logo-text"><span class="logo-name">FormAssist</span><span class="logo-sub" id="fa-ctx-title"></span></div>
           </div>
           <div class="header-btns">
+            <button class="icon-btn" id="fa-history-btn" title="Verlauf"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></button>
             <button class="icon-btn" id="fa-profile-btn" title="Profil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke-width="2"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></button>
             <button class="icon-btn" id="fa-dark-btn" title="Dark Mode"><svg viewBox="0 0 24 24" id="fa-dark-icon"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></button>
             <button class="icon-btn" id="fa-close"    title="Schließen"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
           </div>
         </div>
-        <div class="ctx-banner">
-          <div class="ctx-title" id="fa-ctx-title"></div>
-          <div class="ctx-sub"   id="fa-ctx-sub"></div>
+        <div class="action-panel" id="fa-action-panel">
+          <button class="ap-primary" id="fa-ap-agent" disabled>
+            <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Formular ausfüllen
+          </button>
+          <div class="ap-chips">
+            <button class="ap-chip" id="fa-ap-explain">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              Erklären
+            </button>
+            <button class="ap-chip" id="fa-ap-fields">
+              <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><path d="M9 12h6M9 16h4"/></svg>
+              <span id="fa-ap-field-count">0 Felder</span>
+            </button>
+          </div>
+          <div class="ap-field-list" id="fa-ap-field-list">
+            <div class="field-list" id="fa-ap-field-inner"></div>
+          </div>
+          <div class="ap-mode-select-row">
+            <label class="ap-mode-label" for="fa-assistant-mode">Assistent-Modus</label>
+            <select class="ap-select" id="fa-assistant-mode">
+              <option value="hybrid">Empfohlen</option>
+              <option value="classic">Mit Vorschau</option>
+              <option value="context">Automatisch</option>
+            </select>
+          </div>
+          <div class="ap-mode-row">
+            <span class="ap-mode-label">Automatisch weiterklicken</span>
+            <label class="ap-toggle">
+              <input type="checkbox" id="fa-auto-nav" checked>
+              <span class="ap-toggle-track"></span>
+              <span class="ap-toggle-thumb"></span>
+            </label>
+          </div>
+          <div class="guided-progress" id="fa-guided-progress" style="display:none">
+            <div class="gp-bar-wrap"><div class="gp-bar" id="fa-gp-bar"></div></div>
+            <div class="gp-label" id="fa-gp-label"></div>
+          </div>
+          <div class="trust-row">
+            <span class="trust-dot"></span>
+            <span>Profil lokal gespeichert · KI nur bei Aktionen</span>
+          </div>
         </div>
-        <div class="messages" id="fa-messages"></div>
+        <div class="messages" id="fa-messages">
+          <div class="results-empty" id="fa-results-empty">Starte den Agenten oder stelle eine Frage unten.</div>
+        </div>
+        <div class="history-panel" id="fa-history-panel">
+          <div class="profile-hdr">
+            <span>Verlauf</span>
+            <button class="history-clear" id="fa-history-clear">Alles löschen</button>
+          </div>
+          <div class="history-list" id="fa-history-list"></div>
+        </div>
         <div class="profile-panel" id="fa-profile-panel">
-          <div class="profile-hdr"><span>Mein Profil</span><span>Lokal gespeichert · nie übertragen</span></div>
+          <div class="profile-hdr"><span>Mein Profil</span><span id="fa-pf-fill-count">Lokal gespeichert</span></div>
+          <div class="pf-switcher">
+            <select class="pf-select" id="fa-profile-select"></select>
+            <button class="pf-sw-btn" id="fa-pf-new" title="Neues Profil">+</button>
+            <button class="pf-sw-btn danger" id="fa-pf-del-profile" title="Profil löschen">×</button>
+          </div>
+          <div class="profile-progress"><div class="profile-progress-fill" id="fa-pf-progress" style="width:0%"></div></div>
           <div class="profile-grid" id="fa-profile-grid"></div>
           <div class="profile-actions">
             <button class="btn-primary" id="fa-pf-save">Speichern</button>
             <button id="fa-pf-fake">Fake-Daten</button>
             <button id="fa-pf-fill">Formular ausfüllen</button>
             <button class="btn-danger" id="fa-pf-clear">Löschen</button>
+            <button class="btn-io" id="fa-pf-export">↓ Export</button>
+            <button class="btn-io" id="fa-pf-import">↑ Import</button>
           </div>
         </div>
         <div class="input-area">
@@ -733,7 +1571,7 @@
             <textarea class="input-box" id="fa-input" placeholder="Frage zum Formular stellen…" rows="1"></textarea>
             <button class="send-btn" id="fa-send"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg></button>
           </div>
-          <div class="footer-note">Powered by Groq · llama-3.1-8b-instant</div>
+          <div class="footer-note" id="fa-footer-note"></div>
         </div>
       </div>`;
     shadow.appendChild(wrap);
@@ -754,8 +1592,11 @@
     const autofillValue  = $('fa-autofill-value');
     const toastEl        = $('fa-toast');
 
-    $('fa-ctx-title').textContent = ctx.page.h1 || ctx.page.title || ctx.page.hostname;
-    $('fa-ctx-sub').textContent   = [submitLabel ? `"${submitLabel}"` : null, `${allFields.length} Felder`, ctx.page.hostname].filter(Boolean).join(' · ');
+    const KBD_STYLE = 'font-family:var(--font);font-size:9px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:1px 4px;color:var(--text3)';
+    function updateFooterNote() {
+      $('fa-footer-note').innerHTML = `<span class="footer-provider">${providerLabel()}</span><span class="footer-sep">·</span><span class="footer-model">${escapeHtml(_model)}</span><span class="footer-sep">·</span><kbd style="${KBD_STYLE}">Alt+Shift+F</kbd>`;
+    }
+    updateFooterNote();
 
     // ── Apply dark mode ───────────────────────────────────────────────
     if (darkMode) hostEl.classList.add('dark');
@@ -768,6 +1609,7 @@
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
     }
+    _onProviderFallback = () => showToast('Groq nicht erreichbar – OpenRouter als Backup');
 
     // ═══════════════════════════════════════════════════════════════════════
     // PROFILE PANEL
@@ -796,6 +1638,71 @@
       });
       return p;
     }
+
+    function saveActiveProfileToStore(cb) {
+      const entry = getActiveEntry();
+      entry.profile = { ...profile };
+      entry.extras  = { ...extras };
+      chrome.storage.local.set({ faProfiles: profiles, faProfile: profile, faExtras: extras }, cb);
+    }
+
+    function renderProfileSelect() {
+      const sel = $('fa-profile-select');
+      if (!sel) return;
+      sel.innerHTML = '';
+      profiles.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id; opt.textContent = p.name;
+        if (p.id === activeProfileId) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      const delBtn = $('fa-pf-del-profile');
+      if (delBtn) delBtn.disabled = profiles.length <= 1;
+    }
+
+    function switchProfile(id) {
+      if (id === activeProfileId) return;
+      saveActiveProfileToStore(() => {
+        activeProfileId = id;
+        const entry = getActiveEntry();
+        // Swap profile + extras in-place
+        Object.keys(profile).forEach(k => delete profile[k]);
+        Object.assign(profile, entry.profile);
+        Object.keys(extras).forEach(k => delete extras[k]);
+        Object.assign(extras, entry.extras);
+        chrome.storage.local.set({ faActiveProfileId: activeProfileId });
+        loadProfileIntoInputs(profile);
+        renderExtrasInProfile();
+        updateProfileProgress();
+        SYSTEM = buildSystemPrompt(ctx, profile, extras);
+        showToast(`Profil „${entry.name}" geladen`);
+      });
+    }
+
+    renderProfileSelect();
+
+    $('fa-profile-select').addEventListener('change', e => switchProfile(e.target.value));
+
+    $('fa-pf-new').addEventListener('click', () => {
+      const name = prompt('Profilname:');
+      if (!name?.trim()) return;
+      const id = 'p_' + Date.now();
+      profiles.push({ id, name: name.trim(), profile: {}, extras: {} });
+      chrome.storage.local.set({ faProfiles: profiles });
+      renderProfileSelect();
+      switchProfile(id);
+    });
+
+    $('fa-pf-del-profile').addEventListener('click', () => {
+      if (profiles.length <= 1) return;
+      const entry = getActiveEntry();
+      if (!confirm(`Profil „${entry.name}" löschen?`)) return;
+      profiles = profiles.filter(p => p.id !== activeProfileId);
+      activeProfileId = profiles[0].id;
+      chrome.storage.local.set({ faProfiles: profiles, faActiveProfileId: activeProfileId });
+      renderProfileSelect();
+      switchProfile(activeProfileId);
+    });
 
     function loadProfileIntoInputs(p) {
       PROFILE_FIELDS.forEach(pf => {
@@ -851,59 +1758,171 @@
     }
 
     let profileVisible = false;
+    let historyVisible = false;
+    const historyPanel = shadow.getElementById('fa-history-panel');
+
     function showProfile() {
+      if (historyVisible) hideHistory();
       profileVisible = true;
       renderExtrasInProfile();
+      updateProfileProgress();
+      messagesEl.classList.add('fading');
+      setTimeout(() => { messagesEl.style.display = 'none'; }, 150);
       profilePanel.classList.add('visible');
-      messagesEl.style.display = 'none';
       $('fa-profile-btn').classList.add('active');
     }
     function hideProfile() {
       profileVisible = false;
-      profilePanel.classList.remove('visible');
       messagesEl.style.display = '';
+      requestAnimationFrame(() => messagesEl.classList.remove('fading'));
+      profilePanel.classList.remove('visible');
       $('fa-profile-btn').classList.remove('active');
     }
+
+    function renderHistoryList() {
+      const listEl = $('fa-history-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      if (!faHistory.length) {
+        listEl.innerHTML = '<div class="history-empty">Noch keine ausgefüllten Formulare. Starte den Agent, um den Verlauf zu befüllen.</div>';
+        return;
+      }
+      [...faHistory].reverse().forEach(entry => {
+        const div = document.createElement('div');
+        div.className = 'history-entry';
+        div.title = entry.url || '';
+        div.innerHTML = `
+          <div class="history-icon"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><path d="M9 12h6M9 16h4"/></svg></div>
+          <div class="history-info">
+            <div class="history-domain">${escapeHtml(entry.title || entry.domain || '—')}</div>
+            <div class="history-meta">${escapeHtml(entry.domain)} · ${entry.fieldCount} Felder · ${new Date(entry.ts).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</div>
+          </div>`;
+        if (entry.url) div.addEventListener('click', () => { window.location.href = entry.url; });
+        listEl.appendChild(div);
+      });
+    }
+
+    function showHistory() {
+      if (profileVisible) hideProfile();
+      historyVisible = true;
+      renderHistoryList();
+      messagesEl.classList.add('fading');
+      setTimeout(() => { messagesEl.style.display = 'none'; }, 150);
+      historyPanel.classList.add('visible');
+      $('fa-history-btn').classList.add('active');
+    }
+    function hideHistory() {
+      historyVisible = false;
+      messagesEl.style.display = '';
+      requestAnimationFrame(() => messagesEl.classList.remove('fading'));
+      historyPanel.classList.remove('visible');
+      $('fa-history-btn').classList.remove('active');
+    }
+
+    function addHistoryEntry(entry) {
+      faHistory.push(entry);
+      if (faHistory.length > 30) faHistory = faHistory.slice(-30);
+      chrome.storage.local.set({ faHistory });
+    }
+
+    $('fa-history-btn').addEventListener('click', () => { if (historyVisible) hideHistory(); else showHistory(); });
+    $('fa-history-clear').addEventListener('click', () => {
+      faHistory = [];
+      chrome.storage.local.set({ faHistory });
+      renderHistoryList();
+      showToast('Verlauf gelöscht');
+    });
+
+    function updateProfileProgress() {
+      const filled = PROFILE_FIELDS.filter(pf => {
+        const inp = shadow.getElementById(`fa-pf-${pf.key}`);
+        return inp && inp.value.trim();
+      }).length;
+      const pct = Math.round(filled / PROFILE_FIELDS.length * 100);
+      const fill = $('fa-pf-progress');
+      const label = $('fa-pf-fill-count');
+      if (fill)  fill.style.width = pct + '%';
+      if (label) label.textContent = `${filled}/${PROFILE_FIELDS.length} Felder`;
+    }
+
+    profileGrid.addEventListener('input', updateProfileProgress);
 
     $('fa-profile-btn').addEventListener('click', () => { if (profileVisible) hideProfile(); else showProfile(); });
 
     $('fa-pf-save').addEventListener('click', () => {
       const p = getProfileFromInputs();
       PROFILE_FIELDS.forEach(pf => { if (p[pf.key]) profile[pf.key] = p[pf.key]; else delete profile[pf.key]; });
-<<<<<<< HEAD
-      chrome.storage.local.set({ faProfile: profile }, () => {
-        SYSTEM = buildSystemPrompt(ctx, profile);
-        showToast('Profil gespeichert');
-      });
-=======
-      chrome.storage.local.set({ faProfile: profile });
-
       profileGrid.querySelectorAll('.pf-extra').forEach(div => {
         const key = div.dataset.extraKey;
         const val = div.querySelector('input')?.value.trim();
         if (key) { if (val) extras[key] = val; else delete extras[key]; }
       });
-      chrome.storage.local.set({ faExtras: extras }, () => showToast('Profil gespeichert'));
->>>>>>> 9f1dbf9 (Update project files)
-    });
-
-    $('fa-pf-fake').addEventListener('click', () => loadProfileIntoInputs(FAKE_DATA));
-
-    $('fa-pf-fill').addEventListener('click', () => {
-      let filled = 0;
-      allFields.forEach(f => {
-        if (!f.el) return;
-        const pf = matchProfile(f.el, profile);
-        if (pf) { fillField(f.el, profile[pf.key]); filled++; }
+      saveActiveProfileToStore(() => {
+        SYSTEM = buildSystemPrompt(ctx, profile, extras);
+        showToast('Profil gespeichert');
+        updateProfileProgress();
       });
-      hideProfile();
-      showToast(filled > 0 ? `${filled} Felder ausgefüllt` : 'Keine passenden Felder gefunden');
     });
+
+    $('fa-pf-fake').addEventListener('click', () => {
+      Object.keys(profile).forEach(k => delete profile[k]);
+      Object.assign(profile, FAKE_DATA);
+      loadProfileIntoInputs(profile);
+      SYSTEM = buildSystemPrompt(ctx, profile, extras);
+      showToast('Fake-Daten geladen');
+      updateProfileProgress();
+    });
+
+    $('fa-pf-fill').addEventListener('click', () => { hideProfile(); startAgent(); });
 
     $('fa-pf-clear').addEventListener('click', () => {
       PROFILE_FIELDS.forEach(pf => delete profile[pf.key]);
       loadProfileIntoInputs({});
-      chrome.storage.local.remove('faProfile', () => showToast('Profil gelöscht'));
+      SYSTEM = buildSystemPrompt(ctx, profile, extras);
+      saveActiveProfileToStore(() => showToast('Profil gelöscht'));
+      updateProfileProgress();
+    });
+
+    $('fa-pf-export').addEventListener('click', () => {
+      const data = { profile: { ...profile }, extras: { ...extras } };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'formassist-profil.json';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+      showToast('Profil exportiert');
+    });
+
+    $('fa-pf-import').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = '.json';
+      input.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            if (data.profile && typeof data.profile === 'object') {
+              Object.keys(profile).forEach(k => delete profile[k]);
+              Object.assign(profile, data.profile);
+              if (data.extras && typeof data.extras === 'object') {
+                Object.keys(extras).forEach(k => delete extras[k]);
+                Object.assign(extras, data.extras);
+              }
+              chrome.storage.local.set({ faProfile: profile, faExtras: extras });
+              loadProfileIntoInputs(profile);
+              renderExtrasInProfile();
+              updateProfileProgress();
+              SYSTEM = buildSystemPrompt(ctx, profile, extras);
+              showToast('Profil importiert ✓');
+            } else { showToast('Ungültiges Format'); }
+          } catch { showToast('Fehler beim Lesen der Datei'); }
+        };
+        reader.readAsText(file);
+      });
+      input.click();
     });
 
     // ── Autofill tip ──────────────────────────────────────────────────
@@ -1044,7 +2063,6 @@
     // ═══════════════════════════════════════════════════════════════════════
 
     let isOpen = false;
-    let hasGreeted = false;
 
     function open() {
       isOpen = true;
@@ -1052,7 +2070,6 @@
       else          sidebar.style.display = 'flex';
       triggerBtn.style.opacity       = '0';
       triggerBtn.style.pointerEvents = 'none';
-      if (!hasGreeted) greet();
       setTimeout(() => inputEl.focus(), 320);
     }
 
@@ -1064,19 +2081,132 @@
       triggerBtn.style.pointerEvents = '';
     }
 
-    triggerBtn.addEventListener('click', open);
+    triggerBtn.addEventListener('click', () => {
+      if (isOpen) { close(); return; }
+      open();
+    });
     $('fa-close').addEventListener('click', close);
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && isOpen) {
         close();
         return;
       }
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
+      if ((e.ctrlKey || e.altKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
-        if (isOpen) close();
-        else open();
+        if (isOpen) { close(); return; }
+        open();
       }
     });
+
+    let ctxSignature = null;
+
+    function getContextSignature(c) {
+      const counts = c.forms.map(f => f.allFields.length).join(',');
+      const submits = c.forms.map(f => f.submitText || '').join('|');
+      const labels = c.forms.flatMap(f => f.allFields.map(x => x.label)).join('|');
+      return `${c.page.hostname}|${c.page.pathname}|${c.page.title}|${counts}|${submits}|${labels}`;
+    }
+
+    function updateActionPanel() {
+      const hasFields = allFields.length > 0;
+      const agentBtn  = $('fa-ap-agent');
+      const countEl   = $('fa-ap-field-count');
+      const emptyEl   = $('fa-results-empty');
+      if (agentBtn) agentBtn.disabled = !hasFields;
+      if (countEl) {
+        const stepNote = stepInfo && stepInfo.isMultiStep ? ` · S.${stepInfo.current}/${stepInfo.total}` : '';
+        countEl.textContent = hasFields ? `${allFields.length} Felder${stepNote}` : 'Kein Formular';
+      }
+      if (emptyEl) {
+        const formIcon = `<svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><path d="M9 12h6M9 16h4"/></svg>`;
+        const eyeIcon  = `<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+        const hostname = ctx && ctx.page && ctx.page.hostname ? ctx.page.hostname : '';
+        if (hasFields) {
+          const stepNote = stepInfo && stepInfo.isMultiStep ? ` · Seite ${stepInfo.current}/${stepInfo.total}` : '';
+          emptyEl.innerHTML = `
+            <div class="re-icon">${formIcon}</div>
+            <div class="re-title">${allFields.length} Felder erkannt${stepNote}</div>
+            ${hostname ? `<div class="re-sub">${hostname}</div>` : ''}
+            <div class="re-hint">Starte den Agent zum automatischen Ausfüllen — oder stelle unten eine Frage.</div>`;
+        } else {
+          emptyEl.innerHTML = `
+            <div class="re-icon">${eyeIcon}</div>
+            <div class="re-title">Kein Formular erkannt</div>
+            ${hostname ? `<div class="re-sub">${hostname}</div>` : ''}
+            <div class="re-hint">Ich beobachte die Seite weiter.</div>`;
+        }
+      }
+      renderActionFieldList();
+    }
+
+    function renderActionFieldList() {
+      const listEl = $('fa-ap-field-inner');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      allFields.slice(0, 15).forEach(f => {
+        const btn = document.createElement('button');
+        btn.className = 'field-btn';
+        btn.innerHTML = `<span class="field-btn-label">${f.label}</span><span class="field-type-tag">${f.type}</span>${f.required ? '<span class="req">Pflicht</span>' : ''}`;
+        btn.addEventListener('click', () => {
+          if (f.el) {
+            f.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            highlightField(f.el);
+            activeFieldEl = f.el;
+            fieldNameEl.textContent = f.label;
+            fieldTag.classList.add('visible');
+          }
+          send(`Erkläre mir das Feld "${f.label}" — was soll ich eintragen?`);
+        });
+        listEl.appendChild(btn);
+      });
+      if (allFields.length > 15) {
+        const more = document.createElement('div');
+        more.style.cssText = 'font-size:11px;color:var(--text3);text-align:center;padding:4px 0';
+        more.textContent = `+ ${allFields.length - 15} weitere Felder`;
+        listEl.appendChild(more);
+      }
+    }
+
+    function applyContext(freshCtx) {
+      ctx = freshCtx;
+      allFields = ctx.forms.flatMap(f => f.allFields);
+      submitLabel = ctx.forms[0]?.submitText;
+      ctxSignature = getContextSignature(ctx);
+      stepInfo = getFormStepInfo();
+      SYSTEM = buildSystemPrompt(ctx, profile, extras);
+      $('fa-ctx-title').textContent = ctx.page.h1 || ctx.page.title || ctx.page.hostname;
+      updateActionPanel();
+    }
+
+    function refreshContext(freshCtx) {
+      const sig = getContextSignature(freshCtx);
+      if (sig === ctxSignature) return;
+      applyContext(freshCtx);
+    }
+
+    function getAssistantMode() {
+      return normalizeAssistantMode($('fa-assistant-mode')?.value || _assistantMode);
+    }
+
+    function isContextualAssistantMode() {
+      return getAssistantMode() !== 'classic';
+    }
+
+    function updateAssistantModeUi() {
+      const select = $('fa-assistant-mode');
+      if (select) select.value = normalizeAssistantMode(_assistantMode);
+      const mode = getAssistantMode();
+      if (mode === 'classic') {
+        inputEl.placeholder = 'Frage zum Formular stellen…';
+      } else if (mode === 'context') {
+        inputEl.placeholder = 'Frage zum aktiven Feld stellen…';
+      } else {
+        inputEl.placeholder = 'Frage stellen… (nutzt Feldkontext)';
+      }
+    }
+
+    applyContext(ctx);
+    updateAssistantModeUi();
 
     // ═══════════════════════════════════════════════════════════════════════
     // MESSAGES
@@ -1155,7 +2285,12 @@
       bubble.appendChild(btn);
     }
 
+    function dismissEmpty() {
+      $('fa-results-empty')?.remove();
+    }
+
     function addMsg(role, html, chips, opts = {}) {
+      dismissEmpty();
       const div = document.createElement('div');
       div.className = 'msg ' + role;
       const bubble = document.createElement('div');
@@ -1180,81 +2315,14 @@
     }
 
     function showTyping() {
+      dismissEmpty();
       const div = document.createElement('div');
       div.id = 'fa-typing'; div.className = 'typing-row';
-      div.innerHTML = `<div class="typing-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+      div.innerHTML = `<div class="typing-bubble"><div class="dot"></div></div>`;
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
     function removeTyping() { $('fa-typing')?.remove(); }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // GREETING + FIELD LIST
-    // ═══════════════════════════════════════════════════════════════════════
-
-    function greet() {
-      hasGreeted = true;
-      const purpose = submitLabel
-        ? `Ich sehe das Formular <strong>"${submitLabel}"</strong>`
-        : `Ich habe <strong>${allFields.length} Felder</strong> erkannt`;
-
-      const div = document.createElement('div');
-      div.className = 'msg ai';
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      const greetingHtml = `${purpose} auf <em>${ctx.page.hostname}</em>. Klicke auf ein Feld für gezielte Hilfe, oder stell mir direkt eine Frage.`;
-      bubble.innerHTML = greetingHtml;
-
-      const quickActions = document.createElement('div');
-      quickActions.className = 'quick-actions';
-      const summaryBtn = document.createElement('button');
-      summaryBtn.type = 'button';
-      summaryBtn.className = 'quick-action';
-      summaryBtn.textContent = 'Formular erklären';
-      summaryBtn.addEventListener('click', askFormSummary);
-      const guidedBtn = document.createElement('button');
-      guidedBtn.type = 'button';
-      guidedBtn.className = 'quick-action';
-      guidedBtn.textContent = 'Geführter Modus';
-      guidedBtn.addEventListener('click', startGuidedMode);
-      const agentBtn = document.createElement('button');
-      agentBtn.type = 'button';
-      agentBtn.className = 'quick-action';
-      agentBtn.textContent = '✦ KI Auto-Fill';
-      agentBtn.addEventListener('click', agentFill);
-      quickActions.append(summaryBtn, guidedBtn, agentBtn);
-      bubble.appendChild(quickActions);
-
-      const list = document.createElement('div');
-      list.className = 'field-list';
-      allFields.slice(0, 15).forEach(f => {
-        const btn = document.createElement('button');
-        btn.className = 'field-btn';
-        btn.innerHTML = `<span class="field-btn-label">${f.label}</span><span class="field-type-tag">${f.type}</span>${f.required ? '<span class="req">Pflicht</span>' : ''}`;
-        btn.addEventListener('click', () => {
-          if (f.el) {
-            f.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            highlightField(f.el);
-            activeFieldEl = f.el;
-            fieldNameEl.textContent = f.label;
-            fieldTag.classList.add('visible');
-          }
-          send(`Erkläre mir das Feld "${f.label}" — was soll ich eintragen?`);
-        });
-        list.appendChild(btn);
-      });
-      if (allFields.length > 15) {
-        const more = document.createElement('div');
-        more.style.cssText = 'font-size:11px;color:var(--text3);text-align:center;padding:4px 0';
-        more.textContent = `+ ${allFields.length - 15} weitere Felder`;
-        list.appendChild(more);
-      }
-      bubble.appendChild(list);
-      addCopyButton(bubble, htmlToPlainText(greetingHtml));
-      div.appendChild(bubble);
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // AI
@@ -1262,8 +2330,6 @@
 
     let history       = [];
     let activeFieldEl = null;
-    const guidedMode = { active: false, fields: [], index: 0 };
-    const agentMode  = { active: false, unknowns: [], idx: 0, knownMatches: [] };
 
     function createStreamBubble() {
       const div = document.createElement('div');
@@ -1275,59 +2341,117 @@
       return { div, bubble };
     }
 
+    function parseModelJsonArray(raw) {
+      const text = String(raw || '').trim();
+      if (!text) return [];
+
+      function tryParse(s) {
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) return parsed;
+          if (parsed && typeof parsed === 'object') return [parsed]; // single object → wrap
+        } catch {}
+        // strip trailing commas, then retry
+        const fixed = s.replace(/,\s*([\]}])/g, '$1');
+        try {
+          const parsed = JSON.parse(fixed);
+          if (Array.isArray(parsed)) return parsed;
+          if (parsed && typeof parsed === 'object') return [parsed];
+        } catch {}
+        return null;
+      }
+
+      const direct = tryParse(text);
+      if (direct) return direct;
+
+      const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (fenced?.[1]) { const r = tryParse(fenced[1].trim()); if (r) return r; }
+
+      const arrMatch = text.match(/\[[\s\S]*\]/);
+      if (arrMatch) { const r = tryParse(arrMatch[0]); if (r) return r; }
+
+      return [];
+    }
+
+    function toSafeText(value, maxLen = 280) {
+      if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return '';
+      return String(value).replace(/\s+/g, ' ').trim().slice(0, maxLen);
+    }
+
+    function sanitizeAgentActions(parsed) {
+      if (!Array.isArray(parsed)) return [];
+      const allowedActions = new Set(['fill', 'select', 'check', 'click', 'submit', 'done']);
+      const allowedSources = new Set(['profile', 'inferred', 'suggestion']);
+      const cleaned = [];
+      for (const item of parsed) {
+        if (!item || typeof item !== 'object') continue;
+        const action = toSafeText(item.action, 24).toLowerCase();
+        if (!allowedActions.has(action)) continue;
+        if (action === 'done') {
+          cleaned.push({ action: 'done' });
+          break;
+        }
+        const selector = toSafeText(item.selector, 320);
+        if (!selector) continue;
+        const label = toSafeText(item.label, 120);
+        const normalized = { action, selector, label };
+        const src = toSafeText(item.source, 24).toLowerCase();
+        if (allowedSources.has(src)) normalized.source = src;
+        const conf = Number(item.confidence);
+        if (Number.isFinite(conf)) normalized.confidence = Math.max(0, Math.min(1, conf));
+        if (action === 'fill' || action === 'select') {
+          const value = toSafeText(item.value, 280);
+          if (!value) continue;
+          normalized.value = value;
+        }
+        if (action === 'click') normalized.isNavigation = !!item.isNavigation;
+        cleaned.push(normalized);
+        if (cleaned.length >= 150) break;
+      }
+      return cleaned;
+    }
+
     async function askAI(userText, opts = {}) {
       const key = await loadKey();
-      if (!key) { addMsg('ai', 'API-Schlüssel nicht gefunden. Bitte <code>api-key.txt</code> mit deinem Groq API-Key befüllen.'); return ''; }
-      const content = userText + (opts.includeActive === false ? '' : getActiveFieldContext(activeFieldEl));
+      if (!key) { addMsg('ai', `API-Schlüssel für ${providerLabel()} nicht gefunden. Bitte in den FormAssist-Einstellungen hinterlegen.`); return ''; }
+      const includeActive = opts.includeActive === false
+        ? false
+        : (opts.includeActive === true ? true : isContextualAssistantMode());
+      const content = userText + (includeActive ? getActiveFieldContext(activeFieldEl) : '');
       history.push({ role: 'user', content });
       showTyping();
 
       const useStream = opts.render !== false;
 
       try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-          body: JSON.stringify({
-            model: MODEL, max_tokens: opts.maxTokens || 400, stream: useStream,
-            messages: [{ role: 'system', content: SYSTEM }, ...history.slice(-10)],
-          }),
-        });
+        const reqBody = {
+          model: _model, max_tokens: opts.maxTokens || 400, stream: useStream,
+          messages: [{ role: 'system', content: SYSTEM }, ...history.slice(-6)],
+        };
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          removeTyping();
-          addMsg('ai', 'Fehler: ' + (data.error?.message || `HTTP ${res.status}`));
-          history.pop(); return '';
-        }
-
-        // ── Non-streaming path (submit review) ───────────────────────
+        // ── Non-streaming path ────────────────────────────────────────
         if (!useStream) {
-          const data = await res.json();
+          const data = await groqRequest(key, reqBody);
           removeTyping();
           const reply = data.choices?.[0]?.message?.content?.trim();
           if (reply) { history.push({ role: 'assistant', content: reply }); return reply; }
           addMsg('ai', 'Unbekannter Fehler.'); history.pop(); return '';
         }
 
-        // ── Streaming path ────────────────────────────────────────────
+        // ── Streaming path (via background port) ──────────────────────
         removeTyping();
         const { div: msgDiv, bubble: streamBubble } = createStreamBubble();
         let rawText = '';
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
         let buf = '';
 
-        outer: while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
+        await groqStream(key, reqBody, chunk => {
+          buf += chunk;
           const lines = buf.split('\n');
           buf = lines.pop() || '';
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
             const payload = line.slice(6).trim();
-            if (payload === '[DONE]') break outer;
+            if (payload === '[DONE]') return;
             try {
               const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
               if (delta) {
@@ -1335,9 +2459,9 @@
                 streamBubble.innerHTML = renderMarkdown(rawText);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
               }
-            } catch { /* malformed chunk */ }
+            } catch {}
           }
-        }
+        });
 
         const fullText = rawText.trim();
         if (fullText) {
@@ -1352,20 +2476,26 @@
         messagesEl.scrollTop = messagesEl.scrollHeight;
         return fullText;
 
-      } catch {
+      } catch (err) {
         removeTyping();
-        addMsg('ai', 'Verbindungsfehler. Bitte Internetverbindung prüfen.');
+        addMsg('ai', 'Verbindungsfehler: ' + (err?.message || 'Bitte Internetverbindung prüfen.'));
         history.pop(); return '';
       }
     }
 
-    function send(text) {
+    async function send(text) {
       const t = (text !== undefined ? text : inputEl.value).trim();
       if (!t) return;
-      addMsg('user', t);
       inputEl.value = ''; inputEl.style.height = 'auto';
-      if (guidedMode.active) { handleGuidedAnswer(t); return; }
-      if (agentMode.active)  { handleAgentAnswer(t);  return; }
+      addMsg('user', t);
+      if (guidedAskState.active && agentState.guided) {
+        await handleGuidedAnswer(t);
+        return;
+      }
+      if (manualAssistState.pending && agentState.active) {
+        await handleManualAssistAnswer(t);
+        return;
+      }
       askAI(t);
     }
 
@@ -1395,426 +2525,1129 @@
       );
     }
 
-    function getGuidedFields() {
-      const seenRadios = new Set();
-      return allFields
-        .filter(f => f.el && isVisible(f.el) && !SKIP_TYPES.has(f.el.type))
-        .filter(f => {
-          const type = (f.el.type || '').toLowerCase();
-          if (type === 'password' || type === 'file') return false;
-          if (type === 'radio' && f.el.name) {
-            const key = `${f.el.form ? Array.from(document.forms).indexOf(f.el.form) : 'page'}:${f.el.name}`;
-            if (seenRadios.has(key)) return false;
-            seenRadios.add(key);
-          }
-          return !getFieldValueForReview(f.el);
-        })
-        .sort((a, b) => Number(b.required) - Number(a.required));
-    }
-
-    function focusGuidedField(field) {
-      const el = field?.el;
-      if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
-      highlightField(el);
-      activeFieldEl = el;
-      fieldNameEl.textContent = field.label;
-      fieldTag.classList.add('visible');
-    }
-
-    function describeGuidedField(field) {
-      const bits = [];
-      if (field.required) bits.push('Pflichtfeld');
-      if (field.hint) bits.push(field.hint);
-      if (field.options?.length) bits.push(`Optionen: ${field.options.join(', ')}`);
-      return bits.length ? `<br><span class="review-note">${escapeHtml(bits.join(' · '))}</span>` : '';
-    }
-
-    function askGuidedQuestion() {
-      const field = guidedMode.fields[guidedMode.index];
-      if (!field) {
-        guidedMode.active = false;
-        addMsg('ai', 'Geführter Modus abgeschlossen. Du kannst das Formular jetzt noch einmal prüfen oder absenden.');
-        return;
-      }
-      focusGuidedField(field);
-      const progress = `${guidedMode.index + 1}/${guidedMode.fields.length}`;
-      addMsg(
-        'ai',
-        `Geführter Modus ${progress}: Was soll ich bei <strong>${escapeHtml(field.label)}</strong> eintragen?${describeGuidedField(field)}`,
-        ['Überspringen', 'Beenden'],
-        {}
-      );
-    }
-
-    function startGuidedMode() {
-      if (profileVisible) hideProfile();
-      open();
-      guidedMode.fields = getGuidedFields();
-      guidedMode.index = 0;
-      if (!guidedMode.fields.length) {
-        addMsg('ai', 'Ich finde gerade keine leeren, passenden Felder für den geführten Modus.');
-        return;
-      }
-      guidedMode.active = true;
-      addMsg('ai', 'Ich führe dich jetzt Feld für Feld durch das Formular. Antworte kurz; ich trage deine Antwort direkt ein.');
-      askGuidedQuestion();
-    }
-
-    function handleGuidedAnswer(text) {
-      const normalized = text.toLowerCase();
-      if (['beenden', 'abbrechen', 'stop', 'stopp'].includes(normalized)) {
-        guidedMode.active = false;
-        addMsg('ai', 'Geführter Modus beendet. Du kannst jederzeit wieder starten.');
-        return;
-      }
-      const field = guidedMode.fields[guidedMode.index];
-      if (!field) {
-        guidedMode.active = false;
-        return;
-      }
-      if (!['überspringen', 'ueberspringen', 'skip'].includes(normalized)) {
-        fillField(field.el, text);
-        showToast(`${field.label} ausgefüllt`);
-      }
-      guidedMode.index += 1;
-      askGuidedQuestion();
-    }
-
     // ═══════════════════════════════════════════════════════════════════════
-    // AGENT AUTO-FILL — live sequential fill, one AI call per field
+    // AGENT MODE — vollautomatischer Formular-Agent
     // ═══════════════════════════════════════════════════════════════════════
-
-    function matchExtras(field) {
-      const fl = field.label.toLowerCase().trim();
-      const key = Object.keys(extras).find(k => {
-        const kl = k.toLowerCase().trim();
-        return kl === fl || fl.includes(kl) || kl.includes(fl);
-      });
-      return key ? extras[key] : null;
-    }
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    async function agentFill() {
-      if (profileVisible) hideProfile();
-      open();
+    function normalizeForCompare(value) {
+      return clean(String(value ?? '')).toLowerCase();
+    }
 
-      const candidateFields = allFields.filter(f => {
-        if (!f.el || !isVisible(f.el)) return false;
-        const type = (f.el.type || '').toLowerCase();
-        return !SKIP_TYPES.has(type) && type !== 'password' && type !== 'file';
+    function getActionConfidence(action) {
+      if (Number.isFinite(action?.confidence)) return action.confidence;
+      if (!action?.source || action.source === 'profile') return 0.95;
+      if (action.source === 'inferred') return 0.78;
+      if (action.source === 'suggestion') return 0.52;
+      return 0.6;
+    }
+
+    function getCurrentFieldValue(el) {
+      if (!el) return '';
+      const type = (el.type || '').toLowerCase();
+      if (type === 'checkbox') return el.checked ? 'true' : 'false';
+      if (type === 'radio') {
+        const root = el.form || document;
+        const checked = el.name ? root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`) : (el.checked ? el : null);
+        if (!checked) return '';
+        return clean(getLabel(checked) || checked.value || 'true');
+      }
+      if (el.tagName === 'SELECT') {
+        const selected = Array.from(el.selectedOptions || []);
+        if (!selected.length) return '';
+        const first = selected[0];
+        return clean(first.text || first.label || first.value);
+      }
+      return clean(el.value || '');
+    }
+
+    function isActionApplied(el, action, expectedValue = '') {
+      if (!el) return false;
+      const type = (el.type || '').toLowerCase();
+      if (action === 'check') return !!el.checked;
+      const expected = normalizeForCompare(expectedValue);
+      if (!expected) return normalizeForCompare(getCurrentFieldValue(el)) !== '';
+
+      if (type === 'checkbox') {
+        const truthy = /^(ja|yes|true|1|x|ok|checked|ausgewählt)$/i.test(expectedValue);
+        return el.checked === truthy;
+      }
+
+      const current = normalizeForCompare(getCurrentFieldValue(el));
+      if (!current) return false;
+
+      if (el.tagName === 'SELECT') {
+        const rawValue = normalizeForCompare(el.value);
+        return current === expected || rawValue === expected || current.includes(expected) || expected.includes(current);
+      }
+
+      if (type === 'date') {
+        const expectedIso = parseDateToISO(expectedValue) || expected;
+        const currentIso = parseDateToISO(current) || current;
+        return currentIso === expectedIso;
+      }
+
+      return current === expected || current.includes(expected) || expected.includes(current);
+    }
+
+    function resolveActionElement(act) {
+      if (!act) return null;
+      let el = null;
+      if (act.selector) {
+        try { el = document.querySelector(act.selector); } catch {}
+      }
+      if (el) return el;
+      const wanted = normalizeForCompare(act.label);
+      if (!wanted) return null;
+      return allFields.find(f => f?.el && isVisible(f.el) && normalizeForCompare(f.label) === wanted)?.el || null;
+    }
+
+    function applyDeterministicProfileFill() {
+      const freshFields = extractRichContext().forms.flatMap(f => f.allFields);
+      const seenRadioGroups = new Set();
+      let filled = 0;
+
+      for (const f of freshFields) {
+        const el = f?.el;
+        if (!el || !isVisible(el)) continue;
+        const type = (el.type || '').toLowerCase();
+        if (type === 'radio' && el.name) {
+          if (seenRadioGroups.has(el.name)) continue;
+          seenRadioGroups.add(el.name);
+        }
+
+        const pf = matchProfile(el, profile);
+        if (!pf || !profile[pf.key]) continue;
+        const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
+        const hasStrongAutocomplete = ac && ac !== 'on' && ac !== 'off' && pf.ac.some(a => ac.includes(a));
+        const labelNorm = normalizeForCompare(getLabel(el));
+        const pfLabelNorm = normalizeForCompare(pf.label);
+        const hasStrongLabel = labelNorm === pfLabelNorm || labelNorm.startsWith(pfLabelNorm + ' ') || labelNorm.includes(` ${pfLabelNorm}`);
+        if (!hasStrongAutocomplete && !hasStrongLabel) continue;
+
+        const hasError = !!getError(el) || (el.willValidate && !el.checkValidity());
+        const current = normalizeForCompare(getCurrentFieldValue(el));
+        if (current && !hasError) continue;
+
+        const value = profile[pf.key];
+        fillField(el, value);
+        if (isActionApplied(el, 'fill', value)) {
+          filled++;
+          agentState.filledFields.push({ label: f.label || pf.label, value, url: location.href });
+        }
+      }
+
+      return filled;
+    }
+
+    function getUnresolvedFieldCandidates() {
+      const freshCtx = extractRichContext();
+      const unresolved = [];
+      const seenRadioGroups = new Set();
+
+      freshCtx.forms.forEach(form => {
+        form.sections.forEach(sec => {
+          sec.fields.forEach(f => {
+            const el = f?.el;
+            if (!el || !isVisible(el)) return;
+            const type = (el.type || '').toLowerCase();
+
+            if (type === 'radio' && el.name) {
+              const key = `${form.index}:${el.name}`;
+              if (seenRadioGroups.has(key)) return;
+              seenRadioGroups.add(key);
+            }
+
+            const invalid = !!getError(el) || (el.willValidate && !el.checkValidity());
+            let missing = false;
+
+            if (type === 'radio' && el.name) {
+              const root = el.form || document;
+              const checked = root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`);
+              missing = !!f.required && !checked;
+            } else if (type === 'checkbox') {
+              missing = !!f.required && !el.checked;
+            } else if (el.tagName === 'SELECT') {
+              missing = !!f.required && !clean(el.value);
+            } else {
+              missing = !!f.required && !clean(el.value || '');
+            }
+
+            if (!missing && !invalid) return;
+
+            unresolved.push({
+              selector: f.selector || getAgentSelector(el),
+              label: f.label || getLabel(el) || 'dieses Feld',
+              hint: f.hint || getHint(el) || '',
+              options: Array.isArray(f.options) ? f.options : [],
+              invalid,
+            });
+          });
+        });
       });
 
-      if (!candidateFields.length) {
-        addMsg('ai', 'Keine ausfüllbaren Felder gefunden.');
-        return;
-      }
+      unresolved.sort((a, b) => Number(b.invalid) - Number(a.invalid));
+      return unresolved;
+    }
 
-      const key = await loadKey();
-      if (!key) {
-        addMsg('ai', 'API-Schlüssel nicht gefunden. Bitte <code>api-key.txt</code> befüllen.');
-        return;
-      }
+    function showManualAssistQuestion(next) {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble guided-q';
 
-      addMsg('user', '✦ KI Auto-Fill');
+      const eyebrow = document.createElement('div');
+      eyebrow.className = 'gq-eyebrow';
+      eyebrow.textContent = next.label || 'Frage';
 
-      // Live status bubble
-      const statusDiv = document.createElement('div');
-      statusDiv.className = 'msg ai';
-      const statusBubble = document.createElement('div');
-      statusBubble.className = 'bubble';
-      const statusList = document.createElement('div');
-      statusList.style.cssText = 'display:flex;flex-direction:column;gap:5px;';
-      statusBubble.appendChild(statusList);
-      statusDiv.appendChild(statusBubble);
-      messagesEl.appendChild(statusDiv);
+      const reason = next.invalid ? 'Das Feld ist noch ungültig.' : 'Ich brauche noch eine Pflichtangabe.';
+      const text = document.createElement('div');
+      text.className = 'gq-text';
+      text.textContent = `${reason} Was soll ich bei "${next.label}" eintragen?`;
+      bubble.append(eyebrow, text);
 
-      function makeRow(label) {
-        const row = document.createElement('div');
-        row.className = 'live-row';
-        const icon = document.createElement('span');
-        icon.className = 'live-row-icon';
-        icon.innerHTML = '<div class="fa-spinner"></div>';
-        const lbl = document.createElement('span');
-        lbl.className = 'live-row-label';
-        lbl.textContent = label;
-        row.append(icon, lbl);
-        statusList.appendChild(row);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-        return {
-          done(value, source) {
-            icon.innerHTML = '✓';
-            icon.style.color = 'var(--accent)';
-            if (value) {
-              const val = document.createElement('span');
-              val.className = 'live-row-value';
-              val.textContent = value;
-              row.appendChild(val);
-            }
-            if (source) {
-              const badge = document.createElement('span');
-              badge.className = `badge badge-${source === 'profile' ? 'profile' : 'ai'}`;
-              badge.textContent = source === 'profile' ? 'Profil' : 'KI';
-              row.appendChild(badge);
-            }
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-          },
-          ask() {
-            icon.innerHTML = '?';
-            icon.style.color = 'var(--text3)';
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-          },
-        };
-      }
-
-      const unknownFields = [];
-      let filledCount = 0;
-
-      for (const field of candidateFields) {
-        if (field.el) {
-          field.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          highlightField(field.el);
-          activeFieldEl = field.el;
-          fieldNameEl.textContent = field.label;
-          fieldTag.classList.add('visible');
-        }
-
-        const row = makeRow(field.label);
-
-        // 1. Profile match (instant, no API)
-        const pf = matchProfile(field.el, profile);
-        if (pf && profile[pf.key]) {
-          await sleep(120);
-          fillField(field.el, profile[pf.key]);
-          row.done(profile[pf.key], 'profile');
-          filledCount++;
-          continue;
-        }
-
-        // 2. Extras match (instant, no API)
-        const extrasVal = matchExtras(field);
-        if (extrasVal) {
-          await sleep(120);
-          fillField(field.el, extrasVal);
-          row.done(extrasVal, 'profile');
-          filledCount++;
-          continue;
-        }
-
-        // 3. Ask AI for this specific field
-        const fieldPrompt = [
-          `Feld: "${field.label}" (${field.type})${field.required ? ' [Pflichtfeld]' : ''}`,
-          field.hint            ? `Hinweis: ${field.hint}` : '',
-          field.options?.length ? `Optionen: ${field.options.join(', ')}` : '',
-          '',
-          'Gib NUR den einzutragenden Wert zurück — kein JSON, kein Erklärtext.',
-          'Wenn du keinen sicheren Wert kennst: antworte exakt mit NULL',
-        ].filter(Boolean).join('\n');
-
-        try {
-          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-            body: JSON.stringify({
-              model: MODEL,
-              max_tokens: 80,
-              messages: [
-                { role: 'system', content: SYSTEM },
-                { role: 'user',   content: fieldPrompt },
-              ],
-            }),
+      if (next.options.length) {
+        const chipsEl = document.createElement('div');
+        chipsEl.className = 'gq-chips';
+        next.options.slice(0, 10).forEach(opt => {
+          const btn = document.createElement('button');
+          btn.className = 'gq-chip';
+          btn.textContent = opt;
+          btn.addEventListener('click', () => {
+            chipsEl.querySelectorAll('.gq-chip').forEach(chip => { chip.disabled = true; });
+            btn.classList.add('gq-selected');
+            handleManualAssistAnswer(opt);
           });
-          const data = await res.json();
-          const reply = (data.choices?.[0]?.message?.content || '').trim();
-
-          if (!reply || reply.toUpperCase() === 'NULL') {
-            row.ask();
-            unknownFields.push(field);
-          } else {
-            fillField(field.el, reply);
-            row.done(reply, 'ai');
-            filledCount++;
-          }
-        } catch {
-          row.ask();
-          unknownFields.push(field);
-        }
+          chipsEl.appendChild(btn);
+        });
+        bubble.appendChild(chipsEl);
       }
 
-      const summary = document.createElement('div');
-      summary.className = 'live-summary';
-      summary.textContent = `${filledCount} von ${candidateFields.length} Feldern ausgefüllt${unknownFields.length ? ` · ${unknownFields.length} unbekannt` : ''}`;
-      statusBubble.appendChild(summary);
+      if (next.hint) {
+        const hint = document.createElement('div');
+        hint.className = 'gq-hint';
+        hint.textContent = `Hinweis: ${next.hint}`;
+        bubble.appendChild(hint);
+      }
+
+      const entryHint = document.createElement('div');
+      entryHint.className = 'gq-hint';
+      entryHint.textContent = 'Oder tippe unten deine Antwort ein.';
+      bubble.appendChild(entryHint);
+
+      div.appendChild(bubble);
+      messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
 
-      if (unknownFields.length) {
-        await sleep(300);
-        addMsg('ai', `Für ${unknownFields.length} Feld${unknownFields.length !== 1 ? 'er' : ''} brauche ich deine Hilfe:`);
-        agentMode.active = true;
-        agentMode.unknowns = unknownFields;
-        agentMode.idx = 0;
-        agentMode.knownMatches = [];
-        agentModeAskNext();
+    function askUserForMissingField() {
+      const next = getUnresolvedFieldCandidates()[0];
+      if (!next) return false;
+
+      manualAssistState.pending = next;
+      if (isContextualAssistantMode()) {
+        showManualAssistQuestion(next);
       } else {
-        showToast(`${filledCount} Felder ausgefüllt`);
+        const reason = next.invalid ? 'Das Feld ist noch ungültig.' : 'Ich brauche noch eine Pflichtangabe.';
+        const optionText = next.options.length ? `\nOptionen: ${next.options.slice(0, 10).join(', ')}` : '';
+        const hintText = next.hint ? `\nHinweis: ${next.hint}` : '';
+        addMsg('ai', `${reason}\nBitte gib einen Wert fuer **${next.label}** ein.${optionText}${hintText}`, null, { copy: false });
       }
+
+      const target = resolveActionElement(next);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        highlightField(target);
+      }
+      return true;
     }
 
-    function agentModeAskNext() {
-      if (agentMode.idx >= agentMode.unknowns.length) {
-        agentMode.active = false;
-        addMsg('ai', 'Alle Felder wurden ausgefüllt.');
-        return;
+    function clickNextButtonIfReady(formEl) {
+      if (!formEl) return false;
+      if (typeof formEl.checkValidity === 'function' && !formEl.checkValidity()) return false;
+      const nextBtn = Array.from(formEl.querySelectorAll('button[type="submit"], input[type="submit"]')).find(btn => {
+        if (btn.disabled) return false;
+        const txt = getElementTextValue(btn).toLowerCase();
+        return /(weiter|next|fortschritt|fortfahren|continue)/.test(txt);
+      });
+      if (!nextBtn) return false;
+      const hidden = formEl.querySelector('input[name*="submit"][type="hidden"]');
+      if (hidden) {
+        const submitValue = nextBtn.getAttribute?.('data-submit-value') || nextBtn.value || hidden.getAttribute('value') || 'next';
+        hidden.value = submitValue;
       }
-
-      const field = agentMode.unknowns[agentMode.idx];
-      const parts = [];
-      if (field.hint)            parts.push(field.hint);
-      if (field.options?.length) parts.push(`Optionen: ${field.options.join(', ')}`);
-
-      const progress = `${agentMode.idx + 1}/${agentMode.unknowns.length}`;
-      addMsg(
-        'ai',
-        `(${progress}) Was soll ich bei <strong>${escapeHtml(field.label)}</strong> eintragen?${field.required ? ' <span class="review-note">(Pflichtfeld)</span>' : ''}${parts.length ? `<br><span class="review-note">${escapeHtml(parts.join(' · '))}</span>` : ''}`,
-        ['Überspringen', 'Beenden'],
-        {}
-      );
-
-      if (field.el) {
-        field.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        highlightField(field.el);
-        activeFieldEl = field.el;
-        fieldNameEl.textContent = field.label;
-        fieldTag.classList.add('visible');
-      }
+      if (typeof formEl.requestSubmit === 'function') formEl.requestSubmit(nextBtn.form === formEl ? nextBtn : undefined);
+      else nextBtn.click();
+      return true;
     }
 
-    function handleAgentAnswer(text) {
-      const normalized = text.toLowerCase().trim();
-      if (['beenden', 'abbrechen', 'stop', 'stopp'].includes(normalized)) {
-        agentMode.active = false;
-        if (agentMode.knownMatches.length) {
-          addMsg('ai', 'Beendet. Hier sind die Vorschläge für die bekannten Felder:');
-          addAgentPreview(agentMode.knownMatches);
-        } else {
-          addMsg('ai', 'Auto-Fill beendet.');
+    async function handleManualAssistAnswer(answer) {
+      const pending = manualAssistState.pending;
+      if (!pending) return;
+
+      const el = resolveActionElement(pending);
+      if (!el) {
+        manualAssistState.pending = null;
+        if (!askUserForMissingField()) {
+          addMsg('ai', 'Ich finde das Feld gerade nicht mehr. Bitte Agent neu starten.', null, { copy: false });
+          agentState.active = false;
         }
         return;
       }
 
-      const field = agentMode.unknowns[agentMode.idx];
-      if (!field) { agentMode.active = false; return; }
-
-      if (!['überspringen', 'ueberspringen', 'skip'].includes(normalized)) {
-        fillField(field.el, text);
-        showToast(`${field.label} ausgefüllt`);
-
-        const pf = matchProfile(field.el, profile);
-        if (pf) {
-          profile[pf.key] = text;
-          chrome.storage.local.set({ faProfile: profile });
-          addMsg('ai', `In deinem Profil als <strong>${escapeHtml(pf.label)}</strong> gespeichert.`, null, {});
-        } else {
-          extras[field.label] = text;
-          chrome.storage.local.set({ faExtras: extras });
-          addMsg('ai', `<strong>${escapeHtml(field.label)}</strong> gespeichert — wird auf zukünftigen Formularen automatisch vorgeschlagen.`, null, {});
-        }
-
-        agentMode.knownMatches.push({ field, label: field.label, value: text, source: 'profile' });
+      fillField(el, answer);
+      if (!isActionApplied(el, 'fill', answer)) {
+        const optionText = pending.options?.length ? ` Mögliche Optionen: ${pending.options.slice(0, 6).join(', ')}.` : '';
+        addMsg('ai', `Der Wert passt noch nicht zu **${pending.label}**.${optionText} Bitte antworte präziser.`, null, { copy: false });
+        return;
       }
 
-      agentMode.idx++;
-      agentModeAskNext();
+      agentState.filledFields.push({ label: pending.label, value: answer, url: location.href });
+      manualAssistState.pending = null;
+      await sleep(200);
+
+      const formEl = el.form || stepInfo?.form || document.querySelector('form');
+      if (clickNextButtonIfReady(formEl)) {
+        try {
+          chrome.storage.session?.set?.({
+            faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers },
+          });
+        } catch {}
+        addMsg('ai', 'Danke — ich mache weiter und klicke auf "Weiter".', null, { copy: false });
+        return;
+      }
+
+      await runAgentStep();
     }
 
-    function addAgentPreview(matches) {
+    function buildAgentPrompt() {
+      const freshCtx = extractRichContext();
+      const profileLines = PROFILE_FIELDS.filter(pf => profile[pf.key])
+        .map(pf => `${pf.label}: "${profile[pf.key]}"`).join('\n');
+      const extrasLines = Object.entries(extras)
+        .map(([k, v]) => `${k}: "${v}"`).join('\n');
+      const sessionAnswerLines = Object.entries(agentState.sessionAnswers || {})
+        .map(([k, v]) => `${k}: "${v}"`).join('\n');
+      const prevFillLines = (agentState.filledFields || [])
+        .filter(f => f.url && f.url !== location.href)
+        .slice(-24)
+        .map(f => `${f.label}: "${f.value}"`)
+        .join('\n');
+
+      const fieldLines = freshCtx.forms.flatMap(form => {
+        const rows = [];
+        if (form.submitText) rows.push(`[submit] "${form.submitText}"`);
+        form.sections.forEach(sec => {
+          if (sec.title) rows.push(`# ${sec.title}`);
+          sec.fields.forEach(f => {
+            if (!f.el || !isVisible(f.el)) return;
+            const el = f.el;
+            const sel = f.selector || getAgentSelector(el);
+            if (!sel) return;
+            let line = `${sel} ${f.type}${f.required ? ' ✱' : ''} "${f.label}"`;
+            if (f.options?.length) line += ` (${f.options.slice(0, 10).join(' | ')})`;
+            if (f.hint) line += ` → ${f.hint}`;
+            const curVal = el.tagName === 'SELECT'
+              ? (el.selectedIndex > 0 ? clean(el.options[el.selectedIndex].text) : '')
+              : clean(el.value || '');
+            if (curVal) line += ` [Wert="${curVal}"]`;
+            const err = getError(el);
+            if (err) line += ` ❌"${err}"`;
+            rows.push(line);
+          });
+        });
+        // navigation buttons
+        const navButtons = Array.from(form.formEl?.querySelectorAll?.('button, input[type="button"], input[type="submit"]') || [])
+          .filter(btn => isVisible(btn) && !btn.disabled);
+        navButtons.forEach(btn => {
+          const sel = getAgentSelector(btn);
+          const label = getElementTextValue(btn) || 'Button';
+          if (sel && label) rows.push(`${sel} button "${label}"`);
+        });
+        return rows;
+      }).join('\n');
+
+      const today = new Date();
+      const birthdate = profile.birthdate ? new Date(profile.birthdate) : null;
+      const age = birthdate ? Math.floor((today - birthdate) / (365.25 * 24 * 3600 * 1000)) : null;
+
+      return [
+        'Du bist ein Formular-Ausfüll-Agent. Gib einen JSON-Array mit Aktionen zurück — kein Markdown, keine Erklärung.',
+        '',
+        'NUTZERPROFIL:',
+        profileLines || '(leer)',
+        extrasLines ? '\nEXTRAS:\n' + extrasLines : '',
+        sessionAnswerLines ? '\nNUTZER-ANTWORTEN (direkt verwenden, nicht erneut fragen):\n' + sessionAnswerLines : '',
+        prevFillLines ? '\nBEREITS AUSGEFÜLLT (vorherige Seiten — konsistent halten):\n' + prevFillLines : '',
+        age != null ? `\n[Berechnetes Alter: ${age}]` : '',
+        '',
+        `SEITE: ${document.title} | ${location.hostname}`,
+        '',
+        'FELDER:',
+        fieldLines || '(keine Felder erkannt)',
+        '',
+        'FORMAT (ein Objekt pro Feld):',
+        '[{"action":"fill"|"select"|"check"|"click"|"submit"|"ask"|"done","selector":"[name=\\"x\\"]","value":"...","label":"...","source":"profile"|"inferred"|"suggestion","confidence":0.0-1.0,"isNavigation":true,"question":"...","options":["A","B"]}]',
+        '',
+        'action="ask": Wert nicht ableitbar → Frage an Nutzer. Felder: "label" (Feldname), "question" (verständliche Frage auf Deutsch), "options" (max. 4 wahrscheinliche Antworten als String-Array, leer wenn Freitext). Nur verwenden wenn wirklich kein Wert aus Profil/Kontext ableitbar ist.',
+        '',
+        'AUSFÜLL-STRATEGIE — versuche JEDES Feld zu befüllen:',
+        '',
+        'source="profile"  → Wert 1:1 aus Profil',
+        '  Beispiele: Vorname→firstName, Nachname→lastName, Email, Telefon, IBAN, Straße, PLZ, Stadt, Land, Firma, Berufsbezeichnung',
+        '',
+        'source="inferred"  → logisch aus Profil herleitbar (IMMER versuchen!):',
+        '  Anrede/Titel: "Herr"/"Frau" aus Vorname (gängige deutsche Namen)',
+        '  Geschlecht: "männlich"/"weiblich"/"m"/"w" aus Vorname',
+        '  Vollständiger Name: firstName + " " + lastName',
+        '  Geburtsjahr/Monat/Tag: einzeln aus birthdate aufteilen',
+        '  Alter: berechnet aus birthdate (heute=' + today.toISOString().split('T')[0] + ')',
+        '  Altersgruppe: z.B. "25-34" aus Alter berechnen',
+        '  Nationalität/Staatsangehörigkeit: aus nationality oder birthplace ableiten',
+        '  Ländervorwahl: "+49" aus Deutschland, "+43" aus Österreich, "+41" aus Schweiz etc.',
+        '  Land: aus nationality (z.B. "deutsch" → "Deutschland")',
+        '  Bundesland: aus Stadt oder PLZ wenn eindeutig (München→Bayern, Berlin→Berlin etc.)',
+        '  Hausnummer: aus street trennen falls Format "Straße HNr"',
+        '  Straßenname: aus street trennen falls nötig',
+        '  Berufsfeld/Branche: aus jobTitle ableiten',
+        '  Akademischer Grad: aus jobTitle/Kontext',
+        '  Sprache: aus nationality (deutsch→Deutsch)',
+        '',
+        'source="suggestion"  → kein Profilwert, aber aus Kontext sinnvoll:',
+        '  Formularsprache/Land wenn offensichtlich (deutsches Formular → Deutschland, Deutsch)',
+        '  Standardwerte die fast immer zutreffen (z.B. "Nein" bei unbekannten Ja/Nein-Feldern)',
+        '',
+        'PFLICHTREGELN:',
+        '- Felder mit [Wert="..."] und ohne ❌ sind bereits korrekt ausgefüllt — überspringen',
+        '- Felder mit ❌ haben einen Validierungsfehler — korrigierten Wert liefern',
+        '- Alle anderen leeren Felder MÜSSEN befüllt werden wenn ein Wert ableitbar ist',
+        '- SELECT: value muss exakt einer der angegebenen Optionen entsprechen — wähle die am besten passende',
+        '- isNavigation:true für alle Weiter/Nächste/Fortfahren-Buttons',
+        '- action="submit" NUR für die finale Abgabe des Formulars',
+        '- confidence angeben: 0.0 (sehr unsicher) bis 1.0 (sehr sicher)',
+        '- Felder ohne jeden möglichen Wert weglassen',
+        '',
+        agentState.lastFailures?.length
+          ? 'LETZTE FEHLSCHLÄGE:\n' + agentState.lastFailures.map(f => `- ${f.label || f.selector}: ${f.reason || 'nicht angewendet'}`).join('\n')
+          : '',
+      ].join('\n');
+    }
+
+    let agentState = { active: false, guided: false, autoNavigate: true, sessionAnswers: {}, filledFields: [], startUrl: '', lastFailures: [] };
+    let guidedAskState = { active: false, queue: [], navAction: null };
+    let manualAssistState = { pending: null };
+    let agentStatusBubble = null;
+
+    function startAgent() {
+      if (profileVisible) hideProfile();
+      open();
+      const autoNav = $('fa-auto-nav')?.checked !== false;
+      const mode = getAssistantMode();
+      const guided = mode !== 'classic';
+      agentState = { active: true, guided, autoNavigate: autoNav, sessionAnswers: {}, filledFields: [], startUrl: location.href, correctionRound: 0, lastFailures: [] };
+      guidedAskState = { active: false, queue: [], navAction: null };
+      manualAssistState.pending = null;
+      if (guided) {
+        const gpWrap = $('fa-guided-progress'); const gpBar = $('fa-gp-bar'); const gpLabel = $('fa-gp-label');
+        if (gpWrap) gpWrap.style.display = 'block';
+        if (gpBar)  gpBar.style.width = '0%';
+        if (gpLabel) gpLabel.textContent = 'Analysiere…';
+      }
+      addMsg('user', '⚡ Formular ausfüllen');
+      if (!guided) {
+        addMsg('ai', 'Klassischer Modus aktiv: Ich zeige zuerst eine Vorschau und führe danach aus.', null, { copy: false });
+      }
+      const prefilled = applyDeterministicProfileFill();
+      if (prefilled > 0) {
+        addMsg('ai', `Direkt aus Profil: ${prefilled} Feld${prefilled !== 1 ? 'er' : ''} ausgefüllt.`, null, { copy: false });
+      }
+      runAgentStep();
+    }
+
+    function parseSSEText(chunk) {
+      let text = '';
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try { text += JSON.parse(data)?.choices?.[0]?.delta?.content || ''; } catch {}
+      }
+      return text;
+    }
+
+    async function runAgentStep(retry = false) {
+      const key = await loadKey();
+      if (!key) { addMsg('ai', `API-Schlüssel für ${providerLabel()} fehlt. Bitte in den FormAssist-Einstellungen hinterlegen.`); agentState.active = false; return; }
+      showTyping();
+      const prompt = buildAgentPrompt();
+      const messages = retry
+        ? [{ role: 'user', content: prompt },
+           { role: 'assistant', content: 'Entschuldigung, ich habe die Ausgabe nicht korrekt formatiert.' },
+           { role: 'user', content: 'Antworte NUR mit dem JSON-Array, ohne Erklärung, ohne Markdown.' }]
+        : [{ role: 'user', content: prompt }];
+      try {
+        let raw = '';
+        await groqStream(key, { model: _model, max_tokens: 1200, stream: true, messages },
+          chunk => { raw += parseSSEText(chunk); });
+        removeTyping();
+        raw = raw.trim();
+        const actions = sanitizeAgentActions(parseModelJsonArray(raw));
+        if (!Array.isArray(actions) || !actions.length) {
+          if (!retry) { await runAgentStep(true); return; }
+          if (askUserForMissingField()) {
+            agentState.active = true;
+            return;
+          }
+          addMsg('ai', 'KI-Antwort war nicht im erwarteten Format. Bitte Agent erneut starten.');
+          agentState.active = false; return;
+        }
+        if (agentState.guided) {
+          runGuidedStep(actions);
+        } else {
+          showAgentPreview(actions);
+        }
+      } catch (err) {
+        removeTyping();
+        addMsg('ai', `Agent-Fehler: ${err?.message || 'Verbindungsproblem'}`);
+        agentState.active = false;
+      }
+    }
+
+    function showAgentPreview(actions) {
+      dismissEmpty();
+      const fillTypes = new Set(['fill', 'select', 'check']);
+      const fillActions = actions.filter(a => fillTypes.has(a.action));
+      const otherActions = actions.filter(a => !fillTypes.has(a.action));
+
+      if (!fillActions.length) { executeAgentActions(actions); return; }
+
       const div = document.createElement('div');
       div.className = 'msg ai';
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
 
-      const header = document.createElement('div');
-      header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;';
-      header.innerHTML = `<strong>KI-Vorschläge (${matches.length} Felder)</strong>`;
+      const hdr = document.createElement('div');
+      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;';
+      const title = document.createElement('strong');
+      title.textContent = `Agent-Vorschau — ${fillActions.length} Feld${fillActions.length !== 1 ? 'er' : ''}`;
       const selectAllBtn = document.createElement('button');
       selectAllBtn.className = 'agent-select-all';
       selectAllBtn.textContent = 'Alle ab-/auswählen';
-      header.appendChild(selectAllBtn);
+      hdr.append(title, selectAllBtn);
+
+      const profileCount    = fillActions.filter(a => !a.source || a.source === 'profile').length;
+      const inferredCount   = fillActions.filter(a => a.source === 'inferred').length;
+      const suggestionCount = fillActions.filter(a => a.source === 'suggestion').length;
+      const sourceRow = document.createElement('div');
+      sourceRow.className = 'preview-source-row';
+      if (profileCount)    sourceRow.innerHTML += `<span class="psr-chip psr-profile">● ${profileCount} aus Profil</span>`;
+      if (inferredCount)   sourceRow.innerHTML += `<span class="psr-chip psr-inferred">● ${inferredCount} abgeleitet</span>`;
+      if (suggestionCount) sourceRow.innerHTML += `<span class="psr-chip psr-suggestion">● ${suggestionCount} Vorschlag${suggestionCount > 1 ? 'e' : ''}</span>`;
 
       const note = document.createElement('div');
       note.className = 'review-note';
-      note.textContent = 'Wähle die Felder aus, die übernommen werden sollen, und bestätige.';
+      note.style.marginBottom = '8px';
+      note.textContent = 'Werte prüfen und anpassen — dann Ausführen.';
 
       const preview = document.createElement('div');
-      preview.className = 'agent-preview';
+      preview.className = 'sf-preview';
+      const rows = [];
 
-      const checkboxes = [];
-      matches.forEach((m, i) => {
+      fillActions.forEach(action => {
         const row = document.createElement('div');
-        row.className = 'agent-field-row';
+        row.className = 'sf-row';
+        row.dataset.source = action.source || 'profile';
         const cb = document.createElement('input');
         cb.type = 'checkbox';
-        cb.id = `fa-agent-cb-${i}`;
-        cb.checked = true;
-        const lbl = document.createElement('label');
-        lbl.htmlFor = `fa-agent-cb-${i}`;
-        const badge = m.source === 'profile'
-          ? `<span class="badge badge-profile">Profil</span>`
-          : `<span class="badge badge-ai">KI</span>`;
-        lbl.innerHTML = `<span class="agent-field-label">${escapeHtml(m.label)}</span><span class="agent-field-value">${escapeHtml(m.value)}</span>`;
-        row.append(cb, lbl);
-        const badgeEl = document.createElement('div');
-        badgeEl.innerHTML = badge;
-        row.appendChild(badgeEl.firstChild);
+        cb.className = 'sf-cb';
+        const confidence = getActionConfidence(action);
+        cb.checked = action.source === 'suggestion'
+          ? confidence >= AGENT_AUTO_SELECT_CONFIDENCE
+          : confidence >= 0.45;
+
+        const lbl = document.createElement('span');
+        lbl.className = 'sf-label';
+        lbl.textContent = action.label || action.selector || '?';
+        lbl.title = `${lbl.textContent} · Confidence ${Math.round(confidence * 100)}%`;
+
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'sf-input';
+        inp.value = action.value != null ? String(action.value) : '';
+        inp.placeholder = 'Wert…';
+        inp.addEventListener('input', () => { cb.checked = !!inp.value.trim(); });
+        inp.addEventListener('click', e => e.stopPropagation());
+        row.addEventListener('click', e => { if (e.target.tagName !== 'INPUT') cb.checked = !cb.checked; });
+
+        if (action.source === 'inferred' || action.source === 'suggestion') {
+          const badge = document.createElement('span');
+          if (action.source === 'inferred') {
+            badge.textContent = 'Abgeleitet';
+            badge.className = 'source-badge inferred';
+          } else {
+            badge.textContent = 'Vorschlag';
+            badge.className = 'source-badge suggestion';
+          }
+          row.append(cb, lbl, inp, badge);
+        } else {
+          row.append(cb, lbl, inp);
+        }
         preview.appendChild(row);
-        checkboxes.push({ cb, match: m });
+        rows.push({ cb, inp, action });
       });
+
+      if (otherActions.length) {
+        const sec = document.createElement('div');
+        sec.className = 'sf-section-title';
+        sec.textContent = 'Weitere Aktionen';
+        preview.appendChild(sec);
+        otherActions.forEach(action => {
+          const row = document.createElement('div');
+          row.className = 'sf-row';
+          row.style.cssText = 'opacity:0.65;pointer-events:none;';
+          const lbl = document.createElement('span');
+          lbl.style.fontSize = '12px';
+          const typeLabel = action.action === 'submit' ? '⚠ Absenden'
+            : action.isNavigation ? '→ Weiter'
+            : action.action === 'done' ? '✓ Fertig'
+            : '• ' + action.action;
+          lbl.textContent = typeLabel + (action.selector ? ` (${action.selector})` : '');
+          row.appendChild(lbl);
+          preview.appendChild(row);
+        });
+      }
 
       let allChecked = true;
       selectAllBtn.addEventListener('click', () => {
         allChecked = !allChecked;
-        checkboxes.forEach(({ cb }) => { cb.checked = allChecked; });
+        rows.forEach(({ cb }) => { cb.checked = allChecked; });
       });
 
-      const actions = document.createElement('div');
-      actions.className = 'agent-actions';
-
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'agent-actions';
+      actionsEl.style.marginTop = '10px';
       const confirmBtn = document.createElement('button');
       confirmBtn.className = 'agent-confirm';
-      confirmBtn.textContent = 'Ausfüllen';
-
+      confirmBtn.textContent = 'Ausführen';
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'agent-cancel';
       cancelBtn.textContent = 'Abbrechen';
 
       confirmBtn.addEventListener('click', () => {
-        let filled = 0;
-        checkboxes.forEach(({ cb, match }) => {
-          if (cb.checked && match.field?.el) {
-            fillField(match.field.el, match.value);
-            filled++;
-          }
+        confirmBtn.disabled = cancelBtn.disabled = true;
+        rows.forEach(({ cb, inp, action }) => {
+          if (cb.checked) action.value = inp.value.trim() || action.value;
         });
-        confirmBtn.disabled = true;
-        cancelBtn.disabled = true;
-        actions.innerHTML = `<span class="review-note">${filled} Felder wurden ausgefüllt.</span>`;
-        showToast(`${filled} Felder automatisch ausgefüllt`);
+        const finalActions = [...rows.filter(r => r.cb.checked).map(r => r.action), ...otherActions];
+        actionsEl.innerHTML = '';
+        executeAgentActions(finalActions);
       });
 
       cancelBtn.addEventListener('click', () => {
+        agentState.active = false;
+        manualAssistState.pending = null;
         bubble.style.opacity = '0.55';
-        actions.innerHTML = '<span class="review-note">Abgebrochen.</span>';
+        actionsEl.innerHTML = '<span class="review-note">Abgebrochen.</span>';
       });
 
-      actions.append(confirmBtn, cancelBtn);
-      preview.appendChild(actions);
-
-      bubble.append(header, note, preview);
+      actionsEl.append(confirmBtn, cancelBtn);
+      bubble.append(hdr, sourceRow, note, preview, actionsEl);
       div.appendChild(bubble);
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GUIDED MODE — autonomous fill + ask-when-stuck
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function updateGuidedProgress(statusText) {
+      const wrap  = $('fa-guided-progress');
+      const bar   = $('fa-gp-bar');
+      const label = $('fa-gp-label');
+      if (!wrap) return;
+      if (!agentState.guided || !agentState.active) {
+        wrap.style.display = 'none';
+        return;
+      }
+      wrap.style.display = 'block';
+      const totalFields = allFields.length || 1;
+      const filled = agentState.filledFields.filter(f => f.url === location.href).length;
+      const pct = Math.min(100, Math.round(filled / totalFields * 100));
+      if (bar) bar.style.width = pct + '%';
+      if (label) {
+        const stepNote = stepInfo?.isMultiStep ? ` · Schritt ${stepInfo.current}/${stepInfo.total}` : '';
+        label.textContent = statusText || `${agentState.filledFields.length} Felder ausgefüllt${stepNote}`;
+      }
+    }
+
+    async function runGuidedStep(actions) {
+      dismissEmpty();
+      const allFills    = actions.filter(a => ['fill','select','check'].includes(a.action));
+      const certain     = allFills.filter(a => getActionConfidence(a) >= GUIDED_MIN_CONFIDENCE);
+      const uncertain   = allFills.filter(a => getActionConfidence(a) <  GUIDED_MIN_CONFIDENCE);
+      // Convert low-confidence fills to ask actions; include AI suggestion as first chip
+      const syntheticAsks = uncertain.map(a => ({
+        action: 'ask',
+        label: a.label || a.selector,
+        question: a.options?.length
+          ? `Was soll bei „${a.label}" ausgewählt werden?`
+          : `Was soll in „${a.label}" eingetragen werden?`,
+        options: a.options?.length
+          ? a.options.slice(0, 4)
+          : (a.value ? [a.value] : []),
+      }));
+      const askActions  = [...actions.filter(a => a.action === 'ask'), ...syntheticAsks];
+      const fillActions = certain;
+      const clickActions = actions.filter(a => a.action === 'click' && !a.isNavigation);
+      const navActions  = actions.filter(a => a.isNavigation || a.action === 'submit');
+      const isDone      = actions.some(a => a.action === 'done');
+
+      // Execute fill + non-nav clicks immediately
+      if (fillActions.length || clickActions.length) {
+        await executeGuidedFillActions([...fillActions, ...clickActions]);
+      }
+
+      if (isDone && !askActions.length && !navActions.length) {
+        updateGuidedProgress('Fertig ✓');
+        setTimeout(() => { const w = $('fa-guided-progress'); if (w) w.style.display = 'none'; }, 3000);
+        addMsg('ai', '✅ Formular vollständig ausgefüllt.', null, { copy: false });
+        agentState.active = false;
+        learnAgentFields();
+        return;
+      }
+
+      if (askActions.length) {
+        updateGuidedProgress(`${askActions.length} Rückfrage${askActions.length > 1 ? 'n' : ''} …`);
+        guidedAskState.active   = true;
+        guidedAskState.queue    = [...askActions];
+        guidedAskState.navAction = navActions[0] || null;
+        showNextGuidedQuestion();
+      } else if (navActions.length) {
+        updateGuidedProgress('Weiterklicken …');
+        await handleGuidedNavigation(navActions[0]);
+      } else if (!fillActions.length && !clickActions.length) {
+        if (askUserForMissingField()) { agentState.active = true; } else { agentState.active = false; updateGuidedProgress('Fertig'); }
+      }
+    }
+
+    async function executeGuidedFillActions(fillActions) {
+      agentStatusBubble = createAgentBubble();
+      let filled = 0;
+      const failed = [];
+      for (const act of fillActions) {
+        if (!agentState.active) break;
+        const el = resolveActionElement(act);
+        if ((act.action === 'fill' || act.action === 'select') && el) {
+          fillField(el, act.value || '');
+          if (isActionApplied(el, act.action, act.value || '')) {
+            appendAgentRow('✓', act.label || act.selector, act.value);
+            agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
+            filled++;
+          } else {
+            appendAgentRow('✗', act.label || act.selector, 'nicht angewendet');
+            failed.push(act);
+          }
+          await sleep(80);
+        } else if (act.action === 'check' && el) {
+          if (!el.checked) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
+          appendAgentRow('✓', act.label || act.selector, '');
+          agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
+          filled++;
+          await sleep(80);
+        } else if (act.action === 'click' && el) {
+          el.click();
+          appendAgentRow('→', act.label || act.selector, '');
+          await sleep(300);
+        } else if (el === null && act.selector) {
+          appendAgentRow('✗', act.label || act.selector, 'nicht gefunden');
+          failed.push(act);
+        }
+      }
+      finalizeAgentBubble(filled);
+      if (failed.length) agentState.lastFailures = failed.map(a => ({ selector: a.selector, label: a.label, reason: 'nicht angewendet' }));
+      learnAgentFields();
+      updateGuidedProgress();
+    }
+
+    function showNextGuidedQuestion() {
+      if (!guidedAskState.queue.length) {
+        guidedAskState.active = false;
+        addMsg('ai', 'Danke! Ich fülle jetzt aus…', null, { copy: false });
+        runAgentStep();
+        return;
+      }
+      showGuidedQuestion(guidedAskState.queue[0]);
+    }
+
+    function showGuidedQuestion(ask) {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble guided-q';
+
+      const eyebrow = document.createElement('div');
+      eyebrow.className = 'gq-eyebrow';
+      eyebrow.textContent = ask.label || 'Frage';
+
+      const text = document.createElement('div');
+      text.className = 'gq-text';
+      text.textContent = ask.question || `Was soll ich in "${ask.label}" eintragen?`;
+
+      bubble.append(eyebrow, text);
+
+      const options = Array.isArray(ask.options) ? ask.options.filter(Boolean) : [];
+      if (options.length) {
+        const chipsEl = document.createElement('div');
+        chipsEl.className = 'gq-chips';
+        options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.className = 'gq-chip';
+          btn.textContent = opt;
+          btn.addEventListener('click', () => {
+            btn.classList.add('gq-selected');
+            chipsEl.querySelectorAll('.gq-chip:not(.gq-selected)').forEach(b => b.disabled = true);
+            handleGuidedAnswer(opt);
+          });
+          chipsEl.appendChild(btn);
+        });
+        const hint = document.createElement('div');
+        hint.className = 'gq-hint';
+        hint.textContent = 'oder tippe unten deine Antwort';
+        bubble.append(chipsEl, hint);
+      } else {
+        const hint = document.createElement('div');
+        hint.className = 'gq-hint';
+        hint.textContent = 'Tippe deine Antwort unten';
+        bubble.appendChild(hint);
+      }
+
+      div.appendChild(bubble);
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function handleGuidedAnswer(text) {
+      const ask = guidedAskState.queue.shift();
+      if (!ask) return;
+
+      // Store answer for this and future pages
+      agentState.sessionAnswers[ask.label] = text;
+
+      if (guidedAskState.queue.length) {
+        await sleep(150);
+        showNextGuidedQuestion();
+      } else {
+        guidedAskState.active = false;
+        await sleep(200);
+        addMsg('ai', 'Danke! Ich mache weiter…', null, { copy: false });
+        await sleep(300);
+        await runAgentStep();
+      }
+    }
+
+    async function handleGuidedNavigation(navAction) {
+      if (!navAction) return;
+
+      if (navAction.action === 'submit') {
+        finalizeAgentBubble(agentState.filledFields.length);
+        learnAgentFields();
+        const ok = await agentAskSubmit(navAction.label);
+        if (ok) {
+          const el = resolveActionElement(navAction);
+          if (el) { const formEl = el.form || el.closest('form'); if (formEl) approvedSubmits.add(formEl); el.click(); }
+        } else {
+          addMsg('ai', 'Absenden abgebrochen.', null, { copy: false });
+        }
+        agentState.active = false;
+        return;
+      }
+
+      const resumeData = {
+        filledFields: agentState.filledFields,
+        startUrl: agentState.startUrl,
+        guided: true,
+        autoNavigate: agentState.autoNavigate,
+        sessionAnswers: agentState.sessionAnswers,
+      };
+
+      if (agentState.autoNavigate) {
+        const el = resolveActionElement(navAction);
+        if (!el) { addMsg('ai', 'Weiter-Button nicht gefunden. Bitte manuell klicken.', null, { copy: false }); agentState.active = false; return; }
+        addMsg('ai', `→ Klicke auf „${navAction.label || 'Weiter'}"…`, null, { copy: false });
+        try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+        await sleep(350);
+        el.click();
+      } else {
+        // Show manual confirm button
+        const div = document.createElement('div');
+        div.className = 'msg ai';
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.innerHTML = `<div style="margin-bottom:8px;font-size:13px;">Seite ausgefüllt — bereit für den nächsten Schritt.</div>`;
+        const btn = document.createElement('button');
+        btn.className = 'ap-primary';
+        btn.style.cssText = 'height:38px;font-size:12.5px;margin-top:4px;';
+        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${escapeHtml(navAction.label || 'Weiter')}`;
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          const el = resolveActionElement(navAction);
+          if (el) {
+            try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+            el.click();
+          }
+        });
+        bubble.appendChild(btn);
+        div.appendChild(bubble);
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    }
+
+    async function executeAgentActions(actions) {
+      agentStatusBubble = createAgentBubble();
+      let filled = 0;
+      const failedActions = [];
+
+      for (const act of actions) {
+        if (!agentState.active) break;
+
+        if (act.action === 'done') {
+          finalizeAgentBubble(filled);
+          agentState.active = false;
+          learnAgentFields();
+          return;
+        }
+
+        if (act.action === 'submit') {
+          finalizeAgentBubble(filled);
+          learnAgentFields();
+          const ok = await agentAskSubmit(act.label);
+          if (ok) {
+            const el = resolveActionElement(act);
+            if (el) {
+              const formEl = el.form || el.closest('form');
+              if (formEl) approvedSubmits.add(formEl);
+              el.click();
+            }
+          } else {
+            addMsg('ai', 'Absenden abgebrochen.');
+          }
+          agentState.active = false;
+          return;
+        }
+
+        const el = resolveActionElement(act);
+
+        if ((act.action === 'fill' || act.action === 'select') && el) {
+          fillField(el, act.value || '');
+          if (isActionApplied(el, act.action, act.value || '')) {
+            appendAgentRow('✓', act.label || act.selector, act.value);
+            agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
+            filled++;
+          } else {
+            appendAgentRow('✗', act.label || act.selector, 'Wert nicht übernommen');
+            failedActions.push({ selector: act.selector, label: act.label, reason: 'Wert nicht übernommen' });
+          }
+          await sleep(100);
+        } else if (act.action === 'check' && el) {
+          if (!el.checked) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
+          if (isActionApplied(el, act.action)) appendAgentRow('✓', act.label || act.selector, '');
+          else {
+            appendAgentRow('✗', act.label || act.selector, 'nicht gesetzt');
+            failedActions.push({ selector: act.selector, label: act.label, reason: 'Checkbox/Option nicht gesetzt' });
+          }
+          await sleep(100);
+        } else if (act.action === 'click' && el) {
+          appendAgentRow('→', act.label || act.selector, '');
+          if (act.isNavigation) {
+            try {
+              chrome.storage.session?.set?.({
+                faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers },
+              });
+            } catch {}
+            await sleep(200);
+            el.click();
+            return;
+          } else {
+            el.click();
+            await sleep(500);
+          }
+        } else if (!el && act.selector) {
+          appendAgentRow('✗', act.label || act.selector, 'nicht gefunden');
+          failedActions.push({ selector: act.selector, label: act.label, reason: 'Element nicht gefunden' });
+        }
+      }
+
+      finalizeAgentBubble(filled);
+      learnAgentFields();
+      if (!failedActions.length) agentState.lastFailures = [];
+
+      // Auto-correction: one extra round if validation errors found
+      if ((filled > 0 || failedActions.length > 0) && !agentState.correctionRound) {
+        await sleep(700);
+        const errFields = extractRichContext().forms.flatMap(f => f.allFields)
+          .filter(f => f.el && isVisible(f.el) && getError(f.el));
+        if (errFields.length || failedActions.length) {
+          agentState.correctionRound = 1;
+          agentState.active = true;
+          agentState.lastFailures = failedActions.slice(0, 12);
+          if (failedActions.length) {
+            addMsg('ai', `⚠ ${failedActions.length} Aktion${failedActions.length !== 1 ? 'en konnten' : ' konnte'} nicht sicher ausgeführt werden — versuche Korrektur…`);
+          } else {
+            addMsg('ai', `⚠ ${errFields.length} Feld${errFields.length > 1 ? 'er haben' : ' hat'} einen Fehler — korrigiere…`);
+          }
+          await runAgentStep();
+          return;
+        }
+      }
+
+      if (askUserForMissingField()) {
+        agentState.active = true;
+        return;
+      }
+
+      agentState.active = false;
+    }
+
+    function createAgentBubble() {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      const hdrRow = document.createElement('div');
+      hdrRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
+      const hdr = document.createElement('strong');
+      hdr.className = 'fa-agent-hdr';
+      hdr.textContent = 'Agent läuft…';
+      const stopBtn = document.createElement('button');
+      stopBtn.className = 'agent-cancel fa-agent-stop';
+      stopBtn.style.cssText = 'font-size:10.5px;padding:3px 8px;';
+      stopBtn.textContent = 'Stopp';
+      stopBtn.addEventListener('click', () => {
+        agentState.active = false;
+        stopBtn.disabled = true;
+        stopBtn.textContent = 'Gestoppt';
+        const h = agentStatusBubble?.querySelector('.fa-agent-hdr');
+        if (h) h.textContent = 'Agent gestoppt.';
+      });
+      hdrRow.append(hdr, stopBtn);
+      const list = document.createElement('div');
+      list.className = 'fa-agent-list';
+      list.style.cssText = 'display:flex;flex-direction:column;gap:3px;margin-top:7px;';
+      bubble.append(hdrRow, list);
+      div.appendChild(bubble);
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return bubble;
+    }
+
+    function appendAgentRow(icon, label, value) {
+      const list = agentStatusBubble?.querySelector('.fa-agent-list');
+      if (!list) return;
+      const row = document.createElement('div');
+      row.className = 'live-row';
+      row.innerHTML = `<span class="live-row-icon">${escapeHtml(icon)}</span><span class="live-row-label">${escapeHtml(label || '')}</span>${value ? `<span class="live-row-value">${escapeHtml(String(value).slice(0, 30))}</span>` : ''}`;
+      list.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function finalizeAgentBubble(filled) {
+      const hdr = agentStatusBubble?.querySelector('.fa-agent-hdr');
+      if (hdr) hdr.textContent = `Agent: ${filled} Feld${filled !== 1 ? 'er' : ''} ausgefüllt`;
+      agentStatusBubble?.querySelector('.fa-agent-stop')?.remove();
+    }
+
+    function agentAskSubmit(label) {
+      return new Promise(resolve => {
+        const div = document.createElement('div');
+        div.className = 'msg ai';
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.innerHTML = `<strong>Formular absenden?</strong><p style="margin-top:6px;font-size:13px;color:var(--text2)">Der Agent möchte auf <strong>"${escapeHtml(label || 'Absenden')}"</strong> klicken. Bitte alle Einträge kurz prüfen.</p>`;
+        const row = document.createElement('div');
+        row.className = 'agent-actions';
+        row.style.marginTop = '10px';
+        const yes = document.createElement('button');
+        yes.className = 'agent-confirm';
+        yes.textContent = 'Absenden bestätigen';
+        yes.addEventListener('click', () => { div.remove(); resolve(true); });
+        const no = document.createElement('button');
+        no.className = 'agent-cancel';
+        no.textContent = 'Abbrechen';
+        no.addEventListener('click', () => { resolve(false); });
+        row.append(yes, no);
+        bubble.appendChild(row);
+        div.appendChild(bubble);
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
+    }
+
+    function learnAgentFields() {
+      let changed = false;
+      agentState.filledFields.forEach(({ label, value }) => {
+        if (!label || !value) return;
+        const pf = PROFILE_FIELDS.find(p => p.kw.some(k => label.toLowerCase().includes(k)));
+        if (pf && !profile[pf.key]) { profile[pf.key] = value; changed = true; }
+        else if (!pf && !extras[label]) { extras[label] = value; changed = true; }
+      });
+      if (changed) {
+        saveActiveProfileToStore();
+        SYSTEM = buildSystemPrompt(ctx, profile, extras);
+      }
+      const filled = agentState.filledFields.filter(f => f.url === location.href).length;
+      if (filled > 0) {
+        addHistoryEntry({
+          ts: Date.now(),
+          domain: location.hostname,
+          title: document.title || location.hostname,
+          fieldCount: agentState.filledFields.length,
+          url: location.href,
+          profileId: activeProfileId,
+        });
+      }
+    }
+
+    async function resumeAgentIfPending() {
+      try {
+        const res = await new Promise(r => chrome.storage.session?.get?.('faAgentResume', r) ?? r({}));
+        if (!res?.faAgentResume) return;
+        chrome.storage.session.remove('faAgentResume');
+        manualAssistState.pending = null;
+        guidedAskState = { active: false, queue: [], navAction: null };
+        const resume = res.faAgentResume;
+        agentState = {
+          active: true,
+          guided: resume.guided !== false,
+          autoNavigate: resume.autoNavigate !== false,
+          sessionAnswers: resume.sessionAnswers || {},
+          filledFields: resume.filledFields || [],
+          startUrl: resume.startUrl || '',
+          correctionRound: 0,
+          lastFailures: [],
+        };
+        open();
+        const gpWrap = $('fa-guided-progress'); const gpBar = $('fa-gp-bar'); const gpLabel = $('fa-gp-label');
+        if (agentState.guided && gpWrap) { gpWrap.style.display = 'block'; if (gpBar) gpBar.style.width = '0%'; if (gpLabel) gpLabel.textContent = 'Warte auf Felder…'; }
+        addMsg('ai', `Agent fortgesetzt (${agentState.filledFields.length} Felder bisher). Warte auf Felder…`);
+        await waitForFields(4000);
+        applyContext(extractRichContext());
+        addMsg('ai', allFields.length
+          ? `${allFields.length} Felder erkannt — analysiere…`
+          : 'Keine Felder gefunden — versuche trotzdem…', null, { copy: false });
+        await runAgentStep();
+      } catch {}
+    }
+
+    async function waitForFields(maxMs = 4000) {
+      const step = 250;
+      for (let elapsed = 0; elapsed < maxMs; elapsed += step) {
+        const fields = extractRichContext().forms.flatMap(f => f.allFields);
+        if (fields.length > 0) return;
+        await sleep(step);
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1826,6 +3659,7 @@
 
     function getFieldValueForReview(el) {
       if (!el) return '';
+      if (isFileWidget(el)) return '';
       const type = (el.type || '').toLowerCase();
       if (type === 'password') return '[Passwortfeld nicht ausgelesen]';
       if (type === 'file') return el.files?.length ? `${el.files.length} Datei(en) ausgewählt` : '';
@@ -1964,22 +3798,22 @@
       reviewingSubmits.delete(formEl);
     }
 
+    function hasEnoughFields(formEl) {
+      return Array.from(formEl.querySelectorAll(
+        'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]),select,textarea'
+      )).filter(isVisible).length >= 3;
+    }
+
     document.addEventListener('click', e => {
       const submitter = getClickedSubmitter(e.target);
-      if (!submitter) return;
-      const formEl = submitter.form;
-      const bypassNativeValidation = formEl.noValidate || submitter.formNoValidate;
-      if (!bypassNativeValidation && formEl.checkValidity()) return;
-      startSubmitReview(formEl, submitter, e);
+      if (!submitter || !hasEnoughFields(submitter.form)) return;
+      startSubmitReview(submitter.form, submitter, e);
     }, true);
 
     document.addEventListener('submit', e => {
-      startSubmitReview(e.target, e.submitter, e);
-    }, true);
-
-    document.addEventListener('invalid', e => {
-      const formEl = e.target?.form;
-      if (formEl) startSubmitReview(formEl, null, e);
+      const formEl = e.target;
+      if (!(formEl instanceof HTMLFormElement) || !hasEnoughFields(formEl)) return;
+      startSubmitReview(formEl, e.submitter, e);
     }, true);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2001,6 +3835,12 @@
       }
     });
 
+    document.addEventListener('focusout', e => {
+      const next = e.relatedTarget;
+      if (next && ['INPUT','SELECT','TEXTAREA'].includes(next.tagName)) return;
+      autofillTip.classList.remove('visible');
+    }, true);
+
     // ═══════════════════════════════════════════════════════════════════════
     // PROACTIVE FIELD ERROR HELP
     // ═══════════════════════════════════════════════════════════════════════
@@ -2017,7 +3857,7 @@
     }
 
     function scheduleFieldErrorHelp(el, delay = 700) {
-      if (!el || guidedMode.active) return;
+      if (!el) return;
       const problem = getFieldProblem(el);
       if (!problem) return;
       if (reviewingSubmits.has(el.form)) return;
@@ -2028,7 +3868,7 @@
     function showFieldErrorHelp(el) {
       const problem = getFieldProblem(el);
       if (!problem || reviewingSubmits.has(el.form)) return;
-      const label = getLabel(el) || 'diesem Feld';
+      const label = ((el.type || '').toLowerCase() === 'radio' ? getGroupLabel(el) : '') || getLabel(el) || 'diesem Feld';
       const value = getFieldValueForReview(el);
       const key = `${label}|${problem}|${value}`;
       if (lastErrorHelp.get(el) === key) return;
@@ -2058,16 +3898,70 @@
     // SPA — dynamic form detection
     // ═══════════════════════════════════════════════════════════════════════
 
-    let debounce;
+    let domObserveTimer;
     new MutationObserver(() => {
-      clearTimeout(debounce);
-      debounce = setTimeout(() => {
+      clearTimeout(domObserveTimer);
+      domObserveTimer = setTimeout(() => {
         const fresh = extractRichContext();
-        const n = fresh.forms.flatMap(f => f.allFields).length;
-        if (n !== allFields.length)
-          $('fa-ctx-sub').textContent = [fresh.forms[0]?.submitText ? `"${fresh.forms[0].submitText}"` : null, `${n} Felder`, ctx.page.hostname].filter(Boolean).join(' · ');
+        refreshContext(fresh);
       }, 800);
     }).observe(document.body, { childList: true, subtree: true });
+
+    resumeAgentIfPending();
+
+    // ── Action panel ─────────────────────────────────────────────────
+    $('fa-ap-agent').addEventListener('click', () => { if (profileVisible) hideProfile(); startAgent(); });
+    $('fa-ap-explain').addEventListener('click', () => {
+      if (profileVisible) hideProfile();
+      askFormSummary();
+    });
+    $('fa-ap-fields').addEventListener('click', () => {
+      const list = $('fa-ap-field-list');
+      const btn  = $('fa-ap-fields');
+      if (!list) return;
+      const isOpen = list.classList.toggle('open');
+      btn.classList.toggle('open', isOpen);
+      if (isOpen) renderActionFieldList();
+    });
+    $('fa-assistant-mode').addEventListener('change', e => {
+      _assistantMode = normalizeAssistantMode(e.target.value);
+      updateAssistantModeUi();
+      chrome.storage.sync.set({ faAssistantMode: _assistantMode });
+      const modeLabel = _assistantMode === 'classic' ? 'Mit Vorschau' : (_assistantMode === 'context' ? 'Automatisch' : 'Empfohlen');
+      showToast(`Modus: ${modeLabel}`);
+    });
+
+    // ── Keyboard shortcut relay from background ───────────────────────
+    chrome.runtime.onMessage.addListener(msg => {
+      if (msg.type === 'toggle-assistant') {
+        if (isOpen) { close(); return; }
+        open();
+      } else if (msg.type === 'smart-fill') {
+        startAgent();
+      }
+    });
+
+    // ── Sync storage → live config updates ───────────────────────────
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'sync') return;
+      if (changes.faProvider) {
+        _provider = normalizeProvider(changes.faProvider.newValue);
+      }
+      if (changes.faApiKey || changes.faGroqApiKey || changes.faOpenRouterApiKey || changes.faProvider) {
+        _apiKey = '';
+        _keyPromise = null;
+      }
+      if (changes.faModel) {
+        _model = changes.faModel.newValue || getDefaultModel(_provider);
+      } else if (changes.faProvider) {
+        _model = getDefaultModel(_provider);
+      }
+      updateFooterNote();
+      if (changes.faAssistantMode) {
+        _assistantMode = normalizeAssistantMode(changes.faAssistantMode.newValue);
+        updateAssistantModeUi();
+      }
+    });
 
     // ── Restore saved position ────────────────────────────────────────
     if (savedPos && !savedPos.isDocked) {
@@ -2085,5 +3979,6 @@
     }
 
   }); // end chrome.storage.local.get
+  }); // end chrome.storage.sync.get
 
 })();
