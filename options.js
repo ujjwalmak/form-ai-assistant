@@ -36,8 +36,8 @@ const PROVIDERS = Object.freeze({
 const normalizeProvider = value => String(value || '').toLowerCase() === 'openrouter' ? 'openrouter' : 'groq';
 const normalizeAssistantMode = value => {
   const v = String(value || '').toLowerCase();
-  if (v === 'classic' || v === 'context') return v;
-  return 'hybrid';
+  if (v === 'classic') return 'classic';
+  return 'context';
 };
 
 let savedKeys = {

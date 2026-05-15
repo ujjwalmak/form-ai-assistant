@@ -4,7 +4,7 @@
   let _model    = 'llama-3.3-70b-versatile';
   let _apiKey   = '';
   let _provider = 'groq';
-  let _assistantMode = 'hybrid';
+  let _assistantMode = 'context';
   let _keyPromise = null;
   let _onProviderFallback = null;
   function normalizeProvider(value) {
@@ -14,12 +14,12 @@
     return normalizeProvider(provider) === 'openrouter' ? 'OpenRouter' : 'Groq';
   }
   function getDefaultModel(provider = _provider) {
-    return normalizeProvider(provider) === 'openrouter' ? 'openrouter/free' : 'llama-3.3-70b-versatile';
+    return normalizeProvider(provider) === 'openrouter' ? 'openrouter/auto' : 'llama-3.3-70b-versatile';
   }
   function normalizeAssistantMode(value) {
     const v = String(value || '').toLowerCase();
-    if (v === 'classic' || v === 'context') return v;
-    return 'hybrid';
+    if (v === 'classic') return 'classic';
+    return 'context';
   }
   function loadKey() {
     if (_apiKey) return Promise.resolve(_apiKey);
@@ -101,7 +101,6 @@
   const FULL_WIDTH_KEYS = new Set(['email', 'street', 'iban']);
   const AGENT_SELECTOR_ATTR = 'data-fa-selector-id';
   const AGENT_AUTO_SELECT_CONFIDENCE = 0.82;
-  const GUIDED_MIN_CONFIDENCE = 0.6; // below this: ask user instead of auto-fill
   let selectorSeq = 0;
 
   function getAgentSelector(el) {
@@ -944,7 +943,6 @@
 
       /* ── Messages ── */
       .messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; background: var(--bg); transition: opacity 0.15s, transform 0.15s; }
-      .messages.fading { opacity: 0; transform: translateX(-10px); pointer-events: none; }
       .results-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 28px; text-align: center; pointer-events: none; }
       .re-icon { width: 52px; height: 52px; border-radius: 16px; background: var(--accent-l); border: 1.5px solid var(--accent-b); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
       .re-icon svg { width: 26px; height: 26px; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
@@ -957,7 +955,6 @@
       .msg { display: flex; align-items: flex-end; animation: msg-in 0.22s cubic-bezier(0.34, 1.3, 0.64, 1); }
       @keyframes msg-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
       .msg.ai { justify-content: flex-start; }
-      .msg.user { justify-content: flex-end; }
       .bubble { max-width: 100%; padding: 11px 14px; font-size: 13.5px; line-height: 1.52; color: var(--text); font-family: var(--font); overflow-wrap: anywhere; box-shadow: 0 1px 2px rgba(60,64,67,0.08); }
       .msg.ai   .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
       .msg.user { justify-content: flex-start; }
@@ -997,19 +994,6 @@
       .chip:hover { border-color: var(--accent-b); color: var(--accent); }
       .chip:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--accent-b); }
 
-      /* ── Welcome state ── */
-      .welcome-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 28px 20px; text-align: center; gap: 7px; min-height: 200px; transition: opacity 0.22s ease, transform 0.22s ease; }
-      .welcome-state.fading { opacity: 0; transform: translateY(-8px) scale(0.97); pointer-events: none; }
-      .wc-icon { width: 52px; height: 52px; background: var(--accent-l); border: 1px solid var(--accent-b); border-radius: 18px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
-      .wc-icon svg { width: 26px; height: 26px; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-      .wc-title { font-size: 15px; font-weight: 650; color: var(--text); }
-      .wc-desc  { font-size: 12px; color: var(--text3); line-height: 1.5; }
-      .wc-agent { margin-top: 8px; background: var(--accent); color: #fff; border: none; border-radius: 999px; padding: 11px 26px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; box-shadow: 0 2px 6px rgba(11,87,208,0.25); transition: background 0.14s, box-shadow 0.14s; }
-      .wc-agent:hover { background: var(--accent-h); box-shadow: 0 4px 12px rgba(11,87,208,0.32); }
-      .wc-agent:focus-visible { outline: none; box-shadow: var(--focus); }
-      .wc-explain { background: transparent; border: none; color: var(--accent); font-size: 12px; font-family: var(--font); cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.14s; }
-      .wc-explain:hover { background: var(--accent-l); }
-
       /* ── Typing ── */
       .typing-row    { display: flex; gap: 9px; align-items: flex-end; }
       .typing-bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 16px 16px 16px 6px; padding: 13px 16px; display: flex; align-items: center; box-shadow: 0 1px 2px rgba(60,64,67,0.08); }
@@ -1044,7 +1028,6 @@
 
       /* ── Profile panel ── */
       @keyframes profile-in  { from { opacity: 0; transform: translateX(18px); } to   { opacity: 1; transform: translateX(0); } }
-      @keyframes profile-out { from { opacity: 1; transform: translateX(0); }   to   { opacity: 0; transform: translateX(18px); } }
       .profile-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; background: var(--surface); }
       .profile-panel.visible { display: flex; animation: profile-in 0.22s var(--ease) forwards; }
       .profile-hdr { padding: 11px 18px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 650; color: var(--text); flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; min-width: 0; background: var(--surface2); }
@@ -1254,9 +1237,7 @@
       .gq-chip.gq-selected { background: var(--accent); color: #fff; border-color: var(--accent); cursor: default; }
       .gq-hint { font-size: 10.5px; color: var(--text3); line-height: 1.4; }
 
-      /* ── Profile progress ── */
-      .profile-progress { height: 3px; background: var(--border); flex-shrink: 0; }
-      .profile-progress-fill { height: 100%; background: var(--accent); border-radius: 0 2px 2px 0; transition: width 0.35s cubic-bezier(0.4,0,0.2,1); }
+
 
       /* ── Professional polish pass ── */
       .sidebar {
@@ -1509,9 +1490,8 @@
           <div class="ap-mode-select-row">
             <label class="ap-mode-label" for="fa-assistant-mode">Assistent-Modus</label>
             <select class="ap-select" id="fa-assistant-mode">
-              <option value="hybrid">Empfohlen</option>
+              <option value="context">Automatisch (empfohlen)</option>
               <option value="classic">Mit Vorschau</option>
-              <option value="context">Automatisch</option>
             </select>
           </div>
           <div class="ap-mode-row">
@@ -1548,7 +1528,6 @@
             <button class="pf-sw-btn" id="fa-pf-new" title="Neues Profil">+</button>
             <button class="pf-sw-btn danger" id="fa-pf-del-profile" title="Profil löschen">×</button>
           </div>
-          <div class="profile-progress"><div class="profile-progress-fill" id="fa-pf-progress" style="width:0%"></div></div>
           <div class="profile-grid" id="fa-profile-grid"></div>
           <div class="profile-actions">
             <button class="btn-primary" id="fa-pf-save">Speichern</button>
@@ -1766,15 +1745,15 @@
       profileVisible = true;
       renderExtrasInProfile();
       updateProfileProgress();
-      messagesEl.classList.add('fading');
-      setTimeout(() => { messagesEl.style.display = 'none'; }, 150);
+      messagesEl.style.display = 'none';
+      $('fa-action-panel').style.display = 'none';
       profilePanel.classList.add('visible');
       $('fa-profile-btn').classList.add('active');
     }
     function hideProfile() {
       profileVisible = false;
       messagesEl.style.display = '';
-      requestAnimationFrame(() => messagesEl.classList.remove('fading'));
+      $('fa-action-panel').style.display = '';
       profilePanel.classList.remove('visible');
       $('fa-profile-btn').classList.remove('active');
     }
@@ -1806,15 +1785,15 @@
       if (profileVisible) hideProfile();
       historyVisible = true;
       renderHistoryList();
-      messagesEl.classList.add('fading');
-      setTimeout(() => { messagesEl.style.display = 'none'; }, 150);
+      messagesEl.style.display = 'none';
+      $('fa-action-panel').style.display = 'none';
       historyPanel.classList.add('visible');
       $('fa-history-btn').classList.add('active');
     }
     function hideHistory() {
       historyVisible = false;
       messagesEl.style.display = '';
-      requestAnimationFrame(() => messagesEl.classList.remove('fading'));
+      $('fa-action-panel').style.display = '';
       historyPanel.classList.remove('visible');
       $('fa-history-btn').classList.remove('active');
     }
@@ -2346,18 +2325,20 @@
       if (!text) return [];
 
       function tryParse(s) {
-        try {
-          const parsed = JSON.parse(s);
-          if (Array.isArray(parsed)) return parsed;
-          if (parsed && typeof parsed === 'object') return [parsed]; // single object → wrap
-        } catch {}
-        // strip trailing commas, then retry
-        const fixed = s.replace(/,\s*([\]}])/g, '$1');
-        try {
-          const parsed = JSON.parse(fixed);
-          if (Array.isArray(parsed)) return parsed;
-          if (parsed && typeof parsed === 'object') return [parsed];
-        } catch {}
+        const candidates = [s, s.replace(/,\s*([\]}])/g, '$1')];
+        for (const c of candidates) {
+          try {
+            const parsed = JSON.parse(c);
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed && typeof parsed === 'object') {
+              // Unwrap common wrappers: {actions:[...]}, {items:[...]}, {result:[...]}
+              for (const key of ['actions', 'items', 'result', 'data', 'fields']) {
+                if (Array.isArray(parsed[key])) return parsed[key];
+              }
+              return [parsed];
+            }
+          } catch {}
+        }
         return null;
       }
 
@@ -2367,8 +2348,17 @@
       const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
       if (fenced?.[1]) { const r = tryParse(fenced[1].trim()); if (r) return r; }
 
+      // Find outermost array
       const arrMatch = text.match(/\[[\s\S]*\]/);
       if (arrMatch) { const r = tryParse(arrMatch[0]); if (r) return r; }
+
+      // Last resort: extract individual objects that contain "action"
+      const objects = [];
+      const objRe = /\{[^{}]*"action"\s*:[^{}]*\}/g;
+      for (const m of text.matchAll(objRe)) {
+        try { const o = JSON.parse(m[0]); if (o) objects.push(o); } catch {}
+      }
+      if (objects.length) return objects;
 
       return [];
     }
@@ -2380,16 +2370,23 @@
 
     function sanitizeAgentActions(parsed) {
       if (!Array.isArray(parsed)) return [];
-      const allowedActions = new Set(['fill', 'select', 'check', 'click', 'submit', 'done']);
+      const allowedActions = new Set(['fill', 'select', 'check', 'click', 'submit', 'ask', 'done']);
       const allowedSources = new Set(['profile', 'inferred', 'suggestion']);
       const cleaned = [];
       for (const item of parsed) {
         if (!item || typeof item !== 'object') continue;
         const action = toSafeText(item.action, 24).toLowerCase();
         if (!allowedActions.has(action)) continue;
-        if (action === 'done') {
-          cleaned.push({ action: 'done' });
-          break;
+        if (action === 'done') { cleaned.push({ action: 'done' }); break; }
+        if (action === 'ask') {
+          const label    = toSafeText(item.label,    120);
+          const question = toSafeText(item.question, 320);
+          if (!label && !question) continue;
+          const options = Array.isArray(item.options)
+            ? item.options.map(o => toSafeText(o, 120)).filter(Boolean).slice(0, 4)
+            : [];
+          cleaned.push({ action: 'ask', label, question, options });
+          continue;
         }
         const selector = toSafeText(item.selector, 320);
         if (!selector) continue;
@@ -2939,6 +2936,202 @@
     let manualAssistState = { pending: null };
     let agentStatusBubble = null;
 
+    async function runFieldByFieldAgent() {
+      const key = await loadKey();
+      if (!key) {
+        addMsg('ai', `API-Schlüssel für ${providerLabel()} fehlt. Bitte in den FormAssist-Einstellungen hinterlegen.`);
+        agentState.active = false;
+        return;
+      }
+
+      const freshCtx = extractRichContext();
+      const seenRadioGroups = new Set();
+      const fields = [];
+
+      for (const form of freshCtx.forms) {
+        for (const sec of form.sections) {
+          for (const f of sec.fields) {
+            const el = f?.el;
+            if (!el || !isVisible(el)) continue;
+            const type = (el.type || '').toLowerCase();
+            if (SKIP_TYPES.has(type)) continue;
+            if (type === 'radio' && el.name) {
+              const rk = `${form.index}:${el.name}`;
+              if (seenRadioGroups.has(rk)) continue;
+              seenRadioGroups.add(rk);
+            }
+            const curVal = getCurrentFieldValue(el);
+            const hasError = !!getError(el) || (el.willValidate && !el.checkValidity());
+            if (curVal && !hasError) continue;
+            fields.push({
+              el,
+              selector: f.selector || getAgentSelector(el),
+              label: f.label || getLabel(el) || 'Feld',
+              type: f.type || type || 'text',
+              options: Array.isArray(f.options) ? f.options : [],
+              hint: f.hint || '',
+              required: !!f.required,
+            });
+          }
+        }
+      }
+
+      // Detect navigation / submit button
+      let navAction = null;
+      for (const form of freshCtx.forms) {
+        const btns = Array.from(form.formEl?.querySelectorAll?.('button, input[type="button"], input[type="submit"]') || [])
+          .filter(btn => isVisible(btn) && !btn.disabled);
+        for (const btn of btns) {
+          const lbl = getElementTextValue(btn);
+          if (!lbl) continue;
+          const isSubmit = /(absenden|senden|submit|abschicken|fertig stellen|fertigstellen)/i.test(lbl);
+          const isNext   = /(weiter|next|fortfahren|continue|nächste|naechste)/i.test(lbl);
+          if (isSubmit || isNext) {
+            navAction = { action: isSubmit ? 'submit' : 'click', selector: getAgentSelector(btn), label: lbl, isNavigation: true };
+            break;
+          }
+        }
+        if (navAction) break;
+      }
+
+      // Shared context block sent with every AI call
+      const profileLines = PROFILE_FIELDS.filter(pf => profile[pf.key])
+        .map(pf => `${pf.label}: "${profile[pf.key]}"`).join('\n');
+      const extrasLines = Object.entries(extras).map(([k, v]) => `${k}: "${v}"`).join('\n');
+      const sessionLines = Object.entries(agentState.sessionAnswers || {}).map(([k, v]) => `${k}: "${v}"`).join('\n');
+      const prevLines = (agentState.filledFields || [])
+        .filter(f => f.url && f.url !== location.href).slice(-24)
+        .map(f => `${f.label}: "${f.value}"`).join('\n');
+      const today = new Date();
+      const birthdate = profile.birthdate ? new Date(profile.birthdate) : null;
+      const age = birthdate ? Math.floor((today - birthdate) / (365.25 * 24 * 3600 * 1000)) : null;
+
+      const contextBlock = [
+        profileLines    ? 'NUTZERPROFIL:\n' + profileLines : '',
+        extrasLines     ? 'EXTRAS (gelernte Felder):\n' + extrasLines : '',
+        sessionLines    ? 'NUTZER-ANTWORTEN (immer verwenden, nicht erneut fragen):\n' + sessionLines : '',
+        prevLines       ? 'BEREITS AUSGEFÜLLT (vorherige Seiten):\n' + prevLines : '',
+        age != null     ? `Alter: ${age}` : '',
+      ].filter(Boolean).join('\n\n');
+
+      if (fields.length === 0) {
+        // No unfilled fields — handle navigation directly
+        if (navAction) {
+          updateGuidedProgress('Weiterklicken …');
+          await handleGuidedNavigation(navAction);
+        } else {
+          updateGuidedProgress('Fertig ✓');
+          addMsg('ai', '✅ Alle Felder ausgefüllt.', null, { copy: false });
+          agentState.active = false;
+        }
+        return;
+      }
+
+      agentStatusBubble = createAgentBubble();
+      let filled = 0;
+      const asks = [];
+
+      for (const f of fields) {
+        if (!agentState.active) break;
+
+        // Check session answers and extras for exact label match first (no AI call needed)
+        const labelNorm = normalizeForCompare(f.label);
+        let directValue = null;
+        for (const [k, v] of Object.entries(agentState.sessionAnswers || {})) {
+          if (normalizeForCompare(k) === labelNorm && v) { directValue = v; break; }
+        }
+        if (directValue === null) {
+          for (const [k, v] of Object.entries(extras)) {
+            if (normalizeForCompare(k) === labelNorm && v) { directValue = v; break; }
+          }
+        }
+
+        if (directValue !== null) {
+          fillField(f.el, directValue);
+          if (isActionApplied(f.el, 'fill', directValue)) {
+            appendAgentRow('✓', f.label, directValue);
+            agentState.filledFields.push({ label: f.label, value: directValue, url: location.href });
+            filled++;
+          } else {
+            appendAgentRow('✗', f.label, 'nicht angewendet');
+          }
+          await sleep(40);
+          continue;
+        }
+
+        // Ask AI for this single field
+        try {
+          const optStr  = f.options.length ? `\nOptionen: ${f.options.slice(0, 12).join(' | ')}` : '';
+          const hintStr = f.hint ? `\nHinweis: ${f.hint}` : '';
+          const instrStr = f.options.length
+            ? 'Antworte NUR mit einer der Optionen EXAKT wie angegeben, oder "?" wenn keine passt.'
+            : 'Antworte NUR mit dem Wert (max. eine kurze Zeile), oder "?" wenn wirklich kein Wert ableitbar ist.';
+
+          const prompt = [
+            contextBlock,
+            '',
+            `FORMULARFELD: "${f.label}" (${f.type})${f.required ? ' [Pflichtfeld]' : ''}${optStr}${hintStr}`,
+            '',
+            instrStr,
+          ].join('\n');
+
+          const data = await groqRequest(key, {
+            model: _model,
+            max_tokens: 80,
+            messages: [{ role: 'user', content: prompt }],
+          });
+
+          const rawVal = String(data?.choices?.[0]?.message?.content || '').trim();
+
+          if (!rawVal || rawVal === '?' || /^unbekannt$/i.test(rawVal)) {
+            asks.push({
+              action: 'ask',
+              label: f.label,
+              question: `Was soll ich bei "${f.label}" eintragen?`,
+              options: f.options.slice(0, 4),
+              selector: f.selector,
+            });
+          } else {
+            const value = rawVal.split('\n')[0].replace(/^["']|["']$/g, '').trim().slice(0, 200);
+            fillField(f.el, value);
+            if (isActionApplied(f.el, 'fill', value)) {
+              appendAgentRow('✓', f.label, value);
+              agentState.filledFields.push({ label: f.label, value, url: location.href });
+              filled++;
+            } else {
+              appendAgentRow('✗', f.label, 'nicht angewendet');
+            }
+          }
+        } catch (err) {
+          appendAgentRow('✗', f.label, `Fehler: ${(err.message || '').slice(0, 40)}`);
+        }
+
+        await sleep(50);
+      }
+
+      finalizeAgentBubble(filled);
+      learnAgentFields();
+      updateGuidedProgress();
+
+      if (!agentState.active) return;
+
+      if (asks.length) {
+        updateGuidedProgress(`${asks.length} Rückfrage${asks.length > 1 ? 'n' : ''} …`);
+        guidedAskState.active   = true;
+        guidedAskState.queue    = [...asks];
+        guidedAskState.navAction = navAction;
+        showNextGuidedQuestion();
+      } else if (navAction) {
+        updateGuidedProgress('Weiterklicken …');
+        await handleGuidedNavigation(navAction);
+      } else {
+        updateGuidedProgress('Fertig ✓');
+        setTimeout(() => { const w = $('fa-guided-progress'); if (w) w.style.display = 'none'; }, 3000);
+        addMsg('ai', '✅ Formular vollständig ausgefüllt.', null, { copy: false });
+        agentState.active = false;
+      }
+    }
+
     function startAgent() {
       if (profileVisible) hideProfile();
       open();
@@ -2962,7 +3155,11 @@
       if (prefilled > 0) {
         addMsg('ai', `Direkt aus Profil: ${prefilled} Feld${prefilled !== 1 ? 'er' : ''} ausgefüllt.`, null, { copy: false });
       }
-      runAgentStep();
+      if (guided) {
+        runFieldByFieldAgent();
+      } else {
+        runAgentStep();
+      }
     }
 
     function parseSSEText(chunk) {
@@ -2988,18 +3185,17 @@
         : [{ role: 'user', content: prompt }];
       try {
         let raw = '';
-        await groqStream(key, { model: _model, max_tokens: 1200, stream: true, messages },
+        await groqStream(key, { model: _model, max_tokens: 2048, stream: true, messages },
           chunk => { raw += parseSSEText(chunk); });
         removeTyping();
         raw = raw.trim();
         const actions = sanitizeAgentActions(parseModelJsonArray(raw));
         if (!Array.isArray(actions) || !actions.length) {
+          console.warn('[FormAssist] Agent parse failed. raw response:', raw);
           if (!retry) { await runAgentStep(true); return; }
-          if (askUserForMissingField()) {
-            agentState.active = true;
-            return;
-          }
-          addMsg('ai', 'KI-Antwort war nicht im erwarteten Format. Bitte Agent erneut starten.');
+          if (askUserForMissingField()) { agentState.active = true; return; }
+          const preview = raw ? `„${raw.slice(0, 120).replace(/\n/g, ' ')}…"` : '(leer)';
+          addMsg('ai', `KI-Antwort konnte nicht verarbeitet werden. Modell-Output: ${preview}`, null, { copy: false });
           agentState.active = false; return;
         }
         if (agentState.guided) {
@@ -3184,22 +3380,8 @@
 
     async function runGuidedStep(actions) {
       dismissEmpty();
-      const allFills    = actions.filter(a => ['fill','select','check'].includes(a.action));
-      const certain     = allFills.filter(a => getActionConfidence(a) >= GUIDED_MIN_CONFIDENCE);
-      const uncertain   = allFills.filter(a => getActionConfidence(a) <  GUIDED_MIN_CONFIDENCE);
-      // Convert low-confidence fills to ask actions; include AI suggestion as first chip
-      const syntheticAsks = uncertain.map(a => ({
-        action: 'ask',
-        label: a.label || a.selector,
-        question: a.options?.length
-          ? `Was soll bei „${a.label}" ausgewählt werden?`
-          : `Was soll in „${a.label}" eingetragen werden?`,
-        options: a.options?.length
-          ? a.options.slice(0, 4)
-          : (a.value ? [a.value] : []),
-      }));
-      const askActions  = [...actions.filter(a => a.action === 'ask'), ...syntheticAsks];
-      const fillActions = certain;
+      const fillActions  = actions.filter(a => ['fill','select','check'].includes(a.action));
+      const askActions   = actions.filter(a => a.action === 'ask');
       const clickActions = actions.filter(a => a.action === 'click' && !a.isNavigation);
       const navActions  = actions.filter(a => a.isNavigation || a.action === 'submit');
       const isDone      = actions.some(a => a.action === 'done');
@@ -3274,8 +3456,15 @@
     function showNextGuidedQuestion() {
       if (!guidedAskState.queue.length) {
         guidedAskState.active = false;
-        addMsg('ai', 'Danke! Ich fülle jetzt aus…', null, { copy: false });
-        runAgentStep();
+        if (guidedAskState.navAction) {
+          addMsg('ai', 'Danke! Ich mache weiter…', null, { copy: false });
+          handleGuidedNavigation(guidedAskState.navAction);
+        } else {
+          updateGuidedProgress('Fertig ✓');
+          setTimeout(() => { const w = $('fa-guided-progress'); if (w) w.style.display = 'none'; }, 3000);
+          addMsg('ai', '✅ Formular vollständig ausgefüllt.', null, { copy: false });
+          agentState.active = false;
+        }
         return;
       }
       showGuidedQuestion(guidedAskState.queue[0]);
@@ -3332,19 +3521,19 @@
       const ask = guidedAskState.queue.shift();
       if (!ask) return;
 
-      // Store answer for this and future pages
       agentState.sessionAnswers[ask.label] = text;
 
-      if (guidedAskState.queue.length) {
-        await sleep(150);
-        showNextGuidedQuestion();
-      } else {
-        guidedAskState.active = false;
-        await sleep(200);
-        addMsg('ai', 'Danke! Ich mache weiter…', null, { copy: false });
-        await sleep(300);
-        await runAgentStep();
+      // Field-by-field: fill the stored element directly
+      if (ask.selector) {
+        const el = resolveActionElement(ask);
+        if (el) {
+          fillField(el, text);
+          agentState.filledFields.push({ label: ask.label, value: text, url: location.href });
+        }
       }
+
+      await sleep(150);
+      showNextGuidedQuestion();
     }
 
     async function handleGuidedNavigation(navAction) {
@@ -3637,7 +3826,11 @@
         addMsg('ai', allFields.length
           ? `${allFields.length} Felder erkannt — analysiere…`
           : 'Keine Felder gefunden — versuche trotzdem…', null, { copy: false });
-        await runAgentStep();
+        if (agentState.guided) {
+          await runFieldByFieldAgent();
+        } else {
+          await runAgentStep();
+        }
       } catch {}
     }
 
@@ -3927,7 +4120,7 @@
       _assistantMode = normalizeAssistantMode(e.target.value);
       updateAssistantModeUi();
       chrome.storage.sync.set({ faAssistantMode: _assistantMode });
-      const modeLabel = _assistantMode === 'classic' ? 'Mit Vorschau' : (_assistantMode === 'context' ? 'Automatisch' : 'Empfohlen');
+      const modeLabel = _assistantMode === 'classic' ? 'Mit Vorschau' : 'Automatisch';
       showToast(`Modus: ${modeLabel}`);
     });
 

@@ -6,7 +6,7 @@
 Content Scripts laufen nicht im nativen Chrome-PDF-Viewer.
 
 **Ursache:**
-Der Viewer laeuft in einem isolierten `chrome-extension://`-Kontext, auf den `<all_urls>` nicht angewendet wird.
+Der Viewer läuft in einem isolierten `chrome-extension://`-Kontext, auf den `<all_urls>` nicht angewendet wird.
 
 **Auswirkung:**
 FormAssist funktioniert dort nicht, in web-basierten PDF-Viewern jedoch oft schon.
@@ -26,26 +26,39 @@ Agent/Chat sehen nur Hauptdokument und same-origin-iFrames.
 
 ---
 
-## Issue: Datenschutz-/Consent-Luecke fuer Produktivbetrieb
+## Issue: Datenschutz-/Consent-Lücke für Produktivbetrieb
 
 **Problem:**
-Fuer KI-Funktionen werden Formular- und ggf. Profildaten an Groq gesendet, ohne expliziten per-Form-Consent-Flow.
+Für KI-Funktionen werden Formular- und ggf. Profildaten an den gewählten Provider gesendet, ohne expliziten per-Form-Consent-Flow.
 
 **Ursache:**
 Prototyp-Fokus auf UX/Funktion statt auf rechtlicher Operationalisierung.
 
 **Auswirkung:**
-Fuer echte Produktion fehlen noch verbindliche Privacy- und Compliance-Mechaniken.
+Für echte Produktion fehlen noch verbindliche Privacy- und Compliance-Mechaniken.
 
 ---
 
 ## Issue: Clientseitiger API-Key ist nur Prototyp-tauglich
 
 **Problem:**
-API-Key liegt im Browser (`chrome.storage.sync`) statt in einem Backend-Proxy.
+API-Keys liegen im Browser (`chrome.storage.sync`) statt in einem Backend-Proxy.
 
 **Ursache:**
-Direkte Integration wurde fuer schnelles Prototyping priorisiert.
+Direkte Integration wurde für schnelles Prototyping priorisiert.
 
 **Auswirkung:**
-Betriebsmodell ist fuer lokale Nutzung ok, fuer produktiven Rollout aber nicht ausreichend.
+Betriebsmodell ist für lokale Nutzung ok, für produktiven Rollout aber nicht ausreichend.
+
+---
+
+## Issue: Groq "Provider returned error" (503) — transient
+
+**Problem:**
+Gelegentlich antwortet Groq mit HTTP 503 und der Meldung "Provider returned error", wenn ihr Inference-Backend (Meta) temporär nicht erreichbar ist.
+
+**Verhalten heute:**
+Nach 3 Retries wird automatisch auf OpenRouter umgeschaltet (sofern OpenRouter-Key konfiguriert). Ohne OpenRouter-Key wird der Fehler im Chat angezeigt.
+
+**Auswirkung:**
+Mit konfiguriertem OpenRouter-Backup transparent für den Nutzer; ohne Backup: kurze Fehlermeldung.

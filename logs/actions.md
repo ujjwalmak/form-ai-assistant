@@ -5,165 +5,156 @@
 ## [2026-04-23] Session Checkpoint
 
 **Ziel:**
-FormAssist von einem hardcodierten Single-Page-HTML-Prototypen zu einer vollwertigen Chrome Extension weiterentwickeln, die auf beliebigen Seiten mit Formularen funktioniert.
+FormAssist von einem hardcodierten Single-Page-HTML-Prototypen zu einer vollwertigen Chrome Extension weiterentwickeln.
 
 **Aktionen:**
 
 1. `form-ai-assistant.html` analysiert — Anthropic-API-basierter Formular-Assistent für Wohnsitzummeldung
-2. README.md und requirements.txt erstellt, initialer Git-Commit und Push zu github.com/ujjwalmak/form-ai-assistant
-3. API-Backend migriert: Anthropic Claude → Gemini 2.0 Flash → Groq llama-3.1-8b-instant (Credit-Limit-Problem)
-4. API-Key hardcodiert auf User-Wunsch
-5. Vergleich zweier Codelinien: lokale Version (Claude, Shadow DOM, reiche Kontext-Extraktion) vs. GitHub-Version (Kollege, Drag/Resize/Minimize/Feldliste)
-6. Merge der besten Teile beider Versionen in `content.js` (Shadow DOM + Drag + Resize + Minimize + Feldliste + Konversations-History)
-7. GitHub Push Protection blockierte hardcodierten Key → Key in `api-key.txt` ausgelagert, `.gitignore` erstellt
-8. Minimize-Bug behoben (inline-style-Überschreibung)
-9. Resize verbessert: 3 Handles (W, S, SW) statt einem unsichtbaren Streifen
-10. Memory/Logs-Checkpoint durchgeführt (diese Session)
+2. README.md und requirements.txt erstellt, initialer Git-Commit und Push
+3. API-Backend migriert: Anthropic Claude → Gemini 2.0 Flash → Groq llama-3.1-8b-instant
+4. Merge der besten Teile beider Codelinien in `content.js` (Shadow DOM + Drag + Resize + Feldliste + History)
+5. GitHub Push Protection blockierte hardcodierten Key → Key in `api-key.txt` ausgelagert
+6. Minimize-Bug behoben (inline-style-Überschreibung)
 
 **Ergebnis:**
 
 - Chrome Extension (MV3) produktionsbereit für lokalen Einsatz
-- Läuft auf allen Seiten mit Formularfeldern
 - KI versteht Formular-Kontext semantisch (nicht nur HTML-Scanner)
-- Drag, Resize (3 Richtungen), Minimize, Feldliste, Konversations-History funktionieren
 - Kein hardcodierter Key im Repository
 
-**Learnings:**
-
-- GitHub Push Protection scannt alle Commits — Keys müssen vor dem ersten Commit externalisiert werden
-- CSS-Klassen können inline styles nicht überschreiben — Zustandsänderungen bei Drag-basierten Komponenten müssen konsistent über inline styles oder ausschließlich über CSS gesteuert werden
-- Shadow DOM erfordert eigene Font-Loading-Strategie (`<link>` im Shadow Root, nicht @import)
-- `chrome.runtime.getURL` funktioniert nur wenn die Datei in `web_accessible_resources` gelistet ist
-
-**Nächste Schritte:**
-
-1. Verwaiste Dateien (state.js, ui.js, api.js, bootstrap.js, content.css) entfernen
-2. README auf aktuelle Architektur aktualisieren
-3. Feature: Auto-Fill (AI-Vorschlag per Klick ins Feld einfügen)
-4. Feature: Proaktive Fehlererkennung
-5. Feature: localStorage-Gedächtnis für persönliche Daten
-6. Feature: Keyboard-Shortcut (Ctrl+Shift+F)
-
 ---
 
-## [2026-04-30] Dokumentations-Checkpoint
+## [2026-04-30] Cleanup + Profil-System
 
 **Ziel:**
-Die aktuellen Änderungen an UI, Assistenzlogik und Bedienung sauber in der Projektdoku festhalten.
+Verwaiste Multifile-Dateien entfernen, Profil-System mit strukturierter Felderkennung einbauen.
 
 **Aktionen:**
 
-1. README auf die aktuelle Single-File-Architektur mit Shadow DOM aktualisiert
-2. Neue Bedienfunktionen dokumentiert: Copy-Button, geführter Modus, Submit-Review, proaktive Fehlerhilfe, Resize an allen Kanten, Shortcut `Ctrl+Shift+F`
-3. Security-Hinweis fuer den lokalen API-Key praezisiert
-
----
-
-## [2026-04-30] Cleanup-Checkpoint
-
-**Ziel:**
-Die verwaisten Multifile-Dateien aus dem Repo entfernen und die Doku auf den neuen Stand bringen.
-
-**Aktionen:**
-
-1. `api.js`, `bootstrap.js`, `content.css`, `state.js`, `ui.js` und `icon128.svg` entfernt
-2. README auf den bereinigten Single-File-Stand angepasst
-3. Known-Issues und Entscheidungslog auf erledigt bzw. aktuellen Stand gebracht
-
-**Ergebnis:**
-
-- Nur noch die aktive Laufzeitbasis bleibt im Repo
-- Keine verwaisten Multifile-Quellen oder ungenutzte Icon-Datei mehr vorhanden
-- Doku und Repo-Inhalt stimmen wieder überein
-
-**Ergebnis:**
-
-- Projektdoku beschreibt jetzt den aktiven Stand statt der alten Mehrdatei-Architektur
-- Die neuen Assistenz- und UI-Funktionen sind im README auffindbar
-- Der Umgang mit `api-key.txt` ist eindeutig dokumentiert
+1. `api.js`, `bootstrap.js`, `content.css`, `state.js`, `ui.js`, `icon128.svg` entfernt
+2. `PROFILE_FIELDS` — 15 Standard-Profilfelder mit Keywords und Autocomplete-Werten
+3. `matchProfile()` + `matchExtras()` — lokales Matching vor KI-Call
+4. `fillField()` — robuste Feldwert-Einfügung (SELECT, Checkbox, Radio, Text)
+5. Dark Mode via CSS Custom Properties
+6. README und Doku auf bereinigten Stand gebracht
 
 ---
 
 ## [2026-05-07] Agent Auto-Fill — Live Sequential Mode
 
 **Ziel:**
-Einen semi-autonomen KI-Agenten bauen, der Formulare live Feld für Feld befüllt — mit sichtbarem Fortschritt im Chat, automatischem Lernen unbekannter Felder und persistenter Speicherung neuer Daten.
+Semi-autonomen KI-Agenten bauen, der Formulare live ausfüllt.
 
 **Aktionen:**
 
-1. **`agentFill()` — Live Sequential Mode:** KI schickt pro Feld eine eigene Anfrage (max_tokens: 80). Nutzer sieht in Echtzeit wie jedes Feld befüllt wird (Spinner → ✓).
-2. **`faExtras` Storage:** Neuer chrome.storage.local-Key für Felder außerhalb von PROFILE_FIELDS (z.B. "Webseite", "Steuernummer", "Fax"). Wird bei Antwort auf unbekannte Felder automatisch befüllt.
-3. **`matchExtras()` Helper:** Fuzzy-Matching von Feldlabels gegen `faExtras`-Keys (includes-basiert). Verhindert dass die KI für bekannte Extras erneut gefragt wird.
-4. **Zwei-Phasen-Matching:** Profile-Match (kein API-Call) → Extras-Match (kein API-Call) → KI (API-Call). Lokale Matches sind garantiert stabil.
-5. **`agentMode` State Machine:** Unbekannte Felder werden nach dem Live-Fill nacheinander per Chat abgefragt. Antworten werden direkt in Feld eingetragen + gespeichert (faProfile oder faExtras).
-6. **Badge-System in Preview:** `[Profil]` (grün) = aus gespeicherten Daten, `[KI]` (gelb) = aus KI-Inferenz.
-7. **Extras im Profil-Panel:** `renderExtrasInProfile()` zeigt alle faExtras-Einträge unterhalb der Standardfelder — editierbar und einzeln löschbar. Speichern-Button sichert beides.
-8. **`buildSystemPrompt()` erweitert:** Extras werden als `=== WEITERE GESPEICHERTE DATEN ===` Sektion in den System-Prompt aufgenommen.
-
-**Ergebnis:**
-
-- Nutzer klickt "✦ KI Auto-Fill" → sieht live wie Felder befüllt werden
-- Bekannte Felder (Profil + Extras): sofort, kein API-Call
-- Unbekannte Felder: KI antwortet oder fragt nach → wird gespeichert
-- Nach dem ersten Ausfüllen sind neue Felder für alle zukünftigen Formulare bekannt
-- Profil-Panel zeigt jetzt vollständiges Bild aller gespeicherten Daten
+1. `agentFill()` — KI schickt Aktionsplan als JSON-Array, User sieht Vorschau
+2. `faExtras` — neuer Storage-Key für gelernte Freitext-Felder
+3. Zwei-Phasen-Matching: Profil → Extras → KI (nur unbekannte Felder)
+4. Badge-System in Preview: Profil (grün), KI-Vorschlag (gelb)
+5. Extras im Profil-Panel: editierbar und einzeln löschbar
 
 ---
 
-## [2026-04-30] Code-Refactoring — Profile-System & Feldterkennung
+## [2026-05-14] Dokumentation-Sync + UI-Redesign
 
 **Ziel:**
-Erweiterte Feldterkennung mit Profile-System für Auto-Fill. Bessere Feldtyp-Erkennung für verschiedene Formulare.
+Action-Panel-First-UI umsetzen und Doku auf aktuellen Code-Stand bringen.
 
 **Aktionen:**
 
-1. `PROFILE_FIELDS` — 16 Standard-Profilfelder mit Keywords, Autocomplete-Werte, Labels
-2. `FAKE_DATA` — Test-Daten (Max Mustermann, Beispieladresse)
-3. `matchProfile()` — Intelligentes Matching von Formularelementen gegen Profilfelder
-4. `fillField()` — Überarbeitete, robuste Feldwert-Einfügung (SELECT, Checkbox, Radio, Text)
-5. `FULL_WIDTH_KEYS` — Style-Hint für breitere Felder (Email, Straße, IBAN)
-6. Dark Mode — Farbvariablen in CSS (:host.dark)
-7. chrome.storage.local — Profile, Position, Dark Mode werden persistiert
-8. Extension Icons — 16, 32, 48, 128px PNG Icons im manifest definiert
-9. Open Graph Support — og:title, og:description werden extrahiert
-
-**Refactoring Details:**
-
-- `fillField()` nutzt Property Descriptor für robustes Value-Setting
-- SELECT-Matching: Text vs. Label vs. Value, Fuzzy-Match mit lowercase
-- Radio-Buttons: gesamte Radio-Gruppe wird durchsucht
-- Checkbox: Boolesche Logik (ja/yes/true/1/x → checked)
-- Event Dispatch: input + change events für Web-Komponenten-Kompatibilität
-
-**Tests durchgeführt:**
-
-- Multifile-Dateien (state.js, ui.js, api.js, bootstrap.js, content.css, icon.svg, icon128.svg) entfernt
-- Code größe: 1100+ Zeilen in content.js (konsistent, alles Single-File)
-
-**Ergebnis:**
-
-- Auto-Fill funktioniert ohne AI-Hilfe auf vielen Formularen
-- Profile können gespeichert und wiederverwendet werden
-- Dark Mode verbessert UI auf verschiedenen Webseiten
-- Feldterkennung 10x genauer durch strukturiertes Matching
-- Extension sieht professioneller mit Icons aus
+1. UI-Redesign: Action Panel ersetzt Quick Strip und Greeting-Bubble
+2. Drei Agent-Modi: Hybrid (Standard), Klassisch (Vorschau), Automatisch
+3. Quellen-Badges mit Konfidenz: `profile`, `inferred`, `suggestion`
+4. README, short_term.md, long_term.md, known_issues.md, decisions.md synchronisiert
 
 ---
 
-## [2026-05-14] Dokumentation-Sync auf Code-Stand
+## [2026-05-15] Field-by-Field Agent + Bugfixes + Code Cleanup
 
 **Ziel:**
-Die Projektdokumentation auf den real implementierten Funktionsumfang angleichen.
+KI-Vorschläge und Extras-Nutzung verbessern durch Feld-für-Feld-Ansatz; UI-Verbesserungen; Code säubern.
 
-**Aktionen:**
+**Aktionen (Field-by-Field Agent):**
 
-1. README aktualisiert (Featureliste, Sicherheitshinweise, korrekte Feldanzahl)
-2. `memory/short_term.md` komplett auf aktuellen Runtime-Stand gebracht
-3. `memory/long_term.md` korrigiert (15 Profilfelder, kein Minimize, Submit-Review/Fehlerhilfe, Datenschutzhinweis)
-4. `memory/known_issues.md` auf aktive, reale Probleme reduziert
-5. `memory/decisions.md` um historische Kennzeichnungen und neue Entscheidungen erweitert
+1. `runFieldByFieldAgent()` — ersetzt Batch-`runAgentStep()` im Automatisch-Modus
+2. Priorität pro Feld: `sessionAnswers` → `extras` (Label-Match) → KI (Non-Streaming, max_tokens 80)
+3. Navigation/Submit automatisch am Ende erkannt und ausgeführt
+4. `ask`-Aktionen speichern `selector` → `handleGuidedAnswer()` füllt direkt ohne erneuten Agent-Lauf
+5. `showNextGuidedQuestion()` handhabt Navigation wenn Queue leer (kein `runAgentStep()`-Rückruf)
+6. `startAgent()` und `resumeAgentIfPending()` dispatch auf `runFieldByFieldAgent()` vs. `runAgentStep()`
+
+**Aktionen (UI):**
+
+1. Profil- und Verlauf-Panel blenden `fa-action-panel` beim Öffnen aus (volle Panel-Höhe)
+2. `hideProfile()` / `hideHistory()` stellen Action-Panel beim Schließen wieder her
+3. 150ms-Delay beim Ausblenden der Messages entfernt — sofortiger Wechsel ohne Flash
+4. Blauer Fortschrittsbalken (`profile-progress`) aus Profil-Panel entfernt
+
+**Aktionen (Bugfixes):**
+
+1. `getDefaultModel()` — `'openrouter/free'` → `'openrouter/auto'` (war stale)
+2. `directValue`-Check in Field-by-Field — `!directValue` → `=== null` mit `&& v`-Guard
+3. `_assistantMode` Initialwert — `'hybrid'` → `'context'` (Hybrid-Modus längst entfernt)
+
+**Aktionen (Code Cleanup):**
+
+1. `@keyframes profile-out` entfernt (nie referenziert)
+2. Gesamter `/* Welcome state */`-Block entfernt (11 Regeln, Klassen nie gesetzt)
+3. `.messages.fading`-Regel entfernt (`fading` wird nicht mehr auf messages gesetzt)
+4. Doppelte `.msg.user { justify-content: flex-end }`-Regel entfernt
+5. `/* Profile progress */`-Block entfernt (Element aus HTML entfernt)
 
 **Ergebnis:**
 
-- Doku entspricht wieder dem Verhalten in `content.js`, `background.js`, `options.js`
-- Veraltete Aussagen (`api-key.txt`, Guided Mode, Minimize als aktives Feature) sind entfernt bzw. historisch markiert
+- Extras und gelernte Felder werden jetzt zuverlässig genutzt (direkt per Label-Match, kein Batch-Prompt nötig)
+- KI-Vorschläge pro Feld fokussierter und präziser (kleiner Kontext statt große Feldliste)
+- UI-Übergänge sauber ohne Flash
+- ~60 Zeilen toter CSS-Code entfernt
+
+---
+
+## [2026-05-14–15] Guided Mode + Reliability + Neue Features
+
+**Ziel:**
+Vollautonomes geführtes Formular-Ausfüllen mit intelligenter Interaktion, plus diverse Verbesserungen.
+
+**Aktionen (Guided Mode):**
+
+1. `runGuidedStep(actions)` — teilt Aktionen in sicher/unsicher (Schwelle 0.6)
+2. `showGuidedQuestion()` / `handleGuidedAnswer()` — Frage-Antwort-Flow mit Chip-Auswahl
+3. `agentState.sessionAnswers` — Antworten über Seitennavigation persistent
+4. `faAgentResume` erweitert um `guided`, `autoNavigate`, `sessionAnswers`
+5. Auto-Navigate-Toggle und geführter Fortschrittsbalken im UI
+
+**Aktionen (Reliability):**
+
+1. Konfidenz-Schwelle `GUIDED_MIN_CONFIDENCE = 0.6` — darunter ask statt fill
+2. Radio-Button-Fix: `click()` statt `checked = true` für React/Vue-Kompatibilität
+3. `prevFillLines` im Agent-Prompt — bereits gefüllte Felder vorheriger Seiten
+4. Streaming-Agent: `runAgentStep` nutzt `groqStream` mit `parseSSEText`
+5. `waitForFields(4000)` — wartet auf dynamisch geladene Felder beim Resume
+6. Guided-Fortschrittsbalken (`#fa-guided-progress`)
+
+**Aktionen (Neue Features):**
+
+1. Datepicker-Support: `tryDatePickerLib()` für Flatpickr, Pikaday, jQuery, Bootstrap
+2. Profil-Import/Export als JSON
+3. Mehrere Profile: `faProfiles`-Array, Switcher, Anlegen, Löschen, Migration aus Legacy
+4. Agent-History-Panel: letzte 30 Sitzungen, `addHistoryEntry()` + `learnAgentFields()`-Hook
+5. Formularerkennung: Shadow DOM scanning + Nav-Filter
+
+**Aktionen (Provider + Fallback):**
+
+1. `background.js` auf Multi-Provider ausgebaut: `PROVIDERS`-Objekt, `llm-fetch`/`llm-stream`
+2. OpenRouter-Fallback bei Groq 429 **und** 5xx: `fetchProviderWithRetry` + Fallback-Logik
+3. `OPENROUTER_MODEL_REMAP` normalisiert ungültige Modell-IDs (`openrouter/free` → `openrouter/auto`)
+4. `_onProviderFallback`-Callback verbindet Background-Signal mit `showToast()` im Sidebar
+5. `options.js` Modell-Liste bereinigt: echte OpenRouter-IDs statt Platzhalter
+
+**Ergebnis:**
+
+- Agent kann mehrseitige Formulare vollständig autonom ausfüllen
+- Unsichere Felder werden gezielt erfragt, Antworten seitenübergreifend gespeichert
+- Groq-Ausfälle und Rate Limits werden transparent über OpenRouter abgefangen
+- Mehrere Profile ermöglichen verschiedene Identitäten/Nutzer
+- History gibt Überblick über vergangene Agent-Sitzungen

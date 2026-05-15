@@ -17,27 +17,24 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 
 ### KI-Agent
 
-- **⚡ Agent** erstellt einen Aktionsplan fuer erkannte Felder und fuehrt ihn aus
-- **Hybrid-Modus** (Standard): direkt aus Profil, KI nur fuer unbekannte Felder
-- **Klassisch**: editierbare Vorschau vor jeder Ausfuehrung
-- **Automatisch**: kontextuell-autonom ohne Rueckfragen
+- **⚡ Agent** analysiert Formularfelder und füllt sie automatisch aus
+- **Automatisch** (Standard): Feld-für-Feld — Profile + gelernte Extras direkt, KI nur für wirklich unbekannte Felder, fragt gezielt nach wenn nötig
+- **Mit Vorschau**: editierbare Vorschau vor jeder Ausfuehrung
 
-#### Guided Mode
+#### Automatischer Modus (Field-by-Field)
 
-- Vollautonomes Ausfuellen: Agent navigiert selbstständig durch mehrseitige Formulare
-- Felder mit Konfidenz ≥ 0.6 werden direkt ausgefuellt
-- Unsichere Felder werden als Frage gestellt (mit KI-Vorschlag als Chip)
+- Pro Feld: zuerst `extras` + `sessionAnswers` per Label-Match, dann KI mit fokussiertem Einzelprompt
+- Wirklich unbekannte Felder werden als Chip-Frage gestellt
 - Nutzerantworten werden als `sessionAnswers` gespeichert und auf allen Folgeseiten wiederverwendet
 - Auto-Navigate-Toggle: Weiter-/Submit-Buttons werden automatisch geklickt
-- Fortschrittsbalken zeigt gebeantwortete Fragen
+- Agent navigiert selbstständig durch mehrseitige Formulare
 
 #### Agent-Details
 
-- Quellen-Badges: kein Badge = Profil, **Abgeleitet** (blau) = logisch hergeleitet, **KI-Vorschlag** (gelb) = Kontextschätzung
-- Automatische Korrektur-Runde bei Validierungsfehlern nach dem Fuellen
+- `applyDeterministicProfileFill()` — starke Profil-Matches werden immer zuerst direkt gefuellt (kein API-Call)
+- Automatische Korrektur-Runde bei Validierungsfehlern nach dem Fuellen (Vorschau-Modus)
 - Weiterfuehrung ueber mehrseitige Formulare (Navigation + Resume mit `faAgentResume`)
 - `waitForFields()` — wartet bis zu 4 Sekunden auf dynamisch geladene Felder
-- Streaming-Antwort mit Tipp-Animation
 
 ### Formularhilfe
 
