@@ -1,13 +1,13 @@
 ---
 name: long-term-architecture
-description: Extension architecture, provider/API setup, agent flow, storage keys, prompt structure — current as of 2026-05-14
+description: Extension architecture, provider/API setup, agent flow, storage keys, prompt structure — current as of 2026-05-15
 metadata:
   type: project
 ---
 
 # Long-Term Memory — FormAssist
 
-## Architektur (Stand 2026-05-14)
+## Architektur (Stand 2026-05-15)
 
 ### Extension-Typ
 
@@ -58,7 +58,7 @@ Der gesamte UI-Code wird in ein `attachShadow({ mode: 'open' })` injiziert, das 
 - `faGroqApiKey` — Groq API-Key
 - `faOpenRouterApiKey` — OpenRouter API-Key
 - `faModel` — gewähltes Modell
-- `faAssistantMode` — `'hybrid'`, `'classic'`, `'context'`
+- `faAssistantMode` — `'context'` (Standard) oder `'classic'`
 
 **Storage (`chrome.storage.session`):**
 
@@ -76,43 +76,74 @@ Beide Provider sind OpenAI-kompatibel (messages array, choices[0].message.conten
 **Automatischer Fallback:** Groq 429 oder 5xx → OpenRouter mit `meta-llama/llama-3.3-70b-instruct:free`. Modell-IDs ohne `/` (Groq-spezifisch) werden automatisch ersetzt. Toast im Sidebar.
 
 **Message-Typen background.js:**
+
 - Non-Streaming: `{ type: 'llm-fetch', provider, key, body }` → `{ ok, data, usedFallback }`
 - Streaming: Port `llm-stream`, Nachrichten `{ type: 'chunk'|'done'|'error'|'fallback' }`
 
 **Timeouts:** Non-Streaming 25s, Streaming 40s. Retries: max. 2 für retryable Status (408, 429, 500–504).
 
-- Agent: max_tokens 1200, strukturierte Feldliste statt HTML, Streaming
+- Agent (Batch / Classic): max_tokens 2048, strukturierte Feldliste, Streaming
+- Agent (Field-by-Field): max_tokens 80 pro Feld, Non-Streaming
 - Chat: max_tokens 400, System-Prompt mit Formularkontext, History letzte 6 Nachrichten
 
 ## Agent Mode (Haupt-Feature)
 
-### Ablauf (Standard / Hybrid)
+### Modi
 
-1. `startAgent()` → `runAgentStep()` → `buildAgentPrompt()` → Groq (Streaming)
-2. Je nach Modus:
-   - **Hybrid/Klassisch**: `showAgentPreview(actions)` zeigt editierbare Vorschau, User bestätigt
-   - **Automatisch**: direkt `executeAgentActions(actions)`
-3. Nach Ausführung: Auto-Korrektur-Runde wenn Validierungsfehler vorhanden
-4. Bei Navigation: State in `faAgentResume` gespeichert, `resumeAgentIfPending()` bei Seitenload
+| Modus | Wert | Verhalten |
+| --- | --- | --- |
+| Automatisch | `context` | Feld-für-Feld KI, sofort ausfüllen, nur bei wirklich unbekannten Feldern fragen |
+| Mit Vorschau | `classic` | Batch-Prompt → editierbare Vorschau → User bestätigt |
 
-### Ablauf (Guided Mode)
+### Ablauf — Automatisch (Standard)
 
-1. Gleicher Start, dann `runGuidedStep(actions)`
-2. Konfidenz ≥ 0.6 → direkt ausfüllen (`executeGuidedFillActions`)
-3. Konfidenz < 0.6 → synthetische `ask`-Aktion mit KI-Vorschlag als Chip
-4. `showNextGuidedQuestion()` → User antwortet → `handleGuidedAnswer()` → Agent läuft weiter
-5. Nutzerantworten in `agentState.sessionAnswers` — werden auf allen Folgeseiten an Prompt angehängt
-6. Auto-Navigate: Weiter/Submit automatisch klicken wenn keine offenen Fragen
+1. `startAgent()` → `applyDeterministicProfileFill()` (starke Profil-Matches direkt, kein API-Call)
+2. `runFieldByFieldAgent()`:
+   - Alle noch leeren/fehlerhaften Felder der Seite sammeln
+   - Für jedes Feld: `extras` + `sessionAnswers` auf exakten Label-Match prüfen → direkt füllen
+   - Falls kein Match: einzelner `groqRequest` (Non-Streaming, max_tokens 80) mit Kontext-Block + Feldinfo
+   - KI antwortet mit Wert → sofort `fillField()` + in Bubble anzeigen
+   - KI antwortet mit `?` → als `ask`-Aktion mit `selector` in Queue
+3. Nach allen Feldern: offene Fragen nacheinander stellen (`showGuidedQuestion`)
+4. Nach allen Antworten: Navigation/Submit via `handleGuidedNavigation()`
+5. Bei Seitennavigation: State in `faAgentResume`, `resumeAgentIfPending()` → `runFieldByFieldAgent()`
 
-### Agent-Prompt Inhalt
+### Ablauf — Mit Vorschau (Classic)
+
+1. `startAgent()` → `applyDeterministicProfileFill()`
+2. `runAgentStep()` → `buildAgentPrompt()` → Groq (Streaming, max_tokens 2048)
+3. `showAgentPreview(actions)` — editierbare Vorschau, User bestätigt
+4. `executeAgentActions(actions)` — ausführen
+5. Auto-Korrektur-Runde bei Validierungsfehlern (max. 1 Runde)
+
+### Field-by-Field Kontext-Block
 
 ```text
-PROFIL: <alle gesetzten Profilfelder>
-EXTRAS: <gelernte Zusatzfelder>
-[Berechnetes Alter: N]
+NUTZERPROFIL:
+<alle gesetzten Profilfelder>
 
-NUTZER-ANTWORTEN (direkt verwenden): <sessionAnswers>
-BEREITS AUSGEFÜLLT (vorherige Seiten): <filledFields der letzten Seiten>
+EXTRAS (gelernte Felder):
+<key: "value" Paare>
+
+NUTZER-ANTWORTEN (immer verwenden, nicht erneut fragen):
+<sessionAnswers>
+
+BEREITS AUSGEFÜLLT (vorherige Seiten):
+<filledFields der letzten Seiten>
+
+Alter: N
+
+FORMULARFELD: "Label" (type) [Pflichtfeld]
+Optionen: Opt1 | Opt2 | ...
+Hinweis: ...
+
+Antworte NUR mit dem Wert …
+```
+
+### Batch-Prompt (Classic Mode)
+
+```text
+NUTZERPROFIL + EXTRAS + NUTZER-ANTWORTEN + BEREITS AUSGEFÜLLT
 
 SEITE: <title> | <hostname>
 
@@ -120,10 +151,10 @@ FELDER:
 [name="x"] text ✱ "Label" [Wert="aktuell"] ❌"Fehlermeldung"
 [name="y"] select "Label" (Opt1 | Opt2 | ...)
 
-FORMAT + REGELN
+FORMAT + AUSFÜLL-STRATEGIE + PFLICHTREGELN
 ```
 
-### Action-Typen
+### Action-Typen (Classic/Batch)
 
 ```json
 {"action":"fill"|"select"|"check"|"click"|"submit"|"ask"|"done",
@@ -138,23 +169,25 @@ FORMAT + REGELN
 
 ### Konstanten
 
-- `AGENT_AUTO_SELECT_CONFIDENCE = 0.82` — unter diesem Wert kein Auto-Select in Vorschau
-- `GUIDED_MIN_CONFIDENCE = 0.6` — unter diesem Wert: ask statt fill in Guided Mode
+- `AGENT_AUTO_SELECT_CONFIDENCE = 0.82` — unter diesem Wert kein Auto-Select in Classic-Vorschau
 
 ### Agent-State
 
 ```javascript
 agentState = { active, guided, autoNavigate, sessionAnswers, filledFields, startUrl, lastFailures }
 guidedAskState = { active, queue, navAction }
+// queue-Einträge im field-by-field Modus haben: { action:'ask', label, question, options, selector }
 ```
 
-### Auto-Retry bei Parse-Fehler
+### Ask-Flow (Field-by-Field)
 
-`runAgentStep(retry=false/true)` — bei leerem Parse-Ergebnis einmaliger Retry mit explizitem "nur JSON" Hinweis.
+- `showGuidedQuestion(ask)` zeigt Frage mit optionalen Chips
+- `handleGuidedAnswer(text)` → füllt Feld direkt via `ask.selector` → `showNextGuidedQuestion()`
+- `showNextGuidedQuestion()`: Queue leer → `handleGuidedNavigation(navAction)` oder "Fertig"-Meldung
 
-### Auto-Korrektur
+### Auto-Retry (Classic)
 
-Nach `executeAgentActions`: 700ms warten, Felder auf Fehler scannen, bei Treffern automatisch `runAgentStep()` erneut (max. 1 Runde via `agentState.correctionRound`).
+`runAgentStep(retry=false/true)` — bei leerem Parse-Ergebnis einmaliger Retry mit explizitem "nur JSON"-Hinweis.
 
 ## Submit-Review & Fehlerhilfe
 
@@ -167,7 +200,9 @@ Nach `executeAgentActions`: 700ms warten, Felder auf Fehler scannen, bei Treffer
 
 **Header:** Logo + Seitentitel als Subtitle + Icon-Buttons (History, Profil, Dark Mode, Schließen)
 
-**Action Panel:** Primär-Button "Formular ausfüllen" + "Erklären"-Chip + aufklappbare Feldliste
+**Action Panel:** Primär-Button "Formular ausfüllen" + "Erklären"-Chip + aufklappbare Feldliste + Modus-Auswahl + Auto-Weiter-Toggle + Trust-Row. Wird automatisch ausgeblendet, wenn Profil- oder Verlauf-Panel geöffnet ist.
+
+**Profil-Panel / Verlauf-Panel:** Ersetzen beim Öffnen den Action-Panel und die Chat-Area vollständig. Schließen stellt den vorherigen Zustand wieder her.
 
 **Color System:** Light/Dark via CSS Custom Properties, `:host(.dark)` Toggle
 

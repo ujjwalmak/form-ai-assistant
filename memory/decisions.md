@@ -22,24 +22,6 @@ Single-File (`content.js`) mit Shadow DOM wird als aktive Architektur verwendet.
 
 ---
 
-## [2026-04-23] Entscheidung: API-Key nicht hardcoden (historisch)
-
-**Kontext:**
-User wollte Key hardcoden. GitHub Push Protection blockierte den Push mit detektiertem Groq-Key in content.js.
-
-**Entscheidung (damals):**
-Key wurde aus dem Code ausgelagert, um Push-Protection-Blocker zu umgehen.
-
-**Alternativen:**
-
-- GitHub-Secret bypassen via Link (erlaubt für diesen Key): abgelehnt, schlechte Praxis
-- Key im User weiterhin im Chat teilen: bereits passiert, Key ist als kompromittiert zu betrachten
-
-**Status heute:**
-Abgeloest durch Optionen-Seite + `chrome.storage.sync` (`faApiKey`).
-
----
-
 ## [2026-04-23] Entscheidung: Shadow DOM für UI-Isolation
 
 **Kontext:**
@@ -77,34 +59,30 @@ Groq mit `llama-3.1-8b-instant` — kostenloser Free Tier, sehr schnell, OpenAI-
 
 - API-Format ist OpenAI-kompatibel (messages array, choices[0].message.content)
 - Free Tier: 14.400 Req/Tag, 500K Tokens/Tag — ausreichend für Prototyp
+- Standard-Modell inzwischen auf `llama-3.3-70b-versatile` gewechselt
 
 ---
 
-## [2026-04-23] Entscheidung: Minimize-Fix via inline style statt CSS-Klasse allein (historisch)
+## [2026-04-23] Entscheidung: API-Key nicht hardcoden (historisch)
 
 **Kontext:**
-Minimize-Button funktionierte nicht wenn Panel im free-Modus war (gedraggt), weil `sidebar.style.height` (inline) die CSS-Klasse `.minimized { height: 56px }` überschreibt.
+User wollte Key hardcoden. GitHub Push Protection blockierte den Push mit detektiertem Groq-Key in content.js.
 
-**Entscheidung:**
-Minimize-Handler setzt `sidebar.style.height = '56px'` direkt in JS und speichert vorherige Höhe in `savedHeight`. CSS-Klasse bleibt für `overflow: hidden` und andere visuelle Effekte.
-
-**Alternativen:**
-
-- `!important` in CSS: funktioniert nicht gegen inline styles
-- Transition zu reiner JS-Höhensteuerung ohne CSS-Klasse: möglich, aber mehr Code
+**Entscheidung (damals):**
+Key wurde aus dem Code ausgelagert, um Push-Protection-Blocker zu umgehen.
 
 **Status heute:**
-Der Minimize-Button ist in der aktuellen UI nicht mehr Teil des aktiven Feature-Sets.
+Abgelöst durch Optionen-Seite + `chrome.storage.sync`.
 
 ---
 
-## [2026-04-30] Entscheidung: Profile-System mit structuring PROFILE_FIELDS
+## [2026-04-30] Entscheidung: Profile-System mit strukturierten PROFILE_FIELDS
 
 **Kontext:**
-Auto-Fill brauchte eine systematische Feldterkennung. PROFILE_FIELDS mit Keywords und autocomplete-Attributen erlauben intelligentes Matching.
+Auto-Fill brauchte eine systematische Felderkennung. PROFILE_FIELDS mit Keywords und autocomplete-Attributen erlauben intelligentes Matching.
 
 **Entscheidung:**
-Standard-Profilfelder werden strukturiert mit Keywords, Autocomplete-Werten und Labels definiert. `matchProfile()` matched Formularfelder dagegen. `FAKE_DATA` bleibt fuer Prototyping.
+Standard-Profilfelder werden strukturiert mit Keywords, Autocomplete-Werten und Labels definiert. `matchProfile()` matched Formularfelder dagegen. `FAKE_DATA` bleibt für Prototyping.
 
 **Alternativen:**
 
@@ -115,131 +93,99 @@ Standard-Profilfelder werden strukturiert mit Keywords, Autocomplete-Werten und 
 
 - Auto-Fill funktioniert auf vielen Formularen ohne AI-Hilfe
 - Neue Felder können leicht hinzugefügt werden
-- Storage speichert Profile für Wiederverwendung
-
----
-
-## [2026-05-07] Entscheidung: Ein API-Call pro Feld statt ein Batch-Call (historisch)
-
-**Kontext:**
-Agent Auto-Fill brauchte KI-Vorschläge für alle Formularfelder. Zwei Optionen: ein Batch-Call mit JSON-Antwort, oder ein Call pro Feld.
-
-**Entscheidung:**
-Ein API-Call pro Feld (max_tokens: 80). Nutzer sieht live wie jedes Feld befüllt wird.
-
-**Alternativen:**
-
-- Batch-Call mit JSON: schneller, aber keine visuelle Progression, KI-Antwort muss geparst werden
-- Streaming: komplexer, kein Mehrwert für kurze Feldwerte
-
-**Status heute:**
-Der aktive Agent erzeugt pro Schritt einen strukturierten Aktionsplan (JSON-Array) und fuehrt ihn nach User-Preview aus.
 
 ---
 
 ## [2026-05-07] Entscheidung: faExtras als separater Storage-Key
 
 **Kontext:**
-Felder wie "Webseite", "Steuernummer", "Fax" passen nicht in PROFILE_FIELDS. Optionen: PROFILE_FIELDS dynamisch erweitern, oder separates Key-Value-Store.
+Felder wie "Webseite", "Steuernummer", "Fax" passen nicht in PROFILE_FIELDS.
 
 **Entscheidung:**
 `faExtras` als separater `chrome.storage.local`-Key. Schema: `{ "Webseite": "https://...", "Fax": "+49 ..." }`.
 
-**Alternativen:**
-
-- PROFILE_FIELDS dynamisch erweitern: komplexer, bricht die statische Struktur
-- IndexedDB: zu viel Overhead für einfache Key-Value-Paare
-- faProfile mit beliebigen Keys erweitern: vermischt Schema mit freien Einträgen
-
 **Konsequenzen:**
 
 - faExtras ist einfach zu lesen, zu schreiben und anzuzeigen
-- matchExtras() macht fuzzy-matching damit leicht abweichende Labels trotzdem treffen
+- `matchExtras()` macht fuzzy-matching damit leicht abweichende Labels trotzdem treffen
 - Profil-Panel zeigt beides getrennt — klare UX-Trennung
 
 ---
 
-## [2026-05-07] Entscheidung: Lokales Matching vor KI-Call
+## [2026-05-14] Entscheidung: Action-Panel-First UI (Google-Gemini-Paradigma)
 
 **Kontext:**
-Frühere Version schickte alle Felder an die KI und hoffte, dass sie faExtras aus dem System-Prompt nutzt. Das hat nicht zuverlässig funktioniert (KI gab trotzdem null zurück).
+Research in Google's Gemini/Workspace AI-Muster zeigte: Action-fokussierte Sidepanels (suggest → interact → insert) übertreffen Chat-Interfaces für Form-Filling-Tools.
 
 **Entscheidung:**
-Zwei-Phasen-Matching: erst lokal (matchProfile + matchExtras), dann KI nur für wirklich unbekannte Felder.
+Umbau von Chat-first auf Action-Panel-first. Großer Primär-Button oben, Chat visuell sekundär.
+
+**Konsequenzen:**
+
+- `quick-strip` entfernt, durch Action Panel ersetzt
+- `greet()` / `hasGreeted` durch `updateActionPanel()` ersetzt
+- Feldliste jetzt im Action Panel (aufklappbar), nicht im Chat
+
+---
+
+## [2026-05-15] Entscheidung: Field-by-Field Agent statt Konfidenz-Schwelle
+
+**Kontext:**
+Ursprünglich (2026-05-14): Batch-Prompt mit `GUIDED_MIN_CONFIDENCE = 0.6` — Felder unter der Schwelle wurden zu `ask`-Aktionen. Problem: Beim Batch-Prompt ignorierte das Modell `extras`/gelernte Felder und lieferte ungenaue Vorschläge weil der Kontext zu groß war.
+
+**Entscheidung (2026-05-15, ersetzt den alten Ansatz):**
+`GUIDED_MIN_CONFIDENCE` entfernt. Stattdessen `runFieldByFieldAgent()` im Automatisch-Modus (`context`):
+
+1. Pro Feld: zuerst `sessionAnswers` + `extras` per exaktem Label-Match — kein API-Call
+2. Nur für wirklich unbekannte Felder: einzelner `groqRequest` (Non-Streaming, max_tokens 80) mit fokussiertem Kontext-Block
+3. KI antwortet `?` oder leer → `ask`-Aktion mit `selector` in Queue (kein Batch-Re-Run)
+4. Nach allen Feldern: offene Fragen stellen, dann Navigation
 
 **Alternativen:**
 
-- Alles an KI schicken: unzuverlässig, KI ignoriert manchmal gespeicherte Daten
-- Nur lokales Matching: zu begrenzt, KI kann aus Kontext sinnvolle Werte ableiten
+- Konfidenz-Schwelle beibehalten: Modell nutzte Extras trotzdem nicht zuverlässig, da Batch-Kontext zu groß
+- Immer fragen: zu viele Unterbrechungen
+- Nur Profil (kein KI-Fallback): zu viele leere Felder bei unbekannten Formularen
 
 **Konsequenzen:**
 
-- Gespeicherte Daten werden garantiert verwendet — kein Verlassen auf KI-Interpretation
-- Kürzere KI-Anfragen (nur unbekannte Felder)
-- Klare Trennung von Verantwortlichkeiten
+- `extras` und gelernte Felder werden jetzt zuverlässig per Label-Match direkt gefüllt
+- KI-Prompts pro Feld fokussierter und präziser (kleiner Kontext statt große Feldliste)
+- `sessionAnswers` verhindert weiterhin Doppel-Fragen auf Folgeseiten
 
 ---
 
-## [2026-04-30] Entscheidung: Dark Mode als Preference speichern
+## [2026-05-14] Entscheidung: Mehrere Profile als Array (faProfiles)
 
 **Kontext:**
-UI musste für verschiedene Webseiten-Designs arbeiten. Chrome Storage erlaubt Nutzerpräferenzen zu speichern.
+Single-Profile-System reichte nicht aus für Nutzer mit mehreren Identitäten (privat/geschäftlich, Familienmitglieder).
 
 **Entscheidung:**
-Dark Mode wird in chrome.storage.local gepuffert. CSS Custom Properties (@host.dark) steuern die Farben.
+`faProfiles` als Array `[{id, name, profile, extras}]`. In-place mutation der aktiven `profile`/`extras`-Objekte damit alle bisherigen Code-Pfade unverändert bleiben.
+
+**Konsequenzen:**
+
+- Migration: erstes Start legt "Hauptprofil" aus Legacy-`faProfile` an
+- Switcher-UI mit `+`/`×`-Buttons im Profil-Panel
+- Import/Export als JSON pro Profil
+
+---
+
+## [2026-05-15] Entscheidung: OpenRouter als automatischer Fallback
+
+**Kontext:**
+Groq hat ein Rate Limit (429) und gelegentliche Backend-Fehler (503 "Provider returned error"). OpenRouter bietet kostenlose Modelle als Backup. User: "open router habe ich nur als backup eingebaut, wenn groq das limit erreicht hat".
+
+**Entscheidung:**
+background.js fängt Groq 429 **und** 5xx nach allen Retries ab und wiederholt die Anfrage automatisch via OpenRouter (`meta-llama/llama-3.3-70b-instruct:free`). Toast im Sidebar informiert den Nutzer.
 
 **Alternativen:**
 
-- prefers-color-scheme Media Query: nicht ideal, User kann nicht override
-- Browser Extension Settings UI: aufwändiger
+- Nur 429 (Rate Limit): ursprüngliche Anforderung, aber 503 ist ebenso ein Nutzerproblem
+- Reverse-Fallback (OpenRouter → Groq): nicht gewünscht, nicht implementiert
 
 **Konsequenzen:**
 
-- User Preference bleibt über Sessions bestehen
-- Design bleibt auf allen Webseiten konsistent
-
----
-
-## [2026-04-30] Entscheidung: Extension-Icons in manifest statt als SVG
-
-**Kontext:**
-manifest.json brauchte Icons für verschiedene Chrome UI-Positionen (Toolbar, Popup, Extension Management).
-
-**Entscheidung:**
-PNG Icons (16, 32, 48, 128px) werden im manifest definiert und sollten im Root des Extension-Ordners liegen.
-
-**Konsequenzen:**
-
-- Professionelleres Erscheinungsbild
-- Chrome zeigt Icons in verschiedenen Größen an
-
----
-
-## [2026-05-14] Entscheidung: API-Key-Verwaltung via Optionen + storage.sync
-
-**Kontext:**
-Die dokumentierte `api-key.txt`-Loesung war nicht mehr der aktive Stand.
-
-**Entscheidung:**
-API-Key wird in der Optionen-Seite gepflegt und in `chrome.storage.sync` als `faApiKey` gespeichert.
-
-**Konsequenzen:**
-
-- Kein Key im Repository
-- Einheitlicher Setup-Flow fuer Nutzer
-- Fuer Produktion weiterhin Backend-Proxy erforderlich
-
----
-
-## [2026-05-14] Entscheidung: Doku auf aktiven Feature-Stand synchronisieren
-
-**Kontext:**
-Mehrere Dokumente enthielten veraltete Aussagen (u.a. Guided Mode, Minimize, `api-key.txt`, falsche Feldanzahl).
-
-**Entscheidung:**
-README, Short-/Long-Term-Memory und Known-Issues wurden auf den aktuellen Code-Stand gebracht.
-
-**Konsequenzen:**
-
-- Weniger Onboarding-Reibung
-- Klarere Erwartung, was wirklich implementiert ist
+- Modell-IDs ohne `/` (Groq-spezifisch) werden beim Fallback automatisch ersetzt
+- `_onProviderFallback`-Callback verbindet background.js-Signal mit `showToast()` im UI
+- `OPENROUTER_MODEL_REMAP` in background.js normalisiert Legacy-IDs (`openrouter/free` → `openrouter/auto`)
