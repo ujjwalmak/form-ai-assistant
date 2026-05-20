@@ -312,6 +312,22 @@
       </select>
     </section>
 
+    <!-- Supabase Sync -->
+    <section class="settings-card">
+      <h2 class="card-title">Supabase Sync <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px;">optional</span></h2>
+      <p class="desc">
+        Profildaten und Verlauf geräteübergreifend synchronisieren.
+        URL und Anon-Key aus dem Supabase-Dashboard eintragen.
+      </p>
+      <label class="field-label" for="supabaseUrl">Supabase Project URL</label>
+      <input type="text" id="supabaseUrl" placeholder="https://xxxx.supabase.co" autocomplete="off" spellcheck="false">
+      <label class="field-label" for="supabaseKey" style="margin-top:10px;">Supabase Anon Key</label>
+      <div class="input-row">
+        <input type="password" id="supabaseKey" placeholder="sb_..." autocomplete="off" spellcheck="false">
+        <button id="toggleSbKey" type="button">Anzeigen</button>
+      </div>
+    </section>
+
     <!-- Shortcuts -->
     <section class="settings-card">
       <h2 class="card-title">Tastenkürzel</h2>

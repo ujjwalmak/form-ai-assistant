@@ -44,13 +44,22 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": [
+        "fa-utils.js",
+        "fa-profile.js",
+        "fa-scanner.js",
+        "fa-fill.js",
+        "fa-styles.js",
+        "fa-supabase.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://api.groq.com/*",
-    "https://openrouter.ai/*"
+    "https://openrouter.ai/*",
+    "https://*.supabase.co/*"
   ]
 }

@@ -119,8 +119,8 @@ async function validateKey() {
 }
 
 chrome.storage.sync.get(
-  ['faProvider', 'faApiKey', 'faGroqApiKey', 'faOpenRouterApiKey', 'faModel', 'faAssistantMode'],
-  ({ faProvider, faApiKey, faGroqApiKey, faOpenRouterApiKey, faModel, faAssistantMode }) => {
+  ['faProvider', 'faApiKey', 'faGroqApiKey', 'faOpenRouterApiKey', 'faModel', 'faAssistantMode', 'faSupabaseUrl', 'faSupabaseKey'],
+  ({ faProvider, faApiKey, faGroqApiKey, faOpenRouterApiKey, faModel, faAssistantMode, faSupabaseUrl, faSupabaseKey }) => {
     savedKeys = {
       faApiKey: faApiKey || '',
       faGroqApiKey: faGroqApiKey || faApiKey || '',
@@ -133,6 +133,9 @@ chrome.storage.sync.get(
     $('provider').value = provider;
     $('assistantMode').value = normalizeAssistantMode(faAssistantMode);
     updateProviderUi(provider, { keepTypedKey: false });
+
+    if (faSupabaseUrl) $('supabaseUrl').value = faSupabaseUrl;
+    if (faSupabaseKey) $('supabaseKey').value = faSupabaseKey;
   }
 );
 
@@ -145,6 +148,13 @@ $('toggleKey').addEventListener('click', () => {
   const hidden = inp.type === 'password';
   inp.type = hidden ? 'text' : 'password';
   $('toggleKey').textContent = hidden ? 'Verbergen' : 'Anzeigen';
+});
+
+$('toggleSbKey').addEventListener('click', () => {
+  const inp = $('supabaseKey');
+  const hidden = inp.type === 'password';
+  inp.type = hidden ? 'text' : 'password';
+  $('toggleSbKey').textContent = hidden ? 'Verbergen' : 'Anzeigen';
 });
 
 let validateTimer;
@@ -171,6 +181,8 @@ $('save').addEventListener('click', () => {
     faApiKey: provider === 'groq' ? key : (savedKeys.faGroqApiKey || ''),
     faModel: $('model').value || cfg.defaultModel,
     faAssistantMode: normalizeAssistantMode($('assistantMode').value),
+    faSupabaseUrl: $('supabaseUrl').value.trim(),
+    faSupabaseKey: $('supabaseKey').value.trim(),
   };
 
   chrome.storage.sync.set(data, () => {
