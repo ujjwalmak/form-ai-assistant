@@ -37,3 +37,21 @@ CREATE POLICY "public read-write" ON fa_history USING (true) WITH CHECK (true);
 CREATE INDEX IF NOT EXISTS idx_fa_profiles_device  ON fa_profiles (device_id);
 CREATE INDEX IF NOT EXISTS idx_fa_history_device   ON fa_history  (device_id);
 CREATE INDEX IF NOT EXISTS idx_fa_history_ts       ON fa_history  (device_id, ts DESC);
+
+-- Form field tips (curated per domain, shown on field focus)
+CREATE TABLE IF NOT EXISTS form_fields (
+  id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  domain     TEXT        NOT NULL,
+  label_de   TEXT        NOT NULL,
+  tip_de     TEXT,
+  tip_en     TEXT,
+  tip_fr     TEXT,
+  tip_es     TEXT,
+  tip_tr     TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE form_fields ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public read" ON form_fields FOR SELECT USING (true);
+
+CREATE INDEX IF NOT EXISTS idx_form_fields_domain ON form_fields (domain);
