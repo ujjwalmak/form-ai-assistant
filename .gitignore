@@ -1,0 +1,6 @@
+.claude/
+memory/
+logs/
+Ideas
+api-key.txt
+*.local
