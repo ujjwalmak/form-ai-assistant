@@ -23,7 +23,8 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 
 #### Automatischer Modus (Field-by-Field)
 
-- Pro Feld: zuerst `extras` + `sessionAnswers` per Label-Match, dann KI mit fokussiertem Einzelprompt
+- Pro Feld: zuerst `extras` + `sessionAnswers` per Label-Match (exakt + fuzzy Token-Overlap), dann KI
+- Unbekannte Felder werden **gebatcht** (1 API-Call pro 12 Felder statt 1 Call pro Feld); bei Parse-Fehlern fokussierter Einzelprompt als Fallback
 - Wirklich unbekannte Felder werden als Chip-Frage gestellt
 - Nutzerantworten werden als `sessionAnswers` gespeichert und auf allen Folgeseiten wiederverwendet
 - Auto-Navigate-Toggle: Weiter-/Submit-Buttons werden automatisch geklickt
@@ -34,6 +35,8 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 - `applyDeterministicProfileFill()` — starke Profil-Matches werden immer zuerst direkt gefuellt (kein API-Call)
 - Automatische Korrektur-Runde bei Validierungsfehlern nach dem Fuellen (Vorschau-Modus)
 - Weiterfuehrung ueber mehrseitige Formulare (Navigation + Resume mit `faAgentResume`)
+- Loop-Schutz: Auto-Navigation stoppt nach max. 12 Seiten (`AGENT_MAX_PAGES`)
+- Live-Fortschritt im Agent-Status (`Agent läuft… 4/12`) + Abschluss-Zusammenfassung mit Seitenzahl
 - `waitForFields()` — wartet bis zu 4 Sekunden auf dynamisch geladene Felder
 
 ### Formularhilfe
@@ -64,7 +67,9 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 
 ### UI
 
-- Rechts gedockte Sidebar, per Drag loesbar und frei positionierbar
+- Modernes Indigo/Violett-Design (Inter-Font, Glas-Effekt, Gradient-Akzente, Micro-Animationen)
+- Schwebende Sidebar mit abgerundeten Ecken, per Drag loesbar und frei positionierbar
+- Trigger-Button mit Feldanzahl-Badge
 - Resize an allen Seiten und Ecken
 - Dark-Mode-Toggle im Header
 - Fokusbezogener Auto-Fill-Tipp fuer das aktive Feld

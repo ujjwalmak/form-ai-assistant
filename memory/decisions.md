@@ -189,3 +189,23 @@ background.js fängt Groq 429 **und** 5xx nach allen Retries ab und wiederholt d
 - Modell-IDs ohne `/` (Groq-spezifisch) werden beim Fallback automatisch ersetzt
 - `_onProviderFallback`-Callback verbindet background.js-Signal mit `showToast()` im UI
 - `OPENROUTER_MODEL_REMAP` in background.js normalisiert Legacy-IDs (`openrouter/free` → `openrouter/auto`)
+
+---
+
+## [2026-06-11] Entscheidung: Batch-AI-Call + Design-System 2.0
+
+**Kontext:**
+Der Field-by-Field-Agent machte 1 API-Call pro unbekanntem Feld (langsam, Rate-Limit-anfällig). UI sah nach Google-Material aus, sollte moderner werden.
+
+**Entscheidung:**
+
+1. **Batch-Agent:** Unbekannte Felder werden in Chunks à 12 mit EINEM JSON-Prompt gefüllt (`{"1":"Wert","2":"?"}`). Bei Parse-Fehler: Einzelfeld-Fallback (alte Logik). Deterministische Phase (Profil/Extras/SessionAnswers) bleibt vorgelagert — damit bleibt die Kernerkenntnis vom 2026-05-15 (Extras zuverlässig per Label-Match) erhalten.
+2. **Fuzzy-Label-Match:** `labelsRoughlyMatch()` (exakt → Containment → Token-Overlap ≥ 60 %) für Extras/SessionAnswers — weniger Rückfragen auf Folgeseiten.
+3. **Loop-Schutz:** `AGENT_MAX_PAGES = 12`, Seitenzähler wandert durch `faAgentResume.pages`.
+4. **Design 2.0:** fa-styles.js komplett neu — Indigo/Violett-Gradient, Inter statt Roboto, schwebende Glas-Sidebar (backdrop-filter, 24px Radius, 14px Inset), Trigger-Badge mit Feldanzahl, Shine-Animation auf Primär-Button. Alle Klassennamen unverändert (kein JS-Bruch). options.html auf gleiche Tokens umgestellt. Version 2.0.
+
+**Konsequenzen:**
+
+- Formular mit 12 unbekannten Feldern: 1 API-Call statt 12 → deutlich schneller
+- Agent-Status zeigt Live-Fortschritt (`Agent läuft… 4/12`)
+- Abschlussmeldung via `agentDoneMessage()` (Felder + Seitenanzahl)
