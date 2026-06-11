@@ -18,6 +18,12 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 ### KI-Agent
 
 - **⚡ Agent** analysiert Formularfelder und füllt sie automatisch aus
+- **Agentischer Chat**: Die KI kann Felder direkt aus dem Chat heraus ausfüllen ("Trag bei E-Mail x@y.de ein") — Antworten enthalten einen `<<<ACTIONS … ACTIONS>>>`-Block (toleranter Parser: auch ```json-Fences und nackte JSON-Arrays), der validiert und ausgeführt wird: fill/select/**check inkl. Abwählen** ("nein"), Radios per Optionstext, niemals submit
+- **Datums-Intelligenz**: `fillField` normalisiert Werte für `date`/`month`/`week`/`time`/`datetime-local` — inkl. relativer Angaben ("nächster Monat", "in 2 Wochen", "ab sofort", DE+EN) und Formaten wie `20.02.2000` oder `02.2027`
+- **Antwort-Normalisierung**: Tippt der Nutzer auf eine Agent-Rückfrage etwas, das das Feld ablehnt ("Next month" in ein Datumsfeld), wird die Antwort verifiziert, per Mini-KI-Call ins Feldformat konvertiert und erneut gefüllt; erst nach 2 Fehlversuchen kommt eine Rückfrage
+- **Chat-Gedächtnis**: Konversationen werden pro Domain gespeichert (`faChatMem`, max. 24 Nachrichten, 12 Domains LRU) und beim nächsten Seitenaufruf wiederhergestellt — der Agent erinnert sich über Seitenwechsel und Sessions hinweg
+- **Live-Kontext**: Vor jeder Chat-Anfrage wird die Seite neu gescannt — die KI sieht aktuelle Feldwerte, Selektoren und Validierungszustand
+- **Selbstkorrektur**: Nach dem automatischen Ausfüllen prüft der Agent Validierungsfehler und korrigiert ungültige Felder eigenständig (eine Runde, inkl. Fehlermeldung der Seite im Prompt); erst danach fragt er den Nutzer
 - **Automatisch** (Standard): Feld-für-Feld — Profile + gelernte Extras direkt, KI nur für wirklich unbekannte Felder, fragt gezielt nach wenn nötig
 - **Mit Vorschau**: editierbare Vorschau vor jeder Ausfuehrung
 
@@ -67,11 +73,14 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 
 ### UI
 
-- Modernes Indigo/Violett-Design (Inter-Font, Glas-Effekt, Gradient-Akzente, Micro-Animationen)
+- **Aurora-Glass-Design**: Violett→Fuchsia→Pink-Spektrum auf tiefem Glas (32px Blur + Film-Grain), rotierender Aurora-Leuchtrahmen um die Sidebar, animierte Aurora-Blobs im Action-Panel, Gradient-Wortmarke, KI-Orb-Avatare an jeder Antwort, rechtsbündige Gradient-Bubbles für Nutzer-Nachrichten, glühender Fortschrittsbalken, federnde Micro-Interaktionen (respektiert `prefers-reduced-motion`)
 - Schwebende Sidebar mit abgerundeten Ecken, per Drag loesbar und frei positionierbar
 - Trigger-Button mit Feldanzahl-Badge
 - Resize an allen Seiten und Ecken
 - Dark-Mode-Toggle im Header
+- Vorschlag-Chips im Startzustand (Formular erklären · Was fehlt noch? · ⚡ Ausfüllen)
+- „Neuer Chat"-Button im Header leert Verlauf + Gedächtnis der aktuellen Domain
+- Wiederhergestellte Unterhaltungen erscheinen gedimmt unter einem „Gedächtnis aktiv"-Trenner
 - Fokusbezogener Auto-Fill-Tipp fuer das aktive Feld
 - Toast-Benachrichtigungen (z. B. bei automatischem Provider-Fallback)
 - Tastenkurzbefehle: `Alt+Shift+F` (oeffnen/schliessen), `Alt+Shift+S` (Agent starten)
@@ -109,6 +118,7 @@ Alle Requests laufen via `background.js` (Service Worker) als CSP-sicheres Routi
 | `faProfiles` | local | Array aller Profile `[{id, name, profile, extras}]` |
 | `faActiveProfileId` | local | ID des aktiven Profils |
 | `faHistory` | local | Array der letzten 30 Agent-Sitzungen |
+| `faChatMem` | local | Chat-Gedächtnis pro Domain `{hostname: {messages, updated}}` |
 | `faPosition` | local | Sidebar-Position |
 | `faDarkMode` | local | Boolean |
 | `faAgentResume` | session | Agent-State fuer Weiterführung nach Navigation |

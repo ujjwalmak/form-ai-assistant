@@ -167,6 +167,7 @@
             <div class="logo-text"><span class="logo-name">FormAssist</span><span class="logo-sub" id="fa-ctx-title"></span></div>
           </div>
           <div class="header-btns">
+            <button class="icon-btn" id="fa-new-chat" title="Neuer Chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
             <button class="icon-btn" id="fa-history-btn" title="Verlauf"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></button>
             <button class="icon-btn" id="fa-profile-btn" title="Profil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke-width="2"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></button>
             <button class="icon-btn" id="fa-dark-btn" title="Dark Mode"><svg viewBox="0 0 24 24" id="fa-dark-icon"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></button>
@@ -515,6 +516,11 @@
     }
 
     $('fa-history-btn').addEventListener('click', () => { if (historyVisible) hideHistory(); else showHistory(); });
+    $('fa-new-chat').addEventListener('click', () => {
+      if (profileVisible) hideProfile();
+      if (historyVisible) hideHistory();
+      clearChat();
+    });
     $('fa-history-clear').addEventListener('click', () => {
       faHistory = [];
       chrome.storage.local.set({ faHistory });
@@ -839,7 +845,15 @@
             <div class="re-icon">${formIcon}</div>
             <div class="re-title">${allFields.length} Felder erkannt${stepNote}</div>
             ${hostname ? `<div class="re-sub">${hostname}</div>` : ''}
-            <div class="re-hint">Starte den Agent zum automatischen Ausfüllen — oder stelle unten eine Frage.</div>`;
+            <div class="re-hint">Starte den Agent zum automatischen Ausfüllen — oder stelle unten eine Frage.</div>
+            <div class="re-chips">
+              <button class="re-chip" data-suggest="explain">Formular erklären</button>
+              <button class="re-chip" data-suggest="missing">Was fehlt noch?</button>
+              <button class="re-chip primary" data-suggest="agent">⚡ Ausfüllen</button>
+            </div>`;
+          emptyEl.querySelector('[data-suggest="explain"]')?.addEventListener('click', () => askFormSummary());
+          emptyEl.querySelector('[data-suggest="missing"]')?.addEventListener('click', () => send('Welche Pflichtfelder sind noch leer oder ungültig? Liste sie kurz auf.'));
+          emptyEl.querySelector('[data-suggest="agent"]')?.addEventListener('click', () => startAgent());
         } else {
           emptyEl.innerHTML = `
             <div class="re-icon">${eyeIcon}</div>
@@ -1030,7 +1044,7 @@
       dismissEmpty();
       const div = document.createElement('div');
       div.id = 'fa-typing'; div.className = 'typing-row';
-      div.innerHTML = `<div class="typing-bubble"><div class="dot"></div></div>`;
+      div.innerHTML = `<div class="typing-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
@@ -1042,6 +1056,139 @@
 
     let history       = [];
     let activeFieldEl = null;
+
+    // ── Persistent chat memory (per domain, survives page loads) ─────────
+    const CHAT_MEM_KEY = 'faChatMem';
+    const CHAT_MEM_MAX_MSGS = 24;
+    const CHAT_MEM_MAX_DOMAINS = 12;
+
+    function saveChatMemory() {
+      const trimmed = history.slice(-CHAT_MEM_MAX_MSGS)
+        .map(m => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
+      chrome.storage.local.get([CHAT_MEM_KEY], stored => {
+        const mem = stored[CHAT_MEM_KEY] || {};
+        mem[location.hostname] = { messages: trimmed, updated: Date.now() };
+        const pruned = Object.fromEntries(
+          Object.entries(mem)
+            .sort((a, b) => (b[1].updated || 0) - (a[1].updated || 0))
+            .slice(0, CHAT_MEM_MAX_DOMAINS)
+        );
+        chrome.storage.local.set({ [CHAT_MEM_KEY]: pruned });
+      });
+    }
+
+    function restoreChatMemory() {
+      chrome.storage.local.get([CHAT_MEM_KEY], stored => {
+        const entry = stored[CHAT_MEM_KEY]?.[location.hostname];
+        if (!entry?.messages?.length) return;
+        history = entry.messages.map(m => ({ role: m.role, content: m.content }));
+        dismissEmpty();
+        const divider = document.createElement('div');
+        divider.className = 'chat-divider';
+        divider.innerHTML = '<span>Frühere Unterhaltung · Gedächtnis aktiv</span>';
+        messagesEl.appendChild(divider);
+        entry.messages.slice(-6).forEach(m => {
+          const div = document.createElement('div');
+          div.className = `msg ${m.role === 'user' ? 'user' : 'ai'} restored`;
+          const bubble = document.createElement('div');
+          bubble.className = 'bubble';
+          if (m.role === 'user') {
+            bubble.innerHTML = textToHtml(String(m.content).split('\n')[0].slice(0, 220));
+          } else {
+            bubble.innerHTML = renderMarkdown(splitActionBlock(m.content).text.slice(0, 600));
+          }
+          div.appendChild(bubble);
+          messagesEl.appendChild(div);
+        });
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
+    }
+
+    function clearChat() {
+      history = [];
+      messagesEl.innerHTML = '<div class="results-empty" id="fa-results-empty"></div>';
+      chrome.storage.local.get([CHAT_MEM_KEY], stored => {
+        const mem = stored[CHAT_MEM_KEY] || {};
+        delete mem[location.hostname];
+        chrome.storage.local.set({ [CHAT_MEM_KEY]: mem });
+      });
+      updateActionPanel();
+      showToast('Neuer Chat — Gedächtnis für diese Seite geleert');
+    }
+
+    // ── Chat actions: the AI can fill fields directly from a reply ───────
+    // Tolerant parsing: official <<<ACTIONS … ACTIONS>>> marker (also unclosed),
+    // ```json fenced arrays, or a bare trailing JSON array with "action" keys —
+    // smaller models don't always follow the marker format exactly.
+    function splitActionBlock(raw) {
+      const text = String(raw || '');
+      let payload = null;
+      let stripped = text;
+
+      const marker = text.match(/<<<ACTIONS([\s\S]*?)(?:ACTIONS>>>|$)/);
+      if (marker) {
+        payload = marker[1];
+        stripped = text.replace(marker[0], '');
+      } else {
+        const fence = text.match(/```(?:json|actions)?\s*(\[[\s\S]*?\])\s*```/i);
+        if (fence && /"action"/.test(fence[1])) {
+          payload = fence[1];
+          stripped = text.replace(fence[0], '');
+        } else {
+          const bare = text.match(/\[\s*\{[\s\S]*?"action"[\s\S]*?\}\s*\]\s*$/);
+          if (bare) {
+            payload = bare[0];
+            stripped = text.replace(bare[0], '');
+          }
+        }
+      }
+
+      if (!payload) return { text: text.trim(), actions: [] };
+      const actions = sanitizeAgentActions(parseModelJsonArray(payload))
+        .filter(a => ['fill', 'select', 'check'].includes(a.action));
+      return { text: stripped.trim(), actions };
+    }
+
+    async function executeChatActions(actions) {
+      if (!actions.length) return;
+      let applied = 0;
+      const rows = [];
+      for (const act of actions.slice(0, 20)) {
+        const el = resolveActionElement(act);
+        if (!el) { rows.push({ ok: false, label: act.label || act.selector, note: 'nicht gefunden' }); continue; }
+        let ok = false;
+        let note = act.value || '';
+        const type = (el.type || '').toLowerCase();
+
+        if (act.action === 'check') {
+          const wantOff = /^(nein|no|false|0|aus|off|uncheck(?:ed)?)$/i.test(String(act.value || '').trim());
+          if (type === 'radio') {
+            fillField(el, act.value || act.label || '');
+            ok = isActionApplied(el, 'check');
+          } else {
+            if (el.checked === wantOff) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
+            ok = el.checked === !wantOff;
+            note = wantOff ? 'abgewählt' : 'angekreuzt';
+          }
+        } else {
+          fillField(el, act.value || '');
+          ok = isActionApplied(el, act.action, act.value || '');
+        }
+
+        if (ok) { applied++; highlightField(el); }
+        rows.push({ ok, label: act.label || act.selector, note: ok ? note : 'nicht übernommen' });
+        await sleep(60);
+      }
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble action-result';
+      bubble.innerHTML = `<div class="ar-hdr">${applied ? '✓' : '✗'} ${applied} Feld${applied === 1 ? '' : 'er'} ausgefüllt</div>`
+        + rows.map(r => `<div class="ar-row ${r.ok ? 'ok' : 'fail'}"><span class="ar-icon">${r.ok ? '✓' : '✗'}</span><span class="ar-label">${escapeHtml(r.label || '')}</span>${r.note ? `<span class="ar-value">${escapeHtml(String(r.note).slice(0, 40))}</span>` : ''}</div>`).join('');
+      div.appendChild(bubble);
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
 
     function createStreamBubble() {
       const div = document.createElement('div');
@@ -1134,6 +1281,10 @@
           if (!value) continue;
           normalized.value = value;
         }
+        if (action === 'check') {
+          const value = toSafeText(item.value, 60);
+          if (value) normalized.value = value; // allows "nein"/"false" → uncheck
+        }
         if (action === 'click') normalized.isNavigation = !!item.isNavigation;
         cleaned.push(normalized);
         if (cleaned.length >= 150) break;
@@ -1154,9 +1305,14 @@
       const useStream = opts.render !== false;
 
       try {
+        // Re-scan the page so the model sees live field values (not the
+        // snapshot from page load) — required for accurate chat actions.
+        let liveSystem = SYSTEM;
+        try { liveSystem = buildSystemPrompt(extractRichContext(), profile, extras); } catch {}
+
         const reqBody = {
-          model: _model, max_tokens: opts.maxTokens || 400, stream: useStream,
-          messages: [{ role: 'system', content: SYSTEM }, ...history.slice(-6)],
+          model: _model, max_tokens: opts.maxTokens || 500, stream: useStream,
+          messages: [{ role: 'system', content: liveSystem }, ...history.slice(-12)],
         };
 
         // ── Non-streaming path ────────────────────────────────────────
@@ -1164,7 +1320,7 @@
           const data = await groqRequest(key, reqBody);
           removeTyping();
           const reply = data.choices?.[0]?.message?.content?.trim();
-          if (reply) { history.push({ role: 'assistant', content: reply }); return reply; }
+          if (reply) { history.push({ role: 'assistant', content: reply }); saveChatMemory(); return reply; }
           addMsg('ai', 'Unbekannter Fehler.'); history.pop(); return '';
         }
 
@@ -1186,7 +1342,8 @@
               const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
               if (delta) {
                 rawText += delta;
-                streamBubble.innerHTML = renderMarkdown(rawText);
+                // Hide a (possibly partial) action block while streaming
+                streamBubble.innerHTML = renderMarkdown(rawText.split('<<<ACTIONS')[0]);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
               }
             } catch {}
@@ -1196,9 +1353,16 @@
         const fullText = rawText.trim();
         if (fullText) {
           history.push({ role: 'assistant', content: fullText });
-          streamBubble.innerHTML = renderMarkdown(fullText);
-          streamBubble.classList.add('copyable');
-          addCopyButton(streamBubble, fullText);
+          saveChatMemory();
+          const { text: visibleText, actions } = splitActionBlock(fullText);
+          if (visibleText) {
+            streamBubble.innerHTML = renderMarkdown(visibleText);
+            streamBubble.classList.add('copyable');
+            addCopyButton(streamBubble, visibleText);
+          } else {
+            msgDiv.remove();
+          }
+          if (actions.length) await executeChatActions(actions);
         } else {
           msgDiv.remove();
           addMsg('ai', 'Unbekannter Fehler.'); history.pop();
@@ -1300,6 +1464,51 @@
       return null;
     }
 
+    // Convert a free-form user answer ("nächster Monat", "zwanzigster Februar")
+    // into the exact value the field accepts — one small, fast AI call.
+    async function aiNormalizeFieldValue(el, label, raw) {
+      try {
+        const key = await loadKey();
+        if (!key) return null;
+        const type = el.tagName === 'SELECT' ? 'select' : ((el.type || 'text').toLowerCase());
+        const options = el.tagName === 'SELECT'
+          ? Array.from(el.options).map(o => clean(o.text)).filter(Boolean).slice(0, 15)
+          : [];
+        const fmt = {
+          date: 'YYYY-MM-DD', month: 'YYYY-MM', week: 'YYYY-Www',
+          time: 'HH:MM', 'datetime-local': 'YYYY-MM-DDTHH:MM', number: 'nur Ziffern',
+        }[type];
+        const prompt = [
+          `Heute ist ${new Date().toISOString().split('T')[0]}.`,
+          `Formularfeld: "${label}" (Typ: ${type})${fmt ? ` — erwartetes Format: ${fmt}` : ''}`,
+          options.length ? `Optionen: ${options.join(' | ')}` : '',
+          `Nutzer-Antwort: "${raw}"`,
+          '',
+          options.length
+            ? 'Wähle die am besten passende Option. Antworte NUR mit der Option EXAKT wie angegeben, oder "?" wenn keine passt.'
+            : 'Wandle die Antwort in den exakten Feldwert um (relative Angaben wie "nächster Monat" anhand des heutigen Datums umrechnen). Antworte NUR mit dem Wert, oder "?".',
+        ].filter(Boolean).join('\n');
+        const data = await groqRequest(key, { model: _model, max_tokens: 40, messages: [{ role: 'user', content: prompt }] });
+        const v = String(data?.choices?.[0]?.message?.content || '')
+          .split('\n')[0].replace(/^["']|["']$/g, '').trim();
+        if (!v || v === '?' || /^unbekannt$/i.test(v)) return null;
+        return v.slice(0, 200);
+      } catch { return null; }
+    }
+
+    // Fill + verify; if the raw value is rejected by the field, normalize it
+    // via AI and retry once. Returns the value that stuck, or null.
+    async function fillFieldVerified(el, label, raw) {
+      fillField(el, raw);
+      if (isActionApplied(el, 'fill', raw)) return raw;
+      const norm = await aiNormalizeFieldValue(el, label, raw);
+      if (norm && normalizeForCompare(norm) !== normalizeForCompare(raw)) {
+        fillField(el, norm);
+        if (isActionApplied(el, 'fill', norm)) return norm;
+      }
+      return null;
+    }
+
     function agentDoneMessage() {
       const total = agentState.filledFields.length;
       const pages = (agentState.pages || 0) + 1;
@@ -1354,10 +1563,10 @@
         return current === expected || rawValue === expected || current.includes(expected) || expected.includes(current);
       }
 
-      if (type === 'date') {
-        const expectedIso = parseDateToISO(expectedValue) || expected;
-        const currentIso = parseDateToISO(current) || current;
-        return currentIso === expectedIso;
+      if (['date', 'month', 'week', 'time', 'datetime-local'].includes(type)) {
+        const expectedNorm = normalizeTemporalValue(type, expectedValue) || parseDateToISO(expectedValue) || expected;
+        const currentNorm  = normalizeTemporalValue(type, current) || current;
+        return normalizeForCompare(currentNorm) === normalizeForCompare(expectedNorm);
       }
 
       return current === expected || current.includes(expected) || expected.includes(current);
@@ -1372,7 +1581,12 @@
       if (el) return el;
       const wanted = normalizeForCompare(act.label);
       if (!wanted) return null;
-      return allFields.find(f => f?.el && isVisible(f.el) && normalizeForCompare(f.label) === wanted)?.el || null;
+      const exact = allFields.find(f => f?.el && isVisible(f.el) && normalizeForCompare(f.label) === wanted)?.el;
+      if (exact) return exact;
+      // Fuzzy fallback over a fresh scan — model labels rarely match 1:1,
+      // and SPA re-renders can detach the originally scanned elements.
+      const fresh = extractRichContext().forms.flatMap(f => f.allFields);
+      return fresh.find(f => f?.el && isVisible(f.el) && labelsRoughlyMatch(f.label, act.label))?.el || null;
     }
 
     function applyDeterministicProfileFill() {
@@ -1568,14 +1782,17 @@
         return;
       }
 
-      fillField(el, answer);
-      if (!isActionApplied(el, 'fill', answer)) {
+      const appliedValue = await fillFieldVerified(el, pending.label, answer);
+      if (appliedValue === null) {
         const optionText = pending.options?.length ? ` Mögliche Optionen: ${pending.options.slice(0, 6).join(', ')}.` : '';
-        addMsg('ai', `Der Wert passt noch nicht zu **${pending.label}**.${optionText} Bitte antworte präziser.`, null, { copy: false });
+        addMsg('ai', renderMarkdown(`Der Wert passt noch nicht zu **${pending.label}**.${optionText} Bitte antworte präziser.`), null, { copy: false });
         return;
       }
+      if (appliedValue !== answer) {
+        addMsg('ai', renderMarkdown(`Verstanden — ich habe **${appliedValue}** eingetragen.`), null, { copy: false });
+      }
 
-      agentState.filledFields.push({ label: pending.label, value: answer, url: location.href });
+      agentState.filledFields.push({ label: pending.label, value: appliedValue, url: location.href });
       manualAssistState.pending = null;
       await sleep(200);
 
@@ -1695,6 +1912,7 @@
         '- Felder mit ❌ haben einen Validierungsfehler — korrigierten Wert liefern',
         '- Alle anderen leeren Felder MÜSSEN befüllt werden wenn ein Wert ableitbar ist',
         '- SELECT: value muss exakt einer der angegebenen Optionen entsprechen — wähle die am besten passende',
+        '- Datumsfelder IMMER als ISO: date→YYYY-MM-DD, month→YYYY-MM, time→HH:MM',
         '- isNavigation:true für alle Weiter/Nächste/Fortfahren-Buttons',
         '- action="submit" NUR für die finale Abgabe des Formulars',
         '- confidence angeben: 0.0 (sehr unsicher) bis 1.0 (sehr sicher)',
@@ -1864,7 +2082,7 @@
           '',
           'Gib für jedes Feld den Wert an. Antworte NUR mit einem JSON-Objekt, Schlüssel = Feldnummer:',
           '{"1":"Wert","2":"?"}',
-          'Regeln: "?" wenn kein Wert aus Profil/Kontext ableitbar ist. Bei Feldern mit Optionen EXAKT eine der Optionen wählen. Keine Erklärung, kein Markdown.',
+          'Regeln: "?" wenn kein Wert aus Profil/Kontext ableitbar ist. Bei Feldern mit Optionen EXAKT eine der Optionen wählen. Datumsfelder IMMER als ISO (date→YYYY-MM-DD, month→YYYY-MM, time→HH:MM). Keine Erklärung, kein Markdown.',
         ].join('\n');
         const data = await groqRequest(key, {
           model: _model,
@@ -1885,7 +2103,7 @@
         const hintStr = f.hint ? `\nHinweis: ${f.hint}` : '';
         const instrStr = f.options.length
           ? 'Antworte NUR mit einer der Optionen EXAKT wie angegeben, oder "?" wenn keine passt.'
-          : 'Antworte NUR mit dem Wert (max. eine kurze Zeile), oder "?" wenn wirklich kein Wert ableitbar ist.';
+          : 'Antworte NUR mit dem Wert (max. eine kurze Zeile), oder "?" wenn wirklich kein Wert ableitbar ist. Datumsfelder als ISO (date→YYYY-MM-DD, month→YYYY-MM).';
         const prompt = [
           contextBlock,
           '',
@@ -1931,6 +2149,51 @@
       updateGuidedProgress();
 
       if (!agentState.active) return;
+
+      // Autonomous correction round: re-ask the AI for fields the page now
+      // marks as invalid, including the validation message — no user input.
+      if (!agentState.correctionRound) {
+        await sleep(400);
+        const errFields = fields.filter(f =>
+          f.el && isVisible(f.el) && (getError(f.el) || (f.el.willValidate && !f.el.checkValidity()))
+        );
+        if (errFields.length) {
+          agentState.correctionRound = 1;
+          const corrBubble = createAgentBubble();
+          const corrHdr = corrBubble.querySelector('.fa-agent-hdr');
+          if (corrHdr) corrHdr.textContent = `Korrigiere ${errFields.length} ungültige${errFields.length === 1 ? 's' : ''} Feld${errFields.length === 1 ? '' : 'er'}…`;
+          agentStatusBubble = corrBubble;
+          let corrected = 0;
+          for (const f of errFields.slice(0, 8)) {
+            if (!agentState.active) break;
+            const errMsg = getError(f.el) || f.el.validationMessage || '';
+            const curVal = getCurrentFieldValue(f.el);
+            try {
+              const raw = await askSingleFieldValue({
+                ...f,
+                hint: [f.hint, errMsg ? `Validierungsfehler: "${errMsg}"` : '', curVal ? `Abgelehnter Wert: "${curVal}"` : '']
+                  .filter(Boolean).join(' · '),
+              });
+              const v = sanitizeValue(raw);
+              if (!isUnknown(v) && normalizeForCompare(v) !== normalizeForCompare(curVal)) {
+                fillField(f.el, v);
+                if (isActionApplied(f.el, 'fill', v)) {
+                  corrected++;
+                  appendAgentRow('✓', f.label, v);
+                  agentState.filledFields.push({ label: f.label, value: v, url: location.href });
+                  continue;
+                }
+              }
+              appendAgentRow('✗', f.label, errMsg.slice(0, 40) || 'weiter ungültig');
+              queueAsk(f);
+            } catch {
+              appendAgentRow('✗', f.label, 'Fehler');
+            }
+          }
+          finalizeAgentBubble(corrected);
+          if (!agentState.active) return;
+        }
+      }
 
       if (asks.length) {
         updateGuidedProgress(`${asks.length} Rückfrage${asks.length > 1 ? 'n' : ''} …`);
@@ -2338,17 +2601,34 @@
       const ask = guidedAskState.queue.shift();
       if (!ask) return;
 
-      agentState.sessionAnswers[ask.label] = text;
+      let storedValue = text;
 
-      // Field-by-field: fill the stored element directly
+      // Field-by-field: fill the stored element, verify, normalize via AI if rejected
       if (ask.selector) {
         const el = resolveActionElement(ask);
         if (el) {
-          fillField(el, text);
-          agentState.filledFields.push({ label: ask.label, value: text, url: location.href });
+          const appliedValue = await fillFieldVerified(el, ask.label, text);
+          if (appliedValue !== null) {
+            storedValue = appliedValue;
+            agentState.filledFields.push({ label: ask.label, value: appliedValue, url: location.href });
+            if (appliedValue !== text) {
+              addMsg('ai', renderMarkdown(`Verstanden — ich habe **${appliedValue}** eingetragen.`), null, { copy: false });
+            }
+          } else {
+            ask._attempts = (ask._attempts || 0) + 1;
+            if (ask._attempts < 2) {
+              guidedAskState.queue.unshift(ask);
+              addMsg('ai', renderMarkdown(`"${text}" passt leider nicht zum Format von **${ask.label}**. Versuch es bitte konkreter (z. B. ein genaues Datum oder eine der Optionen).`), null, { copy: false });
+              return;
+            }
+            addMsg('ai', renderMarkdown(`**${ask.label}** konnte ich nicht automatisch übernehmen — bitte trag den Wert manuell ein.`), null, { copy: false });
+            const target = resolveActionElement(ask);
+            if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightField(target); }
+          }
         }
       }
 
+      agentState.sessionAnswers[ask.label] = storedValue;
       await sleep(150);
       showNextGuidedQuestion();
     }
@@ -2968,6 +3248,7 @@
     }
 
     syncFromSupabase();
+    restoreChatMemory();
     resumeAgentIfPending();
 
     // ── Action panel ─────────────────────────────────────────────────

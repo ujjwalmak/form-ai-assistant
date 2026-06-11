@@ -51,6 +51,41 @@ function tryDatePickerLib(el, text) {
   return false;
 }
 
+// Convert free-form value into the exact string a temporal input accepts.
+// Returns null if the type is not temporal or the value cannot be resolved.
+function normalizeTemporalValue(type, text) {
+  if (!['date', 'month', 'week', 'time', 'datetime-local'].includes(type)) return null;
+  const t = String(text).trim();
+  if (type === 'time') {
+    const m = t.match(/^(\d{1,2})[:.](\d{2})/);
+    return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+  }
+  if (type === 'month') {
+    const ym = t.match(/^(\d{4})-(\d{1,2})$/);                 // YYYY-M(M)
+    if (ym) return `${ym[1]}-${ym[2].padStart(2, '0')}`;
+    const my = t.match(/^(\d{1,2})[./-](\d{4})$/);             // MM.YYYY
+    if (my) return `${my[2]}-${my[1].padStart(2, '0')}`;
+  }
+  let iso = parseDateToISO(t);
+  if (!iso) {
+    const rel = parseRelativeDate(t);
+    if (rel) iso = toISODate(rel);
+  }
+  if (!iso) return null;
+  if (type === 'date')           return iso;
+  if (type === 'month')          return iso.slice(0, 7);
+  if (type === 'datetime-local') return `${iso}T00:00`;
+  if (type === 'week') {
+    const d = new Date(`${iso}T00:00:00`);
+    const target = new Date(d.valueOf());
+    target.setDate(target.getDate() - ((d.getDay() + 6) % 7) + 3);
+    const firstThursday = new Date(target.getFullYear(), 0, 4);
+    const week = 1 + Math.round(((target - firstThursday) / 86400000 - 3 + ((firstThursday.getDay() + 6) % 7)) / 7);
+    return `${target.getFullYear()}-W${String(week).padStart(2, '0')}`;
+  }
+  return iso;
+}
+
 function fillField(el, value) {
   let text = String(value ?? '').trim();
   const kendoRole = isKendoWidget(el);
@@ -79,7 +114,9 @@ function fillField(el, value) {
     if (option) el.value = option.value;
     else if (text) el.value = text;
   } else if (elType === 'checkbox') {
-    el.checked = /^(ja|yes|true|1|x|ok|checked|ausgewählt)$/i.test(text);
+    // click() instead of .checked = … so React/Vue state updates too
+    const desired = /^(ja|yes|true|1|x|ok|checked|ausgewählt|an|on)$/i.test(text);
+    if (el.checked !== desired) el.click();
   } else if (elType === 'radio') {
     const root = el.form || document;
     const radios = el.name ? Array.from(root.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`)) : [el];
@@ -92,7 +129,8 @@ function fillField(el, value) {
     if (match && !match.checked) match.click();
     el = match || el;
   } else {
-    if (elType === 'date') { const iso = parseDateToISO(text); if (iso) text = iso; }
+    const temporal = normalizeTemporalValue(elType, text);
+    if (temporal) text = temporal;
     try {
       const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
