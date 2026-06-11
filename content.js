@@ -86,8 +86,9 @@
   
   // Multi-step form state
   let stepInfo = getFormStepInfo();
-  let autoAdvanceEnabled = false;
-  let advanceCount = 0;
+
+  // Safety: max pages the agent may auto-navigate in one session (loop guard)
+  const AGENT_MAX_PAGES = 12;
 
   // ═══════════════════════════════════════════════════════════════════════
   // INIT — load storage before building UI
@@ -135,7 +136,7 @@
 
     const fontLink = document.createElement('link');
     fontLink.rel = 'stylesheet';
-    fontLink.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
     shadow.appendChild(fontLink);
 
     // ── Styles ────────────────────────────────────────────────────────
@@ -148,6 +149,7 @@
     wrap.innerHTML = `
       <button class="trigger" id="fa-trigger" title="FormAssist öffnen">
         <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <span class="trigger-badge" id="fa-trigger-badge" style="display:none"></span>
       </button>
       <div class="sidebar" id="fa-sidebar">
         <div class="toast" id="fa-toast"></div>
@@ -822,6 +824,11 @@
         const stepNote = stepInfo && stepInfo.isMultiStep ? ` · S.${stepInfo.current}/${stepInfo.total}` : '';
         countEl.textContent = hasFields ? `${allFields.length} Felder${stepNote}` : 'Kein Formular';
       }
+      const badge = $('fa-trigger-badge');
+      if (badge) {
+        badge.textContent = String(allFields.length);
+        badge.style.display = hasFields ? 'flex' : 'none';
+      }
       if (emptyEl) {
         const formIcon = `<svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><path d="M9 12h6M9 16h4"/></svg>`;
         const eyeIcon  = `<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
@@ -1258,6 +1265,48 @@
       return clean(String(value ?? '')).toLowerCase();
     }
 
+    // Fuzzy label comparison: exact → containment → token overlap (≥ 60 %).
+    // Lets learned answers like "Telefonnummer" match "Telefon (mobil)".
+    function labelsRoughlyMatch(a, b) {
+      const na = normalizeForCompare(a);
+      const nb = normalizeForCompare(b);
+      if (!na || !nb) return false;
+      if (na === nb) return true;
+      if (na.length > 3 && nb.length > 3 && (na.includes(nb) || nb.includes(na))) return true;
+      const tokenize = s => new Set(s.split(/[^a-z0-9äöüß]+/i).filter(w => w.length > 2));
+      const ta = tokenize(na);
+      const tb = tokenize(nb);
+      if (!ta.size || !tb.size) return false;
+      let common = 0;
+      for (const t of ta) if (tb.has(t)) common++;
+      return common / Math.min(ta.size, tb.size) >= 0.6;
+    }
+
+    // Look up a stored value for a field label: session answers first, then
+    // learned extras — exact match before fuzzy match.
+    function findStoredAnswer(label) {
+      const sources = [agentState.sessionAnswers || {}, extras];
+      const labelNorm = normalizeForCompare(label);
+      for (const src of sources) {
+        for (const [k, v] of Object.entries(src)) {
+          if (v && normalizeForCompare(k) === labelNorm) return v;
+        }
+      }
+      for (const src of sources) {
+        for (const [k, v] of Object.entries(src)) {
+          if (v && labelsRoughlyMatch(k, label)) return v;
+        }
+      }
+      return null;
+    }
+
+    function agentDoneMessage() {
+      const total = agentState.filledFields.length;
+      const pages = (agentState.pages || 0) + 1;
+      const pageNote = pages > 1 ? ` über ${pages} Seiten` : '';
+      return `✅ Fertig — ${total} Feld${total === 1 ? '' : 'er'} ausgefüllt${pageNote}.`;
+    }
+
     function getActionConfidence(action) {
       if (Number.isFinite(action?.confidence)) return action.confidence;
       if (!action?.source || action.source === 'profile') return 0.95;
@@ -1534,7 +1583,7 @@
       if (clickNextButtonIfReady(formEl)) {
         try {
           chrome.storage.session?.set?.({
-            faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers },
+            faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 },
           });
         } catch {}
         addMsg('ai', 'Danke — ich mache weiter und klicke auf "Weiter".', null, { copy: false });
@@ -1657,7 +1706,7 @@
       ].join('\n');
     }
 
-    let agentState = { active: false, guided: false, autoNavigate: true, sessionAnswers: {}, filledFields: [], startUrl: '', lastFailures: [] };
+    let agentState = { active: false, guided: false, autoNavigate: true, sessionAnswers: {}, filledFields: [], startUrl: '', lastFailures: [], pages: 0 };
     let guidedAskState = { active: false, queue: [], navAction: null };
     let manualAssistState = { pending: null };
     let agentStatusBubble = null;
@@ -1747,7 +1796,7 @@
           await handleGuidedNavigation(navAction);
         } else {
           updateGuidedProgress('Fertig ✓');
-          addMsg('ai', '✅ Alle Felder ausgefüllt.', null, { copy: false });
+          addMsg('ai', agentDoneMessage(), null, { copy: false });
           agentState.active = false;
         }
         return;
@@ -1755,84 +1804,126 @@
 
       agentStatusBubble = createAgentBubble();
       let filled = 0;
+      let done = 0;
       const asks = [];
+      const aiFields = [];
 
+      const setAgentProgress = status => {
+        const hdr = agentStatusBubble?.querySelector('.fa-agent-hdr');
+        if (hdr) hdr.textContent = status;
+      };
+
+      const applyAgentValue = (f, value) => {
+        fillField(f.el, value);
+        if (isActionApplied(f.el, 'fill', value)) {
+          appendAgentRow('✓', f.label, value);
+          agentState.filledFields.push({ label: f.label, value, url: location.href });
+          filled++;
+        } else {
+          appendAgentRow('✗', f.label, 'nicht angewendet');
+        }
+      };
+
+      const queueAsk = f => asks.push({
+        action: 'ask',
+        label: f.label,
+        question: `Was soll ich bei "${f.label}" eintragen?`,
+        options: f.options.slice(0, 4),
+        selector: f.selector,
+      });
+
+      // Phase 1: deterministic — session answers + learned extras (fuzzy match, no API call)
       for (const f of fields) {
         if (!agentState.active) break;
-
-        // Check session answers and extras for exact label match first (no AI call needed)
-        const labelNorm = normalizeForCompare(f.label);
-        let directValue = null;
-        for (const [k, v] of Object.entries(agentState.sessionAnswers || {})) {
-          if (normalizeForCompare(k) === labelNorm && v) { directValue = v; break; }
-        }
-        if (directValue === null) {
-          for (const [k, v] of Object.entries(extras)) {
-            if (normalizeForCompare(k) === labelNorm && v) { directValue = v; break; }
-          }
-        }
-
+        const directValue = findStoredAnswer(f.label);
         if (directValue !== null) {
-          fillField(f.el, directValue);
-          if (isActionApplied(f.el, 'fill', directValue)) {
-            appendAgentRow('✓', f.label, directValue);
-            agentState.filledFields.push({ label: f.label, value: directValue, url: location.href });
-            filled++;
-          } else {
-            appendAgentRow('✗', f.label, 'nicht angewendet');
-          }
+          applyAgentValue(f, directValue);
+          done++;
+          setAgentProgress(`Agent läuft… ${done}/${fields.length}`);
           await sleep(40);
-          continue;
+        } else {
+          aiFields.push(f);
         }
+      }
 
-        // Ask AI for this single field
+      // Phase 2: ONE batched AI call per 12 unknown fields instead of one call
+      // per field. Falls back to focused single-field prompts if the batch
+      // response cannot be parsed.
+      const describeField = (f, i) => {
+        const opt  = f.options.length ? ` Optionen: ${f.options.slice(0, 12).join(' | ')}` : '';
+        const hint = f.hint ? ` Hinweis: ${f.hint}` : '';
+        return `${i}. "${f.label}" (${f.type})${f.required ? ' [Pflichtfeld]' : ''}${opt}${hint}`;
+      };
+
+      async function requestBatchValues(chunk) {
+        const prompt = [
+          contextBlock,
+          '',
+          'FORMULARFELDER:',
+          ...chunk.map((f, i) => describeField(f, i + 1)),
+          '',
+          'Gib für jedes Feld den Wert an. Antworte NUR mit einem JSON-Objekt, Schlüssel = Feldnummer:',
+          '{"1":"Wert","2":"?"}',
+          'Regeln: "?" wenn kein Wert aus Profil/Kontext ableitbar ist. Bei Feldern mit Optionen EXAKT eine der Optionen wählen. Keine Erklärung, kein Markdown.',
+        ].join('\n');
+        const data = await groqRequest(key, {
+          model: _model,
+          max_tokens: Math.min(60 * chunk.length + 120, 1600),
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const raw = String(data?.choices?.[0]?.message?.content || '').trim();
+        const objMatch = raw.replace(/```(?:json)?/gi, '').match(/\{[\s\S]*\}/);
+        if (!objMatch) return null;
         try {
-          const optStr  = f.options.length ? `\nOptionen: ${f.options.slice(0, 12).join(' | ')}` : '';
-          const hintStr = f.hint ? `\nHinweis: ${f.hint}` : '';
-          const instrStr = f.options.length
-            ? 'Antworte NUR mit einer der Optionen EXAKT wie angegeben, oder "?" wenn keine passt.'
-            : 'Antworte NUR mit dem Wert (max. eine kurze Zeile), oder "?" wenn wirklich kein Wert ableitbar ist.';
+          const parsed = JSON.parse(objMatch[0]);
+          return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+        } catch { return null; }
+      }
 
-          const prompt = [
-            contextBlock,
-            '',
-            `FORMULARFELD: "${f.label}" (${f.type})${f.required ? ' [Pflichtfeld]' : ''}${optStr}${hintStr}`,
-            '',
-            instrStr,
-          ].join('\n');
+      async function askSingleFieldValue(f) {
+        const optStr  = f.options.length ? `\nOptionen: ${f.options.slice(0, 12).join(' | ')}` : '';
+        const hintStr = f.hint ? `\nHinweis: ${f.hint}` : '';
+        const instrStr = f.options.length
+          ? 'Antworte NUR mit einer der Optionen EXAKT wie angegeben, oder "?" wenn keine passt.'
+          : 'Antworte NUR mit dem Wert (max. eine kurze Zeile), oder "?" wenn wirklich kein Wert ableitbar ist.';
+        const prompt = [
+          contextBlock,
+          '',
+          `FORMULARFELD: "${f.label}" (${f.type})${f.required ? ' [Pflichtfeld]' : ''}${optStr}${hintStr}`,
+          '',
+          instrStr,
+        ].join('\n');
+        const data = await groqRequest(key, { model: _model, max_tokens: 80, messages: [{ role: 'user', content: prompt }] });
+        return String(data?.choices?.[0]?.message?.content || '').trim();
+      }
 
-          const data = await groqRequest(key, {
-            model: _model,
-            max_tokens: 80,
-            messages: [{ role: 'user', content: prompt }],
-          });
+      const sanitizeValue = raw => String(raw).split('\n')[0].replace(/^["']|["']$/g, '').trim().slice(0, 200);
+      const isUnknown = v => !v || v === '?' || /^unbekannt$/i.test(v);
 
-          const rawVal = String(data?.choices?.[0]?.message?.content || '').trim();
+      for (let start = 0; start < aiFields.length && agentState.active; start += 12) {
+        const chunk = aiFields.slice(start, start + 12);
+        setAgentProgress(`Agent läuft… ${done}/${fields.length} · KI analysiert ${chunk.length} Felder`);
+        let answers = null;
+        try { answers = await requestBatchValues(chunk); } catch {}
 
-          if (!rawVal || rawVal === '?' || /^unbekannt$/i.test(rawVal)) {
-            asks.push({
-              action: 'ask',
-              label: f.label,
-              question: `Was soll ich bei "${f.label}" eintragen?`,
-              options: f.options.slice(0, 4),
-              selector: f.selector,
-            });
-          } else {
-            const value = rawVal.split('\n')[0].replace(/^["']|["']$/g, '').trim().slice(0, 200);
-            fillField(f.el, value);
-            if (isActionApplied(f.el, 'fill', value)) {
-              appendAgentRow('✓', f.label, value);
-              agentState.filledFields.push({ label: f.label, value, url: location.href });
-              filled++;
-            } else {
-              appendAgentRow('✗', f.label, 'nicht angewendet');
+        for (let i = 0; i < chunk.length; i++) {
+          if (!agentState.active) break;
+          const f = chunk[i];
+          let rawVal = answers !== null ? String(answers[String(i + 1)] ?? answers[f.label] ?? '').trim() : null;
+          if (rawVal === null) {
+            try { rawVal = await askSingleFieldValue(f); }
+            catch (err) {
+              appendAgentRow('✗', f.label, `Fehler: ${(err.message || '').slice(0, 40)}`);
+              done++;
+              continue;
             }
           }
-        } catch (err) {
-          appendAgentRow('✗', f.label, `Fehler: ${(err.message || '').slice(0, 40)}`);
+          if (isUnknown(rawVal)) queueAsk(f);
+          else applyAgentValue(f, sanitizeValue(rawVal));
+          done++;
+          setAgentProgress(`Agent läuft… ${done}/${fields.length}`);
+          await sleep(50);
         }
-
-        await sleep(50);
       }
 
       finalizeAgentBubble(filled);
@@ -1853,7 +1944,7 @@
       } else {
         updateGuidedProgress('Fertig ✓');
         setTimeout(() => { const w = $('fa-guided-progress'); if (w) w.style.display = 'none'; }, 3000);
-        addMsg('ai', '✅ Formular vollständig ausgefüllt.', null, { copy: false });
+        addMsg('ai', agentDoneMessage(), null, { copy: false });
         agentState.active = false;
       }
     }
@@ -1864,7 +1955,7 @@
       const autoNav = $('fa-auto-nav')?.checked !== false;
       const mode = getAssistantMode();
       const guided = mode !== 'classic';
-      agentState = { active: true, guided, autoNavigate: autoNav, sessionAnswers: {}, filledFields: [], startUrl: location.href, correctionRound: 0, lastFailures: [] };
+      agentState = { active: true, guided, autoNavigate: autoNav, sessionAnswers: {}, filledFields: [], startUrl: location.href, correctionRound: 0, lastFailures: [], pages: 0 };
       guidedAskState = { active: false, queue: [], navAction: null };
       manualAssistState.pending = null;
       if (guided) {
@@ -2120,7 +2211,7 @@
       if (isDone && !askActions.length && !navActions.length) {
         updateGuidedProgress('Fertig ✓');
         setTimeout(() => { const w = $('fa-guided-progress'); if (w) w.style.display = 'none'; }, 3000);
-        addMsg('ai', '✅ Formular vollständig ausgefüllt.', null, { copy: false });
+        addMsg('ai', agentDoneMessage(), null, { copy: false });
         agentState.active = false;
         learnAgentFields();
         return;
@@ -2188,7 +2279,7 @@
         } else {
           updateGuidedProgress('Fertig ✓');
           setTimeout(() => { const w = $('fa-guided-progress'); if (w) w.style.display = 'none'; }, 3000);
-          addMsg('ai', '✅ Formular vollständig ausgefüllt.', null, { copy: false });
+          addMsg('ai', agentDoneMessage(), null, { copy: false });
           agentState.active = false;
         }
         return;
@@ -2285,6 +2376,7 @@
         guided: true,
         autoNavigate: agentState.autoNavigate,
         sessionAnswers: agentState.sessionAnswers,
+        pages: (agentState.pages || 0) + 1,
       };
 
       if (agentState.autoNavigate) {
@@ -2379,7 +2471,7 @@
           if (act.isNavigation) {
             try {
               chrome.storage.session?.set?.({
-                faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers },
+                faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 },
               });
             } catch {}
             await sleep(200);
@@ -2533,6 +2625,11 @@
         manualAssistState.pending = null;
         guidedAskState = { active: false, queue: [], navAction: null };
         const resume = res.faAgentResume;
+        if ((resume.pages || 0) >= AGENT_MAX_PAGES) {
+          open();
+          addMsg('ai', `⚠ Agent gestoppt: Maximum von ${AGENT_MAX_PAGES} Seiten erreicht (Schutz vor Endlosschleifen). Bei Bedarf einfach neu starten.`, null, { copy: false });
+          return;
+        }
         agentState = {
           active: true,
           guided: resume.guided !== false,
@@ -2542,6 +2639,7 @@
           startUrl: resume.startUrl || '',
           correctionRound: 0,
           lastFailures: [],
+          pages: resume.pages || 1,
         };
         open();
         const gpWrap = $('fa-guided-progress'); const gpBar = $('fa-gp-bar'); const gpLabel = $('fa-gp-label');
