@@ -330,6 +330,24 @@ function extractRichContext() {
   return { page, forms };
 }
 
+// Compact current value of a field for the system prompt (max 60 chars)
+function getFieldValueBrief(el) {
+  if (!el) return '';
+  const type = (el.type || '').toLowerCase();
+  if (type === 'checkbox') return el.checked ? 'angekreuzt' : '';
+  if (type === 'radio' && el.name) {
+    const root = el.form || document;
+    const checked = root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`);
+    return checked ? clean(getLabel(checked) || checked.value) : '';
+  }
+  if (el.tagName === 'SELECT') {
+    const opt = el.selectedOptions?.[0];
+    return opt && el.value ? clean(opt.text) : '';
+  }
+  if (type === 'password' || type === 'file') return '';
+  return clean(String(el.value || '')).slice(0, 60);
+}
+
 function buildSystemPrompt(ctx, profile, extras = {}) {
   const { page, forms } = ctx;
   const lines = [
@@ -365,6 +383,9 @@ function buildSystemPrompt(ctx, profile, extras = {}) {
         let line = `• ${f.label}`;
         if (f.required)     line += ' ✱';
         line += ` (${f.type})`;
+        if (f.selector)     line += ` [sel: ${f.selector}]`;
+        const cur = getFieldValueBrief(f.el);
+        if (cur)            line += ` [aktuell: "${cur}"]`;
         if (f.autocomplete) line += ` [autocomplete: ${f.autocomplete}]`;
         if (f.min || f.max) line += ` [range: ${f.min ?? ''}–${f.max ?? ''}]`;
         if (f.maxLength)    line += ` [max ${f.maxLength} Zeichen]`;
@@ -376,6 +397,28 @@ function buildSystemPrompt(ctx, profile, extras = {}) {
     });
   });
   lines.push('✱ = Pflichtfeld');
+  lines.push(
+    '',
+    '=== AKTIONEN (du kannst Felder direkt ausfüllen) — WICHTIGSTE REGEL ===',
+    'Sobald der Nutzer in IRGENDEINER Form will, dass etwas eingetragen, geändert, ausgewählt, an- oder abgehakt wird',
+    '(z. B. "trag ein", "fülle", "schreib", "setz", "ändere", "wähle", "mach ein Häkchen", "entferne", oder er nennt einfach einen Wert für ein Feld),',
+    'MUSST du ans ENDE deiner Antwort einen Aktionsblock in EXAKT diesem Format anhängen:',
+    '<<<ACTIONS',
+    '[{"action":"fill","selector":"[name=\\"email\\"]","value":"max@web.de","label":"E-Mail"}]',
+    'ACTIONS>>>',
+    '',
+    'Erlaubte actions:',
+    '- "fill"   → Text-, Zahlen- und Datumsfelder. Datum IMMER als ISO: date→YYYY-MM-DD, month→YYYY-MM, time→HH:MM. Relative Angaben ("nächster Monat") selbst in konkrete Daten umrechnen.',
+    '- "select" → Dropdowns. value muss EXAKT einer der angegebenen Optionen entsprechen.',
+    '- "check"  → Checkboxen/Radios. value "ja" zum Ankreuzen, "nein" zum Abwählen, bei Radios der Optionstext.',
+    '',
+    'Nutze NUR [sel: …]-Selektoren, die oben bei den FELDERN stehen (exakt kopieren). Schreibe davor 1 kurzen Satz, was du tust.',
+    'Ohne Aktionsblock passiert NICHTS auf der Seite — reiner Text füllt keine Felder aus.',
+    'KEINE Aktionen, wenn der Nutzer nur eine Frage stellt. Niemals action für Submit/Absenden verwenden.',
+    '',
+    '=== GEDÄCHTNIS ===',
+    'Der bisherige Gesprächsverlauf (auch von früheren Seiten dieser Website) ist Teil des Kontexts. Nutze frühere Antworten des Nutzers aktiv und frage nichts doppelt.'
+  );
   return lines.join('\n');
 }
 
