@@ -58,7 +58,7 @@ Betriebsmodell ist für lokale Nutzung ok, für produktiven Rollout aber nicht a
 Gelegentlich antwortet Groq mit HTTP 503 und der Meldung "Provider returned error", wenn ihr Inference-Backend (Meta) temporär nicht erreichbar ist.
 
 **Verhalten heute:**
-Nach 3 Retries wird automatisch auf OpenRouter umgeschaltet (sofern OpenRouter-Key konfiguriert). Ohne OpenRouter-Key wird der Fehler im Chat angezeigt.
+Nach Ausschöpfen der Retries (`MAX_RETRIES = 2`, also bis zu 3 Versuche) wird automatisch auf OpenRouter umgeschaltet (sofern OpenRouter-Key konfiguriert). Ohne OpenRouter-Key wird der Fehler im Chat angezeigt.
 
 **Auswirkung:**
 Mit konfiguriertem OpenRouter-Backup transparent für den Nutzer; ohne Backup: kurze Fehlermeldung.

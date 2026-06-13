@@ -1,23 +1,31 @@
 ---
 name: short-term-snapshot
-description: Current runtime state, implemented features, and storage keys — snapshot as of 2026-05-15
+description: Current runtime state, implemented features, and storage keys — snapshot as of 2026-06-14
 metadata:
   type: project
 ---
 
 # Short-Term Memory — FormAssist
 
-Stand: 2026-05-15
+Stand: 2026-06-14
 
 ## Aktueller Stand
 
 FormAssist ist eine Chrome Extension (Manifest V3) mit einer Shadow-DOM-Sidebar für Formulare auf `<all_urls>`.
 
+Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-profile` → `fa-scanner` → `fa-fill` → `fa-styles` → `fa-supabase` → `content`).
+
 | Datei | Funktion |
 | --- | --- |
-| `content.js` | Hauptlogik: Kontext-Extraktion, Chat, Agent, Field-by-Field, Profil, Submit-Review, UI |
+| `content.js` | Orchestrierung: Chat, Agent, Field-by-Field, Profil-Panel, Submit-Review, UI |
+| `fa-utils.js` | Hilfsfunktionen (Datums-Parsing, Selektoren, Kendo-Erkennung) |
+| `fa-profile.js` | `PROFILE_FIELDS` (15 Felder) + `FAKE_DATA` |
+| `fa-scanner.js` | Feldanalyse, Label/Hint/Error, `matchProfile`, `buildSystemPrompt` |
+| `fa-fill.js` | `fillField` für alle Feldtypen + Datepicker/Temporal-Normalisierung |
+| `fa-styles.js` | Aurora-Glass-Stylesheet (`FA_CSS`) |
+| `fa-supabase.js` | Optionaler Profil-/History-Sync via Supabase |
 | `background.js` | LLM-Transport: Groq + OpenRouter, Retry, Timeout, Streaming, automatischer Fallback |
-| `options.js` / `options.html` | Provider, API-Keys (Groq + OpenRouter), Modell, Assistent-Modus |
+| `options.js` / `options.html` | Provider, API-Keys (Groq + OpenRouter), Modell, Assistent-Modus, Supabase-Sync |
 | `manifest.json` | Commands, Permissions, Content Script, Service Worker |
 
 ## Technischer Snapshot
@@ -37,7 +45,7 @@ FormAssist ist eine Chrome Extension (Manifest V3) mit einer Shadow-DOM-Sidebar 
 ### Agent
 
 - **Zwei Modi:** Automatisch (`context`, Standard) und Mit Vorschau (`classic`)
-- **Automatisch:** Feld-für-Feld — pro Feld ein eigener Non-Streaming API-Call (max_tokens 80), `extras` + `sessionAnswers` werden zuerst direkt per Label-Match angewendet (kein API-Call), KI füllt unbekannte Felder, `ask` nur bei wirklich unbekanntem Wert
+- **Automatisch:** `extras` + `sessionAnswers` zuerst direkt per Label-Match (kein API-Call); unbekannte Felder werden gebatcht (Chunks à 12, 1 JSON-Call, Einzelfeld-Fallback bei Parse-Fehler — Stand 2026-06-11); `ask` nur bei wirklich unbekanntem Wert
 - **Mit Vorschau:** Batch-Prompt → Streaming → editierbare Vorschau → User bestätigt
 - `applyDeterministicProfileFill()` — starke Profil-Matches werden immer direkt gefüllt (kein API-Call)
 - `AGENT_AUTO_SELECT_CONFIDENCE = 0.82` — unter diesem Wert kein Auto-Select in Vorschau
@@ -88,6 +96,8 @@ FormAssist ist eine Chrome Extension (Manifest V3) mit einer Shadow-DOM-Sidebar 
 
 ## Nächste sinnvolle Schritte
 
-1. Privacy/Consent-Flow vor KI-Analyse von Formularinhalten
-2. Real-World-Tests für verschiedene Formularframeworks (Kendo, React, Legacy)
-3. Optional: Team-/Cloud-Profile mit explizitem Opt-in
+1. Ausführbare Tests einbinden (Vitest, Start `fa-utils.js`) — Kurs-Einheit 8
+2. Eigener Dokumentations-Agent — Kurs-Einheit 9
+3. Optional: RAG über Supabase `form_fields`; Privacy/Consent-Flow vor KI-Analyse
+
+Vollständiger Status nach Kurseinheiten: siehe `Projektstand.md`.
