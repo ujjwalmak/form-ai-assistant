@@ -4,11 +4,19 @@ Chrome Extension (Manifest V3), die auf Seiten mit Formularen eine KI-Sidebar ei
 
 ## Architektur
 
+Das Content-Script ist in Module aufgeteilt, die das Manifest in dieser Reihenfolge lädt (`fa-utils` → `fa-profile` → `fa-scanner` → `fa-fill` → `fa-styles` → `fa-supabase` → `content`):
+
 | Datei | Zweck |
 | --- | --- |
-| `content.js` | Gesamte Laufzeitlogik: Shadow-DOM-UI, Feldanalyse, Agent, Guided Mode, Profil, Submit-Review |
+| `content.js` | Orchestrierung der Laufzeit: Shadow-DOM-UI, Chat, Agent, Guided/Field-by-Field, Profil-Panel, Submit-Review |
+| `fa-utils.js` | Hilfsfunktionen: `clean`, `formatBytes`, `parseDateToISO`/`parseRelativeDate`, Kendo-Erkennung, `getAgentSelector` |
+| `fa-profile.js` | `PROFILE_FIELDS` (15 Standardfelder mit Keywords/Autocomplete) + `FAKE_DATA` |
+| `fa-scanner.js` | Feldanalyse: `getLabel`/`getHint`/`getError`, `extractField`, `matchProfile`, `buildSystemPrompt`, Step-Erkennung |
+| `fa-fill.js` | `fillField` für alle Feldtypen inkl. Datepicker-Libs und temporaler Normalisierung |
+| `fa-styles.js` | Aurora-Glass-Stylesheet (`FA_CSS`), in den Shadow Root injiziert |
+| `fa-supabase.js` | Optionaler Supabase-Sync von Profilen und History (`sbPushProfiles`, `sbFetchProfiles`, …) |
 | `background.js` | LLM-Transport (Groq + OpenRouter, Retry/Timeout, Streaming + Non-Streaming) via Service Worker |
-| `options.js/html` | Einstellungsseite: Provider, API-Keys, Modell, Assistent-Modus |
+| `options.js/html` | Einstellungsseite: Provider, API-Keys, Modell, Assistent-Modus, Supabase-Sync |
 | `manifest.json` | MV3-Konfiguration, Berechtigungen, Tastenkürzel |
 
 Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-Konflikt mit Host-Seiten).
@@ -58,6 +66,7 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 - **Mehrere Profile** — Switcher, Anlegen, Loeschen
 - **Import/Export** als JSON
 - Speicherung lokal in `chrome.storage.local`
+- **Optionaler Supabase-Sync** (`fa-supabase.js`): Profile und History geräteübergreifend, sobald URL + Anon-Key in den Optionen hinterlegt sind; Geräte-Trennung per `crypto.randomUUID()`
 
 ### Formularerkennung
 
@@ -114,7 +123,9 @@ Alle Requests laufen via `background.js` (Service Worker) als CSP-sicheres Routi
 | `faGroqApiKey` | sync | Groq API-Key |
 | `faOpenRouterApiKey` | sync | OpenRouter API-Key |
 | `faModel` | sync | Gewaehltes Modell |
-| `faAssistantMode` | sync | `'hybrid'`, `'classic'` oder `'context'` |
+| `faAssistantMode` | sync | `'context'` (Standard) oder `'classic'` |
+| `faSupabaseUrl` | sync | Supabase Project-URL (optionaler Sync) |
+| `faSupabaseKey` | sync | Supabase Anon-Key (optionaler Sync) |
 | `faProfiles` | local | Array aller Profile `[{id, name, profile, extras}]` |
 | `faActiveProfileId` | local | ID des aktiven Profils |
 | `faHistory` | local | Array der letzten 30 Agent-Sitzungen |

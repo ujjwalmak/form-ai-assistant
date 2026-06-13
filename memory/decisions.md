@@ -209,3 +209,73 @@ Der Field-by-Field-Agent machte 1 API-Call pro unbekanntem Feld (langsam, Rate-L
 - Formular mit 12 unbekannten Feldern: 1 API-Call statt 12 → deutlich schneller
 - Agent-Status zeigt Live-Fortschritt (`Agent läuft… 4/12`)
 - Abschlussmeldung via `agentDoneMessage()` (Felder + Seitenanzahl)
+
+---
+
+## [2026-06-11] Entscheidung: Aurora-Glass-UI (finales Design)
+
+**Kontext:**
+Das am selben Tag eingeführte „Design 2.0" (Indigo/Violett-Gradient) wurde im selben Commit (`d441205`, „Aurora Glass UI") nochmals zu einem ausdrucksstärkeren Glas-Look weiterentwickelt. Diese Iteration ist der aktuell ausgelieferte Stand und löst die Indigo-Beschreibung oben ab.
+
+**Entscheidung:**
+`fa-styles.js` auf ein Aurora-Glass-Design umgestellt:
+
+- Violett→Fuchsia→Pink-Spektrum auf geschichtetem, tiefem Glas (`backdrop-filter: blur(32px) saturate(1.7)`)
+- Rotierender Aurora-Leuchtrahmen um die Sidebar + Film-Grain-Overlay für „Premium Glass"
+- Animierte Aurora-Blobs im Action-Panel (`@keyframes fa-aurora-a/-b`)
+- KI-Orb-Avatare an jeder Antwort (`@keyframes fa-orb`), rechtsbündige Gradient-Bubbles für Nutzer-Nachrichten, glühender Fortschrittsbalken
+- Alle Klassennamen unverändert (kein JS-Bruch); `@media (prefers-reduced-motion: reduce)` respektiert
+- Version bleibt 2.0
+
+**Konsequenzen:**
+
+- README beschreibt das Aurora-Glass-Design als aktuellen UI-Stand
+- Die „Indigo/Violett"-Beschreibung im Design-2.0-Eintrag oben ist nur noch der Zwischenstand desselben Tages
+
+---
+
+## [2026-06-14] Entscheidung: Deployment für den Extension-Case erlassen
+
+**Kontext:**
+Die Kurs-Anforderung „Prototyp über eine Plattform bereitgestellt" (Einheit 5) zielt auf Web-Apps (Vercel/Render). FormAssist ist eine Chrome-Extension (Client-Code) ohne eigenen Server.
+
+**Entscheidung:**
+Mit Prof. Dünnebeil abgestimmt: klassisches PaaS-Deployment ist für diesen Case nicht erforderlich. Supabase deckt den Managed-Plattform-Aspekt teilweise ab. In der Abschlussreflexion als bewusste Architektur-Entscheidung darstellen.
+
+**Konsequenzen:**
+
+- Deployment wird nicht mehr als offene Lücke geführt
+- Verbleibende Pflicht-ToDos: ausführbare Tests (Einheit 8), Dokumentations-Agent (Einheit 9)
+
+---
+
+## [2026-06-14] Entscheidung: Projektstand.md als zentrales PM-Dokument
+
+**Kontext:**
+Projektmanagement-Inhalte waren über mehrere Dateien verteilt (`Ideas`, `NEXT_STEPS.md`); der Status war nirgends nach Kurseinheiten abgeglichen.
+
+**Entscheidung:**
+`Projektstand.md` als einzige PM-Quelle: Vision, Statusübersicht nach Kurseinheiten (gegen „Wo Sie stehen sollten"), Benotung, Roadmap/Backlog. `Ideas` und `NEXT_STEPS.md` darin konsolidiert und entfernt.
+
+**Konsequenzen:**
+
+- README bleibt Produkt-/Technik-Doku, `Projektstand.md` ist der PM-Hub
+- `TESTING_PLAN.md` (technisch) bleibt separat; `PPT_BRIEFING.md` wurde in derselben Aufräumrunde entfernt (siehe nächste Entscheidung)
+
+---
+
+## [2026-06-14] Entscheidung: Ordnerstruktur + Kursfolien aus dem Repo
+
+**Kontext:**
+Das Wurzelverzeichnis war mit Doku-, Präsentations- und Kursfoliendateien überladen.
+
+**Entscheidung:**
+Kursfolien und der Zwischenpräsentations-PDF liegen in `vorlesung/` (via `.gitignore` ausgeschlossen — nicht im Repo). Präsentations-Quellen (`.pptx`, `.docx`, `PPT_BRIEFING.md`) wurden entfernt; nur der PDF-Foliensatz bleibt lokal. Extension-Quellcode bleibt im Root (MV3 erwartet `manifest.json` im Lade-Ordner). `.venv` (Python-Überbleibsel) entfernt.
+
+**Alternativen:**
+
+- Quellcode nach `src/`: verworfen — Bruch-Risiko an Manifest-Pfaden/Ladereihenfolge, kein Mehrwert
+
+**Konsequenzen:**
+
+- `.gitignore`: Kursfolien-Ordner `vorlesung/` ignoriert, `.venv/`; `memory/` + `logs/` bewusst getrackt (Kurs-Anforderung Agent-Transparenz)

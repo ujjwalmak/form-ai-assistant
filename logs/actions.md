@@ -158,3 +158,53 @@ Vollautonomes geführtes Formular-Ausfüllen mit intelligenter Interaktion, plus
 - Groq-Ausfälle und Rate Limits werden transparent über OpenRouter abgefangen
 - Mehrere Profile ermöglichen verschiedene Identitäten/Nutzer
 - History gibt Überblick über vergangene Agent-Sitzungen
+
+---
+
+## [2026-06-14] Dokumentations-Konsolidierung + Repo-Cleanup
+
+**Ziel:**
+Projektmanagement-Doku zusammenführen, Repo-Struktur aufräumen, Stand gegen die Kurs-Checkliste abgleichen.
+
+**Aktionen:**
+
+1. Alle 8 Kurs-PDFs gelesen, Anforderungen je Einheit extrahiert
+2. `Projektstand.md` erstellt: Vision · Status nach Kurseinheiten · Benotung · Roadmap/Backlog
+3. `Ideas` + `NEXT_STEPS.md` in `Projektstand.md` konsolidiert und entfernt
+4. Ordnerstruktur: Kursfolien + Zwischenpräsentations-PDF → `vorlesung/` (gitignored, lokal); `.pptx`/`.docx`/`PPT_BRIEFING.md` entfernt
+5. `.venv` gelöscht; `.gitignore` aufgeräumt: `vorlesung/` + `.venv/` ignoriert, `memory/`/`logs/` aus Ignore entfernt (gehören laut Kurs ins Repo)
+6. Code-Redundanz-Check: keine doppelten Funktionsdefinitionen über `content.js`/`fa-*.js`; alle Module im Manifest geladen
+7. `memory/` (short_term, long_term, decisions) + `logs/` auf Stand 2026-06-14 gebracht
+
+**Ergebnis:**
+
+- Single Source of Truth für den Projektstatus (`Projektstand.md`)
+- Repo aufgeräumt, Kursfolien nicht mehr im Repo
+- Offene Pflicht-ToDos dokumentiert: Tests (Einheit 8), Dokumentations-Agent (Einheit 9)
+
+---
+
+## [2026-06-14] Doku-Verifikation + Personas
+
+**Ziel:**
+Gesamte Dokumentation gegen den Code prüfen und Abweichungen korrigieren; Persona-Lücke (Einheit 2) schließen.
+
+**Aktionen (Doku-Korrekturen):**
+
+1. Modularer Aufbau ergänzt: `README.md`, `short_term.md`, `long_term.md` beschrieben `content.js` als Single-File — tatsächlich 7 Module (`fa-utils/profile/scanner/fill/styles/supabase` + `content`), jetzt als Tabelle/Ladereihenfolge dokumentiert
+2. Supabase-Sync in README ergänzt (Architektur, Feature, Storage-Keys `faSupabaseUrl`/`faSupabaseKey`)
+3. `faAssistantMode`: veraltetes `'hybrid'` entfernt → nur `'context'`/`'classic'` (Code-Stand)
+4. Retry-Inkonsistenz gefixt: `MAX_RETRIES = 2` (bis zu 3 Versuche), `RETRYABLE_STATUS` präzisiert; `known_issues.md` + `long_term.md` vereinheitlicht
+5. Interner Widerspruch in `decisions.md` zu `PPT_BRIEFING.md` korrigiert
+6. Neuer Entscheidungseintrag [2026-06-11] Aurora-Glass-UI (finales Design) ergänzt
+7. `long_term.md` Token-/Kontext-Werte gegen Code korrigiert: Chat `max_tokens` 400 → 500 (Default) + Zusammenfassung 650; Chat-History „letzte 6" → `slice(-12)`; Batch-Chunk `min(60·n+120, 1600)` und Normalisierung (40) ergänzt
+
+**Aktionen (Personas):**
+
+1. `personas/` angelegt mit 5 wiederverwendbaren Rollen-Prompts: `extension-architect`, `agent-prompt-engineer`, `aurora-ux-designer`, `qa-test-engineer`, `docs-agent` + `README.md` (Index + Grundregeln)
+2. `Projektstand.md` Einheit 2 (Vibe Coding) 🟡 → ✅
+
+**Ergebnis:**
+
+- Doku deckt sich mit dem Code (Module, Provider/Retry, Modi, Storage-Keys verifiziert)
+- Persona-Anforderung aus Einheit 2 erfüllt

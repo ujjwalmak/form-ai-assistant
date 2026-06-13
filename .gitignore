@@ -1,6 +1,10 @@
+# Claude-Code lokale Konfiguration
 .claude/
-memory/
-logs/
-Ideas
+
+# Secrets / nur lokal (niemals committen)
 api-key.txt
 *.local
+.venv/
+
+# Kursfolien & lokaler Präsentations-PDF – gehören nicht ins Repo
+vorlesung/

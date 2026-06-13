@@ -1,17 +1,17 @@
 ---
 name: long-term-architecture
-description: Extension architecture, provider/API setup, agent flow, storage keys, prompt structure — current as of 2026-05-15
+description: Extension architecture, provider/API setup, agent flow, storage keys, prompt structure — current as of 2026-06-14
 metadata:
   type: project
 ---
 
 # Long-Term Memory — FormAssist
 
-## Architektur (Stand 2026-05-15)
+## Architektur (Stand 2026-06-14)
 
 ### Extension-Typ
 
-Chrome Extension, Manifest V3. Single content-script (`content.js`), läuft auf `<all_urls>` bei `document_idle`.
+Chrome Extension, Manifest V3. Content-Script läuft auf `<all_urls>` bei `document_idle` und ist in Module gesplittet, die das Manifest in fester Reihenfolge lädt: `fa-utils.js` (Helpers) → `fa-profile.js` (`PROFILE_FIELDS`/`FAKE_DATA`) → `fa-scanner.js` (Feldanalyse, `buildSystemPrompt`) → `fa-fill.js` (`fillField`) → `fa-styles.js` (`FA_CSS`) → `fa-supabase.js` (optionaler Sync) → `content.js` (Orchestrierung/UI/Agent). `background.js` ist der Service Worker.
 
 ### Shadow DOM Isolation
 
@@ -59,6 +59,7 @@ Der gesamte UI-Code wird in ein `attachShadow({ mode: 'open' })` injiziert, das 
 - `faOpenRouterApiKey` — OpenRouter API-Key
 - `faModel` — gewähltes Modell
 - `faAssistantMode` — `'context'` (Standard) oder `'classic'`
+- `faSupabaseUrl` / `faSupabaseKey` — optionaler Supabase-Sync (Project-URL + Anon-Key)
 
 **Storage (`chrome.storage.session`):**
 
@@ -80,11 +81,12 @@ Beide Provider sind OpenAI-kompatibel (messages array, choices[0].message.conten
 - Non-Streaming: `{ type: 'llm-fetch', provider, key, body }` → `{ ok, data, usedFallback }`
 - Streaming: Port `llm-stream`, Nachrichten `{ type: 'chunk'|'done'|'error'|'fallback' }`
 
-**Timeouts:** Non-Streaming 25s, Streaming 40s. Retries: max. 2 für retryable Status (408, 429, 500–504).
+**Timeouts:** Non-Streaming 25s, Streaming 40s. Retries: `MAX_RETRIES = 2` (also bis zu 3 Versuche) für retryable Status (`RETRYABLE_STATUS` = 408, 409, 425, 429, 500, 502, 503, 504).
 
-- Agent (Batch / Classic): max_tokens 2048, strukturierte Feldliste, Streaming
-- Agent (Field-by-Field): max_tokens 80 pro Feld, Non-Streaming
-- Chat: max_tokens 400, System-Prompt mit Formularkontext, History letzte 6 Nachrichten
+- Agent (Classic): max_tokens 2048, strukturierte Feldliste, Streaming
+- Agent (Field-by-Field): Einzelfeld max_tokens 80 (Non-Streaming); Batch-Chunk dynamisch `min(60·n+120, 1600)`
+- Antwort-Normalisierung/Selbstkorrektur: max_tokens 40
+- Chat: max_tokens 500 (Standard; Formular-Zusammenfassung 650), System-Prompt mit Live-Formularkontext, History letzte 12 Nachrichten (`slice(-12)`)
 
 ## Agent Mode (Haupt-Feature)
 
@@ -101,7 +103,7 @@ Beide Provider sind OpenAI-kompatibel (messages array, choices[0].message.conten
 2. `runFieldByFieldAgent()`:
    - Alle noch leeren/fehlerhaften Felder der Seite sammeln
    - Für jedes Feld: `extras` + `sessionAnswers` auf exakten Label-Match prüfen → direkt füllen
-   - Falls kein Match: einzelner `groqRequest` (Non-Streaming, max_tokens 80) mit Kontext-Block + Feldinfo
+   - Falls kein Match: unbekannte Felder werden gebatcht (Chunks à 12, 1 JSON-Call) — Einzelfeld-`groqRequest` (max_tokens 80) nur als Parse-Fallback (Stand 2026-06-11, siehe `decisions.md`)
    - KI antwortet mit Wert → sofort `fillField()` + in Bubble anzeigen
    - KI antwortet mit `?` → als `ask`-Aktion mit `selector` in Queue
 3. Nach allen Feldern: offene Fragen nacheinander stellen (`showGuidedQuestion`)
