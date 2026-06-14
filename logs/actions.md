@@ -362,3 +362,20 @@ Vermeidung von Selbstreferenzen im DocumentationAgent durch Ausschluss eigener D
 **Ergebnis:**
 
 - Der DocumentationAgent dokumentiert sich nicht selbst und vermeidet Selbstreferenzen in der Dokumentation.
+
+
+---
+
+## [2026-06-14] Selbstreferenz-Vermeidung im DocumentationAgent
+
+**Ziel:**
+Vermeidung von Selbstreferenzen im DocumentationAgent durch Ausschluss eigener Dateien.
+
+**Aktionen:**
+
+1. Hinzufügen von `SELF_EXCLUDES` in `agent.py`, um eigene Dateien aus dem Diff auszuschließen.
+2. Anpassung des `git diff`-Befehls, um die ausgeschlossenen Dateien zu berücksichtigen.
+
+**Ergebnis:**
+
+- Der DocumentationAgent dokumentiert sich nicht selbst und vermeidet Selbstreferenzen in der Dokumentation.
