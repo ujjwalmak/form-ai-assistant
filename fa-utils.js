@@ -128,3 +128,12 @@ function getAgentSelector(el) {
   }
   return `[${AGENT_SELECTOR_ATTR}="${CSS.escape(selectorId)}"]`;
 }
+
+// ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    clean, formatBytes, isVisible, textFromEl, getElementTextValue, findButtonByText,
+    parseDateToISO, toISODate, parseRelativeDate, isKendoWidget, getKendoWidget,
+    getAgentSelector,
+  };
+}

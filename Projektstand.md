@@ -14,8 +14,8 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Kennzahl | Stand |
 | --- | --- |
-| **Pflicht-Einheiten erfüllt** | 6 von 8 behandelten (Einheit 2–9) |
-| **Größte offene Punkte** | Ausführbare Tests (E8), Dokumentations-Agent (E9) |
+| **Pflicht-Einheiten erfüllt** | 7 von 8 behandelten (E5 entfällt abgestimmt) — offen nur E9 |
+| **Größte offene Punkte** | Dokumentations-Agent (E9) |
 | **Nächster Meilenstein** | Abschlusspräsentation 02. / 09.07.2026 |
 | **Deployment** | Mit Prof abgestimmt entfallen (Chrome-Extension-Case) |
 
@@ -23,16 +23,17 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 ## Status nach Kurseinheiten
 
-**Legende:** ✅ Erfüllt · 🟡 Teilweise · ⬜ Offen (optional) · ➖ Entfällt · ⏳ Noch nicht behandelt
+**Legende:** ✅ Erfüllt · 🟡 Teilweise · ⬜ Offen · ➖ Entfällt · ⏳ Noch nicht behandelt
+*Diese Übersicht listet nur Pflichtanforderungen (Folien-Checkliste „Wo Sie stehen sollten"). Optionale Kür steht in „Nächste Maßnahmen" / „Roadmap".*
 
-**Schnellüberblick:** E2 ✅ · E3 ✅ · E4 🟡 · E5 ➖ · E6 ✅ · E7 ✅ · E8 🟡 · E9 ⬜ · E10 ⏳ · E11 ⏳
+**Schnellüberblick:** E2 ✅ · E3 ✅ · E4 ✅ · E5 ➖ · E6 ✅ · E7 ✅ · E8 ✅ · E9 ⬜ · E10 ⏳ · E11 ⏳
 
 ### Einheit 2 — Vibe Coding (09.04.2026)
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
 | Erstes Repository mit Vibe Coding erstellt | ✅ | — |
-| Projektspezifische Regeldateien / Personas | ✅ | Regeldateien (`CLAUDE.md`, `test-site/AGENTS.md`) + wiederverwendbare Persona-Prompts in `personas/` (Architekt, Agent/Prompt, UX, QA, Doku) |
+| Projektspezifische Regeldateien / Personas | ✅ | Root-`CLAUDE.md` (Regeln fürs Extension-Repo) + `test-site/CLAUDE.md`/`AGENTS.md` (nur Testseite) + wiederverwendbare Persona-Prompts in `personas/` (Architekt, Agent/Prompt, UX, QA, Doku) |
 
 ### Einheit 3 — Agentic Coding (16.04.2026)
 
@@ -49,14 +50,12 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | --- | :-: | --- |
 | Struktur zum Nachvollziehen der Agent-Aktionen | ✅ | `memory/short_term.md`, `long_term.md`, `decisions.md`, `known_issues.md`, `logs/actions.md` |
 | Daten persistent in einer Datenbank gespeichert | ✅ | Supabase (`fa-supabase.js`, `supabase_tables.sql`) |
-| RAG eingebunden | ⬜ | Optional. Tabelle `form_fields` angelegt, im Code noch nicht aktiv genutzt |
 
 ### Einheit 5 — Deployment und CI/CD (30.04.2026)
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
 | Prototyp über eine Plattform bereitgestellt | ➖ | Mit Prof abgestimmt: für den Chrome-Extension-Case nicht erforderlich. In der Reflektion als bewusste Architektur-Entscheidung darstellen. Supabase deckt den Managed-Plattform-Aspekt teilweise ab. |
-| CI/CD-Pipeline (GitHub Actions) | ⬜ | Optional. Erst sinnvoll, sobald ausführbare Tests existieren (Einheit 8) |
 
 ### Einheit 6 — LLM-APIs (07.05.2026)
 
@@ -75,7 +74,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
 | Relevante Tests identifiziert | ✅ | `TESTING_PLAN.md` |
-| Tests in die Entwicklung eingebunden | ⬜ | Keine ausführbaren Tests, kein Test-Runner. Einstieg: Vitest-Unit-Tests für `fa-utils.js` (`parseDateToISO`, `clean`, `formatBytes`) |
+| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils` + `background` pure functions) via `npm test` + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push). Hinweis: lokal noch nicht ausgeführt (kein Node auf dem Dev-Rechner) — laufen via CI |
 
 ### Einheit 9 — Orchestrierung von Agenten (11.06.2026)
 
@@ -97,16 +96,6 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 ---
 
-## Benotung
-
-| Baustein | Gewicht | Status | Anmerkung |
-| --- | :-: | :-: | --- |
-| Modularbeit (Deployment + Repository) | 40 % | 🟡 | Repo umfangreich, Deployment abgestimmt entfallen |
-| Präsentation (Coding-Ansatz + Reflektion) | 40 % | 🟡 | Zwischenpräsentation erfüllt, Abschluss offen |
-| Tool-/Ansatz-Vortrag | 20 % | ⬜ | Thema noch zu wählen |
-
----
-
 ## Nächste Maßnahmen
 
 **Zeithorizont:** Abschlusspräsentation am 02. / 09.07.2026
@@ -114,12 +103,10 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | # | Maßnahme | Einheit | Prio | Aufwand |
 | :-: | --- | :-: | :-: | :-: |
-| 1 | Ausführbare Tests einbinden — Vitest, Start mit `fa-utils.js` | 8 | 🔴 | 🟡 |
-| 2 | Dokumentations-Agent ergänzen — Service nach Prof-Vorlage | 9 | 🔴 | 🟡 |
-| 3 | Tool-/Ansatz-Vortrag wählen und vorbereiten | — | 🔴 | 🟢 |
-| 4 | Abschlusspräsentation vorbereiten — inkl. Deployment-Begründung | 7 | 🔴 | 🟡 |
-| 5 | RAG über `form_fields` aktiv schalten | 4 | 🟡 | 🟡 |
-| 6 | GitHub Actions für automatischen Testlauf | 5 / 8 | 🟡 | 🟢 |
+| 1 | Dokumentations-Agent ergänzen — Service nach Prof-Vorlage | 9 | 🔴 | 🟡 |
+| 2 | Abschlusspräsentation vorbereiten — inkl. Deployment-Begründung & Reflektion | 12 / 13 | 🔴 | 🟡 |
+| 3 | Tests lokal ausführen + ggf. erweitern (Node installieren, `npm install && npm test`) | 8 | 🟡 | 🟢 |
+| 4 | RAG über `form_fields` aktiv schalten — pgvector/Embeddings für sichtbares „echtes RAG" | 4 | 🟡 | 🟡 |
 
 ---
 

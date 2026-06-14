@@ -117,6 +117,9 @@ async function readApiError(res) {
   return err?.error?.message || `HTTP ${res.status}`;
 }
 
+// ── Browser event listeners (registered only in the extension runtime) ──────
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+
 // ── Keyboard command relay ────────────────────────────────────────────
 chrome.commands.onCommand.addListener(async (command) => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -202,3 +205,13 @@ chrome.runtime.onConnect.addListener(port => {
     }
   });
 });
+
+} // end: extension-runtime event listeners
+
+// ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    normalizeProvider, normalizeModelForProvider, backoffDelay,
+    OPENROUTER_MODEL_REMAP, OPENROUTER_FALLBACK_MODEL, RETRYABLE_STATUS,
+  };
+}
