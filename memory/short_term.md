@@ -39,7 +39,7 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 - Agent-Resume-Status in `chrome.storage.session` (`faAgentResume`)
 - **15** Standard-Profilfelder (`PROFILE_FIELDS`) + freie `faExtras`
 - Automatischer Fallback: Groq 429/5xx → OpenRouter (Toast im Sidebar)
-- Unit-Tests: Vitest in `tests/unit/` (60 Tests, ~77 % Branch-Coverage der Logik-Module), CI via GitHub Actions; Icons in `icons/`
+- Unit-Tests: Vitest in `tests/unit/` (69 Tests, ~77 % Branch-Coverage der Logik-Module), CI via GitHub Actions; Icons in `icons/`
 
 ## Implementierte Features
 
@@ -97,10 +97,11 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 
 ## Nächste sinnvolle Schritte
 
-1. Eigener Dokumentations-Agent — Kurs-Einheit 9 (letzter offener Pflichtpunkt)
-2. Abschlusspräsentation + Reflektion vorbereiten
-3. Optional: Test-Abdeckung erweitern (`fa-supabase` mit chrome-Mocks); RAG über Supabase `form_fields`; Privacy/Consent-Flow vor KI-Analyse
+1. Abschlusspräsentation + Reflektion vorbereiten (inkl. Deployment-Begründung)
+2. Optional: Test-Abdeckung erweitern (`fa-supabase` mit chrome-Mocks); RAG über Supabase `form_fields`; Privacy/Consent-Flow vor KI-Analyse
 
-Erledigt (2026-06-14): Ausführbare Tests + CI (Kurs-Einheit 8).
+Keine offene Pflicht mehr aus behandelten Einheiten; E10/E11 noch nicht behandelt.
+
+Erledigt (2026-06-14): Ausführbare Tests + CI (Kurs-Einheit 8); autonomer Dokumentations-Agent `doc-agent/` (Kurs-Einheit 9).
 
 Vollständiger Status nach Kurseinheiten: siehe `Projektstand.md`.

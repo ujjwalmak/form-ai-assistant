@@ -303,6 +303,28 @@ Kurs-Einheit 8 fordert „relevante Tests identifiziert und in die Entwicklung e
 
 **Konsequenzen:**
 
-- 60 Tests grün, Branch-Coverage ~77 % der Logik-Module; `npm test` / `npm run coverage`.
+- 60 Tests grün, Branch-Coverage ~77 % der Logik-Module; `npm test` / `npm run coverage`. (Stand 2026-06-14 auf 69 Tests erweitert — `fa-profile`-Suite ergänzt.)
 - Neu: `package.json`, `vitest.config.js`, `tests/`, `.github/workflows/test.yml`, `node_modules/` + `coverage/` (gitignored).
 - Einheit 8 erfüllt; offen bleibt als Pflicht nur der Dokumentations-Agent (Einheit 9).
+
+---
+
+## [2026-06-14] Entscheidung: DocumentationAgent als separater Python-Service (Einheit 9)
+
+**Kontext:**
+Einheit 9 (Orchestrierung) fordert „einen eigenen Agenten für die Dokumentation". Die Vorlesungsfolie zeigt das Rollen-Lineup (Orchestrator/Planning/Coding/Testing/**Documentation**) und schlägt Bereitstellung als Microservice (Flask/FastAPI) via JSON-RPC vor (`http://localhost:8010/jsonrpc → DocumentationAgent`). Vorlagen-Flow: `git diff → LLM → Markdown`.
+
+**Entscheidung:**
+Eigener Ordner `doc-agent/` mit einem Flask-Service (`agent.py`), JSON-RPC 2.0, Methoden `document_changes` + `agent_card`, LLM-Transport `llm.py` (Groq primär, OpenRouter Fallback — spiegelt `background.js`). **Autonom:** Default `write=true` — der Agent hängt den erzeugten Eintrag selbst an `logs/actions.md` an (Format der Datei), kein manuelles Copy-Paste. Zusätzlich CLI-Einzellauf `python agent.py --once` für Demo.
+
+**Alternativen:**
+
+- In die Extension integrieren: verworfen — Extension ist Client-Code ohne Server; widerspricht „Microservice"-Vorlage und der Vanilla-JS-Regel.
+- Nur Markdown zurückgeben (kein Schreiben): verworfen — „Agent soll autonom sein" (Nutzer), echtes Schreiben gehört zur Rolle.
+
+**Konsequenzen:**
+
+- Python neben der JS-Extension, aber sauber getrennt in `doc-agent/`; Extension-Code unangetastet (CLAUDE.md-Regel gewahrt).
+- Key über Umgebung/`doc-agent/.env` (gitignored), nie im Code — gleiche Sicherheitslinie wie die Extension.
+- Guardrails: schreibt nur innerhalb des Repos, nur anhängend, nie ohne erkannte Änderung.
+- Einheit 9 erfüllt; aus den behandelten Einheiten ist keine Pflicht mehr offen.

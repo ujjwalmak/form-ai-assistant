@@ -232,3 +232,48 @@ Pflicht „Tests eingebunden" (Einheit 8) umsetzen und verifizieren; Root entzer
 
 - Einheit 8 erfüllt und verifiziert (60 Tests grün, CI aktiv)
 - Offen als Pflicht: nur noch Dokumentations-Agent (Einheit 9)
+
+---
+
+## [2026-06-14] Doku-Verifikation + fa-profile-Test ergänzt
+
+**Ziel:**
+Gesamte Doku gegen den aktuellen Code prüfen; gefundene Abweichung schließen.
+
+**Aktionen:**
+
+1. Zentrale Doku-Behauptungen am Code verifiziert: Manifest-Ladereihenfolge/Version 2.0, `MAX_RETRIES=2` + `RETRYABLE_STATUS` + Timeouts (25s/40s), Fallback-Modell, 15 Profilfelder, `AGENT_MAX_PAGES=12`, `AGENT_AUTO_SELECT_CONFIDENCE=0.82`, Modi `context`/`classic`, Chat-Tokens 500/650, `slice(-12)` — alle korrekt.
+2. **Abweichung gefunden:** Doku nannte `fa-profile` als getestetes Modul, es existierte aber keine `fa-profile.test.js` (nur 4 Testdateien, 60 Tests).
+3. `tests/unit/fa-profile.test.js` ergänzt (9 Tests): `PROFILE_FIELDS`-Struktur/Count/Keys, matchProfile-Vertrag (kw/ac lowercase), deutsche Keywords, `FAKE_DATA`-Vollständigkeit. `fa-profile.js` jetzt 100 % Coverage.
+4. Suite: **69 Tests grün** (5 Dateien); Branch-Coverage 76,75 % ≈ 77 % unverändert.
+5. Testzahl in den aktiven Doku-Dateien `60 → 69` angeglichen (README, Projektstand, short_term, long_term, decisions).
+
+**Ergebnis:**
+
+- Doku und Code wieder deckungsgleich; „5 getestete Module" stimmt jetzt faktisch.
+
+**Nachgelagert (Projektstand-Review):**
+
+- Prof-Checkliste gegen die aktuellste Folie (`vorlesung/08_Orchestrating_Agents`) abgeglichen: alle 10 Punkte erfasst, offen nur der Doku-Agent (E9), Deployment (E5) erlassen — Projektstand korrekt.
+- `Projektstand.md` „Nächste Maßnahmen"/Backlog korrigiert: Maßnahme 3 von `fa-scanner`/`fa-fill` (bereits getestet) auf `fa-supabase` (einziges Logik-Modul ohne Tests) umgestellt; Maßnahme 4 als `form_fields`-Lookup statt „RAG" benannt; „Sprach-Erkennung" (kein reales Feature) durch „Datums-Intelligenz (DE/EN)" ersetzt; RAG-Begriffe entwirrt (echtes RAG = pgvector über persönliche Dokumente); Hinweis auf noch nicht behandelte E10/E11 ergänzt.
+
+---
+
+## [2026-06-14] DocumentationAgent gebaut (Einheit 9)
+
+**Ziel:**
+Letzten offenen Pflichtpunkt umsetzen: eigener Agent für die Dokumentation (Orchestrierung, Einheit 9).
+
+**Aktionen:**
+
+1. Vorlesungsvorlage geprüft (`vorlesung/08_Orchestrating_Agents`): Rolle „Documentation" im Agenten-Lineup, Microservice via JSON-RPC, Flow `git diff → LLM → Markdown`.
+2. `doc-agent/` angelegt: `agent.py` (Flask + JSON-RPC 2.0, Methoden `document_changes`/`agent_card`, CLI `--once`), `llm.py` (Groq + OpenRouter-Fallback), `requirements.txt`, `.env.example`, `README.md`.
+3. **Autonom:** `document_changes` schreibt den erzeugten Eintrag per Default selbst an `logs/actions.md` (Guardrails: nur im Repo, nur anhängend, nie ohne Diff). Key aus `doc-agent/.env`/Umgebung, nie im Code.
+4. `.gitignore`: `doc-agent/.env`, `__pycache__/`, `*.pyc` ergänzt.
+5. Smoke-Tests (Python 3.12.10): leerer Diff → „keine Änderungen" (Git/Pfadlogik ok), `/health` ok, `agent_card` ok, unbekannte Methode → JSON-RPC -32601, fehlender Key → sauberer -32000-Error. Live-LLM-Lauf braucht den Groq-Key des Nutzers (wie die Extension).
+6. Doku nachgezogen: `Projektstand.md` (E9 ⬜→✅, Kennzahlen, Schnellüberblick, Maßnahmen), `short_term.md`, `decisions.md`.
+
+**Ergebnis:**
+
+- Einheit 9 erfüllt; aus den behandelten Einheiten (E2–E9) ist keine Pflicht mehr offen (E5 erlassen).
+- Offen nur noch: Abschlusspräsentation sowie die noch nicht behandelten Einheiten E10/E11.
