@@ -14,8 +14,8 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Kennzahl | Stand |
 | --- | --- |
-| **Pflicht-Einheiten erfüllt** | 7 von 8 behandelten (E5 entfällt abgestimmt) — offen nur E9 |
-| **Größte offene Punkte** | Dokumentations-Agent (E9) |
+| **Pflicht-Einheiten erfüllt** | Alle behandelten erfüllt (E2–E9; E5 entfällt abgestimmt) — keine offene Pflicht |
+| **Größte offene Punkte** | Abschlusspräsentation; E10/E11 noch nicht behandelt |
 | **Nächster Meilenstein** | Abschlusspräsentation 02. / 09.07.2026 |
 | **Deployment** | Mit Prof abgestimmt entfallen (Chrome-Extension-Case) |
 
@@ -26,7 +26,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 **Legende:** ✅ Erfüllt · 🟡 Teilweise · ⬜ Offen · ➖ Entfällt · ⏳ Noch nicht behandelt
 *Diese Übersicht listet nur Pflichtanforderungen (Folien-Checkliste „Wo Sie stehen sollten"). Optionale Kür steht in „Nächste Maßnahmen" / „Roadmap".*
 
-**Schnellüberblick:** E2 ✅ · E3 ✅ · E4 ✅ · E5 ➖ · E6 ✅ · E7 ✅ · E8 ✅ · E9 ⬜ · E10 ⏳ · E11 ⏳
+**Schnellüberblick:** E2 ✅ · E3 ✅ · E4 ✅ · E5 ➖ · E6 ✅ · E7 ✅ · E8 ✅ · E9 ✅ · E10 ⏳ · E11 ⏳
 
 ### Einheit 2 — Vibe Coding (09.04.2026)
 
@@ -74,13 +74,13 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
 | Relevante Tests identifiziert | ✅ | `TESTING_PLAN.md` |
-| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`), **60 Tests grün**, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
+| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`), **69 Tests grün**, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
 
 ### Einheit 9 — Orchestrierung von Agenten (11.06.2026)
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
-| Eigener Agent für die Dokumentation bereitgestellt | ⬜ | Vorlage: `DocumentationAgent` (git diff → LLM → Markdown, Flask/JSON-RPC), Referenz github.com/duenne/prompt_generator |
+| Eigener Agent für die Dokumentation bereitgestellt | ✅ | `doc-agent/` — autonomer `DocumentationAgent` (git diff → LLM → Markdown, schreibt `logs/actions.md` selbst), Flask-Microservice via JSON-RPC (`localhost:8010/jsonrpc`) nach Vorlesungsvorlage; Provider Groq/OpenRouter wie die Extension |
 
 ### Einheit 10 — Stakeholder Interaktion (18.06.2026)
 
@@ -103,17 +103,19 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | # | Maßnahme | Einheit | Prio | Aufwand |
 | :-: | --- | :-: | :-: | :-: |
-| 1 | Dokumentations-Agent ergänzen — Service nach Prof-Vorlage | 9 | 🔴 | 🟡 |
-| 2 | Abschlusspräsentation vorbereiten — inkl. Deployment-Begründung & Reflektion | 12 / 13 | 🔴 | 🟡 |
-| 3 | Testabdeckung bei Bedarf erweitern (DOM-Scanner `fa-scanner`, `fa-fill`) | 8 | 🟡 | 🟡 |
-| 4 | RAG über `form_fields` aktiv schalten — pgvector/Embeddings für sichtbares „echtes RAG" | 4 | 🟡 | 🟡 |
+| 1 | Abschlusspräsentation vorbereiten — inkl. Deployment-Begründung & Reflektion | 12 / 13 | 🔴 | 🟡 |
+| 2 | Unit-Tests für `fa-supabase` ergänzen (chrome-Mocks, `TESTING_PLAN.md` Phase 4) — einziges Logik-Modul noch ohne Tests | 8 | 🟡 | 🟡 |
+| 3 | Form-Field-Tipps aus `form_fields` aktiv schalten — kuratierte Hinweise als Badge (keyed Lookup, Daten in Supabase vorhanden) | 4 | 🟡 | 🟢 |
+
+> **Noch nicht behandelt:** Einheit 10 (Stakeholder-Interaktion, 18.06.) und Einheit 11 (MCP, 25.06.)
+> bringen ggf. neue Pflicht-Anforderungen — folgen erst nach den jeweiligen Vorlesungen.
 
 ---
 
 ## Roadmap / Backlog (Ausbauideen)
 
 Funktionale Ideen über den aktuellen Stand hinaus. Bereits umgesetzte Features (Auto-Fill,
-Guided Mode, Profil-Memory, Dark Mode, Submit-Review, Tastenkürzel, Sprach-Erkennung,
+Guided Mode, Profil-Memory, Dark Mode, Submit-Review, Tastenkürzel, Datums-Intelligenz (DE/EN),
 Formular-Erklärung) stehen in der Statusübersicht / `README.md`.
 
 **Legende:** Nutzen 🟢 Hoch · 🟡 Mittel · ⚪ Niedrig   |   Aufwand 🟢 Niedrig · 🟡 Mittel · 🔴 Hoch
@@ -124,9 +126,11 @@ Formular-Erklärung) stehen in der Statusübersicht / `README.md`.
 | **Live-KI-Validierung beim Tippen** | Eingaben in Echtzeit prüfen (PLZ, Datum, IBAN-Prüfsumme). | 🟢 | 🟡 |
 | **Erweiterte Pre-Submit-Logikprüfung** | Vor dem Absenden auf logische Widersprüche prüfen (baut auf Submit-Review auf). | 🟡 | 🟢 |
 | **Sprachsteuerung (Voice Input)** | Felder per Mikrofon befüllen (Web Speech API) → LLM mappt auf Felder. | 🟡 | 🟡 |
-| **Form-Field-Tipps aus `form_fields`** | Beim Fokus eines Felds kuratierten Hinweis als Badge zeigen (Daten in Supabase vorhanden). | 🟡 | 🟢 |
-| **RAG über persönliche Dokumente** | CV, Mietvertrag etc. chunked + embedded (pgvector); pro Feld semantische Suche. | 🟢 | 🔴 |
+| **Echtes RAG über persönliche Dokumente** | CV, Mietvertrag etc. chunked + embedded (pgvector); pro Feld semantische Suche. Das einzige der drei „RAG"-Themen, das wirklich Retrieval ist (`form_fields`-Tipps sind nur ein keyed Lookup, siehe Maßnahme 4). | 🟢 | 🔴 |
 | **Supabase Auth (OAuth)** | Geräte-UUID durch echte Accounts ersetzen → geräteübergreifend, RLS pro Nutzer. | 🟡 | 🟡 |
 | **Production-Packaging** | Backend-Proxy für Keys, Consent-Flow, Chrome-Web-Store, Firefox-Port. | 🟡 | 🔴 |
 | **Team-/Enterprise-Modus** | Geteilte Antwort-Templates via Multi-Tenancy; setzt OAuth voraus. | ⚪ | 🔴 |
 | **„Fake Filler"** | Auf Test-/Wegwerf-Seiten plausible Dummy-Daten statt echter Profildaten. | ⚪ | 🟢 |
+
+
+Ich zeichnen meienn Namen hier schreib das in die Doku

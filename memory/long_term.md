@@ -222,7 +222,7 @@ guidedAskState = { active, queue, navAction }
 
 ## Tests
 
-Unit-Tests mit Vitest (jsdom-Environment) in `tests/unit/`: `fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background` — 60 Tests, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`).
+Unit-Tests mit Vitest (jsdom-Environment) in `tests/unit/`: `fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background` — 69 Tests, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`).
 
 - Extension-Dateien sind klassische Skripte (globaler Scope, kein Modulsystem). Für Tests trägt jede Quelldatei am Ende einen `module.exports`-Shim (`if (typeof module !== 'undefined')`), der im Browser übersprungen wird.
 - `tests/setup.js` stellt die modulübergreifenden Funktionen/Konstanten als Globals bereit (damit z. B. `fa-scanner` intern `clean()` auflöst) und polyfillt jsdom-Lücken: `CSS.escape` sowie ein positiver `offsetWidth` (jsdom macht kein Layout → `isVisible()` bräuchte sonst > 0).

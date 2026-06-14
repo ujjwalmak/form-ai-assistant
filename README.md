@@ -151,7 +151,7 @@ npm run test:watch # Watch-Modus
 npm run coverage   # Tests + Abdeckungsbericht (coverage/index.html)
 ```
 
-- Tests liegen in `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`) — **60 Tests**, Branch-Coverage ~77 % der Logik-Module.
+- Tests liegen in `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`) — **69 Tests**, Branch-Coverage ~77 % der Logik-Module.
 - `tests/setup.js` stellt die Module als Globals bereit (die Extension-Dateien sind klassische Skripte ohne `import`/`export`) und polyfillt jsdom-Luecken (`CSS.escape`, `offsetWidth`).
 - Jede getestete Quelldatei hat am Ende einen `module.exports`-Shim, der im Browser (kein `module`) uebersprungen wird — die Extension-Laufzeit bleibt unveraendert.
 - CI: `.github/workflows/test.yml` fuehrt die Suite bei jedem Push/PR aus (Regression).

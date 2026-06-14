@@ -9,6 +9,11 @@ coverage/
 api-key.txt
 *.local
 .venv/
+doc-agent/.env
+
+# Python (doc-agent)
+__pycache__/
+*.pyc
 
 # Kursfolien & lokaler Präsentations-PDF – gehören nicht ins Repo
 vorlesung/

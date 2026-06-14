@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Doc-Agent: Vorschau (testen, schreibt nichts)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/doc-agent/agent.py",
+      "args": ["--once", "--preview"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Doc-Agent: Einzellauf (dokumentiert letzten Commit)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/doc-agent/agent.py",
+      "args": ["--once"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Doc-Agent: Server (JSON-RPC :8010)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/doc-agent/agent.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
