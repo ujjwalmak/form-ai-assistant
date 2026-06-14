@@ -59,6 +59,38 @@ curl -X POST http://localhost:8010/jsonrpc \
   -d '{"jsonrpc":"2.0","id":2,"method":"agent_card","params":{}}'
 ```
 
+### C) Automatisch bei jedem Commit (Git-Hook)
+
+Damit sich das Projekt selbst dokumentiert: ein `post-commit`-Hook ruft nach jedem
+`git commit` den **laufenden** Server an, der den Commit autonom in `logs/actions.md` schreibt.
+
+**Einrichtung** (aus dem Repo-Wurzelverzeichnis, einmalig):
+
+```bash
+cp doc-agent/post-commit .git/hooks/post-commit
+chmod +x .git/hooks/post-commit
+```
+
+> `.git/hooks/` ist nicht versioniert — deshalb liegt die nachvollziehbare Vorlage als
+> `doc-agent/post-commit` im Repo. Nach einem Clone den Copy-Schritt erneut ausführen.
+
+**Täglicher Ablauf:**
+
+1. Server **einmal** starten (Terminal offen lassen) — z. B. über den VS-Code-Run-Button
+   „Doc-Agent: Server" (`.vscode/launch.json`).
+2. Normal arbeiten und `git commit` — der Hook meldet `[doc-agent] Commit dokumentiert -> logs/actions.md`.
+3. Den so entstandenen `logs/actions.md`-Eintrag beim **nächsten** Commit mitnehmen.
+
+Läuft der Server nicht, wird die Doku übersprungen — der Commit selbst gelingt trotzdem.
+
+### VS-Code-Run-Buttons (`.vscode/launch.json`)
+
+| Konfiguration | Wirkung |
+|---|---|
+| Doc-Agent: Vorschau (testen, schreibt nichts) | Einzellauf mit `--preview` — zeigt Feedback + Ergebnis, schreibt nichts |
+| Doc-Agent: Einzellauf | dokumentiert den letzten Commit autonom |
+| Doc-Agent: Server | startet den Microservice auf `:8010` |
+
 ## JSON-RPC-Methoden
 
 | Methode | Parameter | Wirkung |
