@@ -141,3 +141,8 @@ function fillField(el, value) {
   el.dispatchEvent(new Event('input',  { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
+
+// ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { setKendoValue, tryDatePickerLib, normalizeTemporalValue, fillField };
+}
