@@ -220,6 +220,18 @@ guidedAskState = { active, queue, navAction }
 - Chrome Native PDF Viewer: Content Scripts nicht injizierbar
 - Cross-Origin iFrames: explizit übersprungen (`window !== window.top`)
 
+## Tests
+
+Unit-Tests mit Vitest (jsdom-Environment) in `tests/unit/`: `fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background` — 60 Tests, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`).
+
+- Extension-Dateien sind klassische Skripte (globaler Scope, kein Modulsystem). Für Tests trägt jede Quelldatei am Ende einen `module.exports`-Shim (`if (typeof module !== 'undefined')`), der im Browser übersprungen wird.
+- `tests/setup.js` stellt die modulübergreifenden Funktionen/Konstanten als Globals bereit (damit z. B. `fa-scanner` intern `clean()` auflöst) und polyfillt jsdom-Lücken: `CSS.escape` sowie ein positiver `offsetWidth` (jsdom macht kein Layout → `isVisible()` bräuchte sonst > 0).
+- `background.js`: die `chrome.*`-Event-Listener sind in `if (typeof chrome !== 'undefined' && chrome.runtime)` gekapselt, damit der Service Worker im Node-Test importierbar ist.
+- CI: `.github/workflows/test.yml` (`npm install && npm test`) bei jedem Push/PR.
+- Bewusst nicht unit-getestet: Netzwerk/Retry (`background`), DOM-Orchestrierung (`content.js`), Kendo-/Datepicker-Library-Pfade, CSS — Kandidaten für E2E (Playwright), siehe `TESTING_PLAN.md`.
+
+Icons liegen unter `icons/` (Manifest referenziert `icons/icon*.png`).
+
 ## Sicherheit
 
 API-Keys in `chrome.storage.sync` — niemals committed. Für KI-Funktionen werden relevante Formular- und Profildaten an den gewählten Provider übertragen. Für Produktion: Backend-Proxy plus expliziten Consent-Flow vorsehen.

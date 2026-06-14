@@ -208,3 +208,27 @@ Gesamte Dokumentation gegen den Code prüfen und Abweichungen korrigieren; Perso
 
 - Doku deckt sich mit dem Code (Module, Provider/Retry, Modi, Storage-Keys verifiziert)
 - Persona-Anforderung aus Einheit 2 erfüllt
+
+---
+
+## [2026-06-14] Test-Suite (Einheit 8) + Repo-Struktur
+
+**Ziel:**
+Pflicht „Tests eingebunden" (Einheit 8) umsetzen und verifizieren; Root entzerren; Doku synchronisieren.
+
+**Aktionen:**
+
+1. Vitest + jsdom eingerichtet: `package.json`, `vitest.config.js`, `tests/setup.js`
+2. 60 Unit-Tests in `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`)
+3. Browser-sichere `module.exports`-Shims an alle getesteten Quelldateien; `chrome.*`-Listener in `background.js` gekapselt
+4. jsdom-Polyfills (`CSS.escape`, `offsetWidth`) + Cross-Modul-Globals in `tests/setup.js`
+5. GitHub-Actions-Workflow `.github/workflows/test.yml` (Regression bei jedem Push)
+6. Coverage-Setup (`@vitest/coverage-v8`, `npm run coverage`) — Branch ~77 % der Logik-Module
+7. Node v24 lokal via winget installiert, Suite ausgeführt: 60/60 grün
+8. Icons nach `icons/` verschoben, Manifest-Pfade angepasst
+9. README (Tests-Sektion), `short_term.md`, `long_term.md`, `decisions.md`, `Projektstand.md` synchronisiert
+
+**Ergebnis:**
+
+- Einheit 8 erfüllt und verifiziert (60 Tests grün, CI aktiv)
+- Offen als Pflicht: nur noch Dokumentations-Agent (Einheit 9)
