@@ -139,3 +139,20 @@ Alle Requests laufen via `background.js` (Service Worker) als CSP-sicheres Routi
 - API-Keys liegen in `chrome.storage.sync` (nicht im Repository)
 - Profil- und Formularinhalte werden fuer KI-Funktionen an den gewaehlten Provider uebertragen
 - Fuer produktiven Einsatz: Backend-Proxy + explizite Consent-/Datenschutz-Mechanik je Formular einplanen
+
+## Tests
+
+Unit-Tests mit [Vitest](https://vitest.dev/) (jsdom) fuer die testbare Logik. Voraussetzung: Node.js.
+
+```bash
+npm install        # einmalig
+npm test           # alle Tests einmal ausfuehren
+npm run test:watch # Watch-Modus
+npm run coverage   # Tests + Abdeckungsbericht (coverage/index.html)
+```
+
+- Tests liegen in `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`) — **60 Tests**, Branch-Coverage ~77 % der Logik-Module.
+- `tests/setup.js` stellt die Module als Globals bereit (die Extension-Dateien sind klassische Skripte ohne `import`/`export`) und polyfillt jsdom-Luecken (`CSS.escape`, `offsetWidth`).
+- Jede getestete Quelldatei hat am Ende einen `module.exports`-Shim, der im Browser (kein `module`) uebersprungen wird — die Extension-Laufzeit bleibt unveraendert.
+- CI: `.github/workflows/test.yml` fuehrt die Suite bei jedem Push/PR aus (Regression).
+- Bewusst nicht unit-getestet: Netzwerk-I/O, DOM-Orchestrierung in `content.js`, CSS — Kandidaten fuer E2E, siehe `TESTING_PLAN.md`.

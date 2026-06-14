@@ -279,3 +279,30 @@ Kursfolien und der Zwischenpräsentations-PDF liegen in `vorlesung/` (via `.giti
 **Konsequenzen:**
 
 - `.gitignore`: Kursfolien-Ordner `vorlesung/` ignoriert, `.venv/`; `memory/` + `logs/` bewusst getrackt (Kurs-Anforderung Agent-Transparenz)
+
+---
+
+## [2026-06-14] Entscheidung: Test-Setup (Vitest + CI) + Icons-Ordner
+
+**Kontext:**
+Kurs-Einheit 8 fordert „relevante Tests identifiziert und in die Entwicklung eingebunden". Die Extension-Dateien sind klassische Content-Scripts ohne Modulsystem (globaler Scope, feste Manifest-Ladereihenfolge).
+
+**Entscheidung:**
+
+- Vitest (jsdom) als Test-Runner; Tests in `tests/unit/` für die pure/DOM-nahe Logik (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`).
+- Pro getesteter Quelldatei ein browser-sicherer `module.exports`-Shim am Dateiende statt Umbau auf ES-Module.
+- `chrome.*`-Listener in `background.js` gegen fehlendes `chrome` im Node-Kontext gekapselt.
+- `tests/setup.js` polyfillt jsdom-Lücken (`CSS.escape`, `offsetWidth`) und stellt Cross-Modul-Globals bereit.
+- GitHub Actions (`.github/workflows/test.yml`) führt die Suite bei jedem Push aus.
+- Icons von Root nach `icons/` verschoben (entzerrt das Root; nur Manifest-Pfade betroffen).
+
+**Alternativen:**
+
+- Umbau auf ES-Module: verworfen — bricht klassisches Content-Script-Laden + Reihenfolge (vgl. Entscheidung gegen `src/`).
+- E2E (Playwright) statt Unit: höherer Aufwand, für die Pflicht nicht nötig (Kür, in `TESTING_PLAN.md`).
+
+**Konsequenzen:**
+
+- 60 Tests grün, Branch-Coverage ~77 % der Logik-Module; `npm test` / `npm run coverage`.
+- Neu: `package.json`, `vitest.config.js`, `tests/`, `.github/workflows/test.yml`, `node_modules/` + `coverage/` (gitignored).
+- Einheit 8 erfüllt; offen bleibt als Pflicht nur der Dokumentations-Agent (Einheit 9).
