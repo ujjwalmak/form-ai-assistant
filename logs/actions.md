@@ -311,3 +311,20 @@ Automatisierte Dokumentation von Commits mit Hilfe eines Git-Hooks.
 **Ergebnis:**
 
 - Automatisierte Dokumentation von Commits in `logs/actions.md` nach jedem Commit, wenn der Server läuft.
+
+
+---
+
+## [2026-06-14] Automatisierte Dokumentation mit Git-Hook
+
+**Ziel:**
+Automatisierte Dokumentation von Commits mit Hilfe eines Git-Hooks.
+
+**Aktionen:**
+
+1. Einrichtung eines `post-commit`-Git-Hooks, der nach jedem Commit den laufenden DocumentationAgent-Server anruft.
+2. Implementierung des Servers, der den Commit autonom in `logs/actions.md` schreibt.
+
+**Ergebnis:**
+
+- Automatisierte Dokumentation von Commits in `logs/actions.md` nach jedem Commit, wenn der Server läuft.
