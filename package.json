@@ -1,0 +1,14 @@
+{
+  "name": "form-ai-assistant",
+  "version": "2.0.0",
+  "private": true,
+  "description": "FormAssist – KI Formular-Assistent (Chrome MV3 Extension)",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.8"
+  }
+}
