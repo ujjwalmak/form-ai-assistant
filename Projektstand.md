@@ -80,7 +80,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
-| Eigener Agent für die Dokumentation bereitgestellt | ✅ | `doc-agent/` — autonomer `DocumentationAgent` (git diff → LLM → Markdown, schreibt `logs/actions.md` selbst), Flask-Microservice via JSON-RPC (`localhost:8010/jsonrpc`) nach Vorlesungsvorlage; Provider Groq/OpenRouter wie die Extension |
+| Eigener Agent für die Dokumentation bereitgestellt | ✅ | `doc-agent/` — autonomer `DocumentationAgent` (git diff → LLM → Markdown, schreibt `logs/actions.md` selbst), Flask-Microservice via JSON-RPC (`localhost:8010/jsonrpc`) nach Vorlesungsvorlage; Provider Groq/OpenRouter wie die Extension. Orchestrierung: `post-commit`-Git-Hook ruft den Service nach jedem Commit (Vorlage `doc-agent/post-commit`), VS-Code-Run-Buttons in `.vscode/launch.json` |
 
 ### Einheit 10 — Stakeholder Interaktion (18.06.2026)
 

@@ -1,0 +1,22 @@
+#!/bin/sh
+# Doku-Agent (Kurs-Einheit 9): nach jedem Commit den letzten Commit
+# vom laufenden DocumentationAgent-Server dokumentieren lassen.
+# Blockiert den Commit nie (exit 0), egal ob der Server laeuft.
+#
+# Installation (aus dem Repo-Wurzelverzeichnis):
+#   cp doc-agent/post-commit .git/hooks/post-commit
+#   chmod +x .git/hooks/post-commit
+# .git/hooks/ ist nicht versioniert — diese Datei ist die nachvollziehbare Vorlage.
+
+URL="http://localhost:8010/jsonrpc"
+REQ='{"jsonrpc":"2.0","id":1,"method":"document_changes","params":{"range":"HEAD~1..HEAD"}}'
+
+RESP=$(curl -s --max-time 30 -X POST "$URL" \
+  -H "Content-Type: application/json" -d "$REQ" 2>/dev/null)
+
+if [ -z "$RESP" ]; then
+  echo "[doc-agent] Server nicht erreichbar (laeuft er auf :8010?) - Doku uebersprungen."
+else
+  echo "[doc-agent] Commit dokumentiert -> logs/actions.md"
+fi
+exit 0

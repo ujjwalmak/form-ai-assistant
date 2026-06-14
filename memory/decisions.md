@@ -328,3 +328,5 @@ Eigener Ordner `doc-agent/` mit einem Flask-Service (`agent.py`), JSON-RPC 2.0, 
 - Key über Umgebung/`doc-agent/.env` (gitignored), nie im Code — gleiche Sicherheitslinie wie die Extension.
 - Guardrails: schreibt nur innerhalb des Repos, nur anhängend, nie ohne erkannte Änderung.
 - Einheit 9 erfüllt; aus den behandelten Einheiten ist keine Pflicht mehr offen.
+
+**Nachtrag (Orchestrierung):** `post-commit`-Git-Hook ruft den laufenden Server nach jedem Commit → Selbst-Dokumentation. Hook nicht versioniert (`.git/hooks/`), daher Vorlage als `doc-agent/post-commit` im Repo + Installationsschritt in `doc-agent/README.md`. Caveat: Diff wird bei ~14000 Zeichen gekürzt — sehr große Commits werden nur teilweise zusammengefasst.
