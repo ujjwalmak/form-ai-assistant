@@ -131,6 +131,3 @@ Formular-Erklärung) stehen in der Statusübersicht / `README.md`.
 | **Production-Packaging** | Backend-Proxy für Keys, Consent-Flow, Chrome-Web-Store, Firefox-Port. | 🟡 | 🔴 |
 | **Team-/Enterprise-Modus** | Geteilte Antwort-Templates via Multi-Tenancy; setzt OAuth voraus. | ⚪ | 🔴 |
 | **„Fake Filler"** | Auf Test-/Wegwerf-Seiten plausible Dummy-Daten statt echter Profildaten. | ⚪ | 🟢 |
-
-
-Ich zeichnen meienn Namen hier schreib das in die Doku
