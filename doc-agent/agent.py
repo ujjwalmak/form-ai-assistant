@@ -86,11 +86,15 @@ def repo_root():
     return Path(out.stdout.strip())
 
 
+# Der Agent dokumentiert sich nicht selbst: eigener Code und die eigene
+# Ausgabedatei werden aus dem Diff ausgeschlossen (vermeidet Selbstreferenz/Rauschen).
+SELF_EXCLUDES = ["doc-agent", "logs/actions.md"]
+
+
 def get_diff(range_spec, root):
-    out = subprocess.run(
-        ["git", "diff", range_spec],
-        capture_output=True, text=True, cwd=root,
-    )
+    cmd = ["git", "diff", range_spec, "--", "."]
+    cmd += [f":(exclude){p}" for p in SELF_EXCLUDES]
+    out = subprocess.run(cmd, capture_output=True, text=True, cwd=root)
     if out.returncode != 0:
         raise RuntimeError(f"git diff fehlgeschlagen: {out.stderr.strip()}")
     return out.stdout

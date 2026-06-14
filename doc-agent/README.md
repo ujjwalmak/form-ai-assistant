@@ -14,7 +14,9 @@ Format von `logs/actions.md` und **schreibt ihn eigenständig** in die Datei. Es
 manuelles Copy-Paste nötig.
 
 **Guardrails:** schreibt nur innerhalb des Repos, nur anhängend (kein Überschreiben),
-nie ohne erkannte Änderung. Provider wie in der Extension: Groq primär, OpenRouter Fallback.
+nie ohne erkannte Änderung. Dokumentiert seine **eigenen** Dateien (`doc-agent/`,
+`logs/actions.md`) bewusst **nicht** — keine Selbstreferenz (`SELF_EXCLUDES` in `agent.py`).
+Provider wie in der Extension: Groq primär, OpenRouter Fallback.
 
 ## Einrichtung
 
