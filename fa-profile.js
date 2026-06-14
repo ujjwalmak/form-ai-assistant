@@ -25,3 +25,8 @@ const FAKE_DATA = {
   city: 'Berlin', country: 'Deutschland', iban: 'DE89370400440532013000',
   bic: 'COBADEFFXXX', company: 'Muster GmbH', jobTitle: 'Software-Entwickler',
 };
+
+// ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { PROFILE_FIELDS, FAKE_DATA };
+}

@@ -5,9 +5,11 @@
   "description": "FormAssist – KI Formular-Assistent (Chrome MV3 Extension)",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
     "jsdom": "^25.0.1",
     "vitest": "^2.1.8"
   }

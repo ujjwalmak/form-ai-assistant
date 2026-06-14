@@ -74,7 +74,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
 | Relevante Tests identifiziert | ✅ | `TESTING_PLAN.md` |
-| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils` + `background` pure functions) via `npm test` + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push). Hinweis: lokal noch nicht ausgeführt (kein Node auf dem Dev-Rechner) — laufen via CI |
+| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`), **60 Tests grün**, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
 
 ### Einheit 9 — Orchestrierung von Agenten (11.06.2026)
 
@@ -105,7 +105,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | :-: | --- | :-: | :-: | :-: |
 | 1 | Dokumentations-Agent ergänzen — Service nach Prof-Vorlage | 9 | 🔴 | 🟡 |
 | 2 | Abschlusspräsentation vorbereiten — inkl. Deployment-Begründung & Reflektion | 12 / 13 | 🔴 | 🟡 |
-| 3 | Tests lokal ausführen + ggf. erweitern (Node installieren, `npm install && npm test`) | 8 | 🟡 | 🟢 |
+| 3 | Testabdeckung bei Bedarf erweitern (DOM-Scanner `fa-scanner`, `fa-fill`) | 8 | 🟡 | 🟡 |
 | 4 | RAG über `form_fields` aktiv schalten — pgvector/Embeddings für sichtbares „echtes RAG" | 4 | 🟡 | 🟡 |
 
 ---

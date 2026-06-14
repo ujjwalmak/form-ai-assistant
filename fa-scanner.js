@@ -448,3 +448,12 @@ function matchProfile(el, profile) {
   }
   return null;
 }
+
+// ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    getLabel, getGroupLabel, isFileWidget, getHint, getError, extractField,
+    groupIntoSections, getFormIntro, getSubmitText, getFieldValueBrief,
+    buildSystemPrompt, getActiveFieldContext, matchProfile,
+  };
+}
