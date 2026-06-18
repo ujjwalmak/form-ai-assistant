@@ -330,3 +330,24 @@ Eigener Ordner `doc-agent/` mit einem Flask-Service (`agent.py`), JSON-RPC 2.0, 
 - Einheit 9 erfüllt; aus den behandelten Einheiten ist keine Pflicht mehr offen.
 
 **Nachtrag (Orchestrierung):** `post-commit`-Git-Hook ruft den laufenden Server nach jedem Commit → Selbst-Dokumentation. Hook nicht versioniert (`.git/hooks/`), daher Vorlage als `doc-agent/post-commit` im Repo + Installationsschritt in `doc-agent/README.md`. Caveat: Diff wird bei ~14000 Zeichen gekürzt — sehr große Commits werden nur teilweise zusammengefasst.
+
+---
+
+## [2026-06-18] Entscheidung: Stakeholder-Projektwebseite mit MkDocs Material (Einheit 10)
+
+**Kontext:**
+Einheit 10 (Stakeholder-Interaktion) fordert eine „Projektwebseite für Stakeholder". Die Folien empfehlen MkDocs + GitHub Pages + PlantUML und geben die drei Stakeholder vor: Professor (Bewertung), Nutzer (Nutzung), Arbeitgeber (Kompetenz/Bewerbungsreferenz).
+
+**Entscheidung:**
+`docs/` + `mkdocs.yml` mit **MkDocs Material**, Struktur entlang der drei Stakeholder (Übersicht, Für Nutzer, Technische Architektur, Entwicklung & Qualität, Entscheidungen & Kompetenzen, Projektstand & Reflexion). Inhalte strikt aus dem Repo abgeleitet, Unsicheres mit `TODO: fachlich klären`. **Mermaid statt PlantUML** für das Architekturdiagramm (in Material eingebaut, kein Extra-Binary). **Auto-Deploy via GitHub Actions** (`.github/workflows/docs.yml`, offizielle Pages-Action) statt `gh-deploy`.
+
+**Alternativen:**
+
+- Fork zum eigenen Account + dort deployen: möglich (volle Kontrolle), aber das Team will alles im einen Repo `ujjwalmak/...`.
+- PlantUML: vom Prof genannt, aber Mermaid ist leichter und ohne Server/Java nutzbar.
+
+**Konsequenzen:**
+
+- Webseite deckt zugleich den Deployment-Aspekt (E5) als deploytes Artefakt mit ab — stärkt die Reflexion.
+- Offen: GitHub Pages muss einmalig vom Repo-Admin aktiviert werden (Source = „GitHub Actions"); Screenshots ergänzt der Nutzer.
+- Neue Dateien: `mkdocs.yml`, `docs/`, `requirements-docs.txt`, `.github/workflows/docs.yml`; `site/` gitignored; Run-Button „Webseite: Vorschau".

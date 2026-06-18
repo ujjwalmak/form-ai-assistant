@@ -1,13 +1,13 @@
 ---
 name: long-term-architecture
-description: Extension architecture, provider/API setup, agent flow, storage keys, prompt structure — current as of 2026-06-14
+description: Extension architecture, provider/API setup, agent flow, storage keys, prompt structure — current as of 2026-06-18
 metadata:
   type: project
 ---
 
 # Long-Term Memory — FormAssist
 
-## Architektur (Stand 2026-06-14)
+## Architektur (Stand 2026-06-18)
 
 ### Extension-Typ
 
@@ -231,6 +231,22 @@ Unit-Tests mit Vitest (jsdom-Environment) in `tests/unit/`: `fa-utils`, `fa-prof
 - Bewusst nicht unit-getestet: Netzwerk/Retry (`background`), DOM-Orchestrierung (`content.js`), Kendo-/Datepicker-Library-Pfade, CSS — Kandidaten für E2E (Playwright), siehe `TESTING_PLAN.md`.
 
 Icons liegen unter `icons/` (Manifest referenziert `icons/icon*.png`).
+
+## Projekt-Tooling (außerhalb der Extension)
+
+Zwei Werkzeuge liegen bewusst getrennt vom Extension-Code (Vanilla JS, kein Build) im Repo —
+sie fassen die Extension nicht an:
+
+- **`doc-agent/`** — autonomer DocumentationAgent (Kurs-Einheit 9). Python/Flask-Microservice
+  via JSON-RPC (`localhost:8010/jsonrpc`); Ablauf `git diff → LLM → Markdown`, schreibt
+  `logs/actions.md` selbst. Provider Groq/OpenRouter wie die Extension (`llm.py`), Key aus
+  `doc-agent/.env` (gitignored). Orchestrierung über einen `post-commit`-Git-Hook (Vorlage
+  `doc-agent/post-commit`). **Self-Exclude** (`SELF_EXCLUDES`): dokumentiert die eigenen
+  Dateien (`doc-agent/`, `logs/actions.md`) nicht. VS-Code-Run-Buttons in `.vscode/launch.json`.
+- **`docs/` + `mkdocs.yml`** — Stakeholder-Projektwebseite (Kurs-Einheit 10), MkDocs Material.
+  Inhalte aus dem Repo abgeleitet; Auto-Deploy nach GitHub Pages via
+  `.github/workflows/docs.yml`. Abhängigkeiten in `requirements-docs.txt`, Build-Ordner `site/`
+  gitignored.
 
 ## Sicherheit
 

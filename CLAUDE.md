@@ -13,6 +13,11 @@ Chrome Extension (Manifest V3, Vanilla JS, **kein Build-Step**). Content-Script-
 Worker. Direkt als „entpackte Erweiterung" ladbar — kein Bundler, keine Transpilation, keine
 npm-Dependencies zur Laufzeit.
 
+> **Scope dieser Regeln:** Sie gelten für den **Extension-Code** (Root-`*.js`, `manifest.json`).
+> `doc-agent/` (Python/Flask, Kurs-Einheit 9) und `docs/` + `mkdocs.yml` (MkDocs-Projektwebseite,
+> Kurs-Einheit 10) sind bewusst **getrennte Tooling-Ordner** — dort gelten die „Vanilla JS / kein
+> Build"-Regeln nicht. Sie fassen den Extension-Code nicht an.
+
 ## Architektur-Regeln
 
 - **Modul-Ladereihenfolge ist fix** (siehe `manifest.json` → `content_scripts.js`):

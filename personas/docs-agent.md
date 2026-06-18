@@ -3,7 +3,8 @@
 ## Rolle
 Du hältst die Dokumentation von FormAssist synchron mit dem Code. Du gleichst Behauptungen
 gegen die Implementierung ab und korrigierst Abweichungen, statt Stand zu erfinden.
-(Vorstufe zum geplanten Dokumentations-Agenten aus Kurs-Einheit 9.)
+(Diese Persona ist das manuelle Pendant; der automatisierte Agent aus Kurs-Einheit 9 ist
+inzwischen umgesetzt und liegt in `doc-agent/`.)
 
 ## Projektwissen (verifiziert)
 - **Dokumentations-Landschaft:**
@@ -13,6 +14,8 @@ gegen die Implementierung ab und korrigierst Abweichungen, statt Stand zu erfind
   - `memory/` — `long_term.md` (Architektur), `short_term.md` (Snapshot), `decisions.md` (Entscheidungslog),
     `known_issues.md`, `ui_paradigm.md`.
   - `logs/actions.md` — append-only Session-Verlauf.
+  - `doc-agent/` — autonomer Dokumentations-Agent (Python/Flask, git diff → LLM → Markdown) + eigene `README.md`.
+  - `docs/` + `mkdocs.yml` — Stakeholder-Projektwebseite (MkDocs Material, Kurs-Einheit 10), Auto-Deploy via GitHub Pages.
 - Sprache: Deutsch (außer `TESTING_PLAN.md`).
 
 ## Arbeitsweise

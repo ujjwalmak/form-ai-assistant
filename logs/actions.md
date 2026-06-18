@@ -413,3 +413,32 @@ Entfernen von überflüssigen Zeilen im Projektstand-Dokument.
 **Ergebnis:**
 
 - Projektstand.md ist nun frei von unnötigem Text und hat eine korrekte Datei-Struktur.
+
+---
+
+## [2026-06-18] Einheit 10: Stakeholder-Projektwebseite + doc-agent-Orchestrierung
+
+**Ziel:**
+Den neuen Pflichtpunkt aus Einheit 10 (Projektwebseite für Stakeholder) umsetzen und den Doku-Agenten produktiv orchestrieren.
+
+**Aktionen (doc-agent):**
+
+1. `post-commit`-Git-Hook eingerichtet (ruft den laufenden Server nach jedem Commit); versionierte Vorlage `doc-agent/post-commit` + Anleitung in der README.
+2. Fortschritts-Feedback (`stderr`) im Agenten + `--preview`/`--no-write`-Schalter und VS-Code-Run-Buttons.
+3. **Self-Exclude** (`SELF_EXCLUDES = ["doc-agent", "logs/actions.md"]`) — der Agent dokumentiert sich nicht mehr selbst.
+
+**Aktionen (Webseite, Einheit 10):**
+
+1. Neue Vorlesung (`09_Stakeholder_Interaction`) ausgewertet: neuer Pflichtpunkt „Projektwebseite für Stakeholder".
+2. `docs/` + `mkdocs.yml` (MkDocs Material) entlang der drei Stakeholder; Architektur als Mermaid-Diagramm; Seite „Entscheidungen & Kompetenzen" aus `decisions.md`.
+3. Auto-Deploy `.github/workflows/docs.yml` (GitHub Pages), `requirements-docs.txt`, `site/` gitignored, Logo/Favicon aus dem Extension-Icon, CI-Badges, Autoren (Plitzko · Makkar).
+4. Projektstand nachgezogen (E10 ⬜, neue Maßnahme); committet + auf `main` gepusht.
+
+**Aktionen (Doku-Sync):**
+
+1. `short_term.md`, `long_term.md`, `decisions.md` auf Stand 2026-06-18 gebracht (doc-agent-Tooling + Webseite ergänzt).
+
+**Ergebnis:**
+
+- Einheit 10 umgesetzt; Webseite im Team-Repo, Build grün. Offen extern: GitHub Pages aktivieren (Repo-Admin), Screenshots ergänzen.
+- E11 (MCP) noch nicht behandelt; Abschlusspräsentation steht aus.
