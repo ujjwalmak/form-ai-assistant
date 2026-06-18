@@ -1,13 +1,13 @@
 ---
 name: short-term-snapshot
-description: Current runtime state, implemented features, and storage keys — snapshot as of 2026-06-14
+description: Current runtime state, implemented features, and storage keys — snapshot as of 2026-06-18
 metadata:
   type: project
 ---
 
 # Short-Term Memory — FormAssist
 
-Stand: 2026-06-14
+Stand: 2026-06-18
 
 ## Aktueller Stand
 
@@ -98,10 +98,12 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 ## Nächste sinnvolle Schritte
 
 1. Abschlusspräsentation + Reflektion vorbereiten (inkl. Deployment-Begründung)
-2. Optional: Test-Abdeckung erweitern (`fa-supabase` mit chrome-Mocks); RAG über Supabase `form_fields`; Privacy/Consent-Flow vor KI-Analyse
+2. Stakeholder-Webseite veröffentlichen — GitHub Pages aktivieren (wartet auf Repo-Admin); optional Screenshots ergänzen
+3. Optional: Test-Abdeckung erweitern (`fa-supabase` mit chrome-Mocks); RAG über Supabase `form_fields`; Privacy/Consent-Flow vor KI-Analyse
 
-Keine offene Pflicht mehr aus behandelten Einheiten; E10/E11 noch nicht behandelt.
+Keine offene Pflicht aus behandelten Einheiten (E2–E10); E11 (MCP) noch nicht behandelt.
 
 Erledigt (2026-06-14): Ausführbare Tests + CI (Kurs-Einheit 8); autonomer Dokumentations-Agent `doc-agent/` (Kurs-Einheit 9).
+Erledigt (2026-06-18): Stakeholder-Projektwebseite (`docs/`, MkDocs Material) + GitHub-Pages-Auto-Deploy (Kurs-Einheit 10); doc-agent um `post-commit`-Hook + Self-Exclude erweitert.
 
 Vollständiger Status nach Kurseinheiten: siehe `Projektstand.md`.

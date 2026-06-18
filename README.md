@@ -156,3 +156,10 @@ npm run coverage   # Tests + Abdeckungsbericht (coverage/index.html)
 - Jede getestete Quelldatei hat am Ende einen `module.exports`-Shim, der im Browser (kein `module`) uebersprungen wird — die Extension-Laufzeit bleibt unveraendert.
 - CI: `.github/workflows/test.yml` fuehrt die Suite bei jedem Push/PR aus (Regression).
 - Bewusst nicht unit-getestet: Netzwerk-I/O, DOM-Orchestrierung in `content.js`, CSS — Kandidaten fuer E2E, siehe `TESTING_PLAN.md`.
+
+## Weitere Bestandteile
+
+Neben dem Extension-Code liegen zwei bewusst **getrennte** Tooling-Ordner im Repo (sie fassen den Extension-Code nicht an):
+
+- **`doc-agent/`** — autonomer Dokumentations-Agent (Kurs-Einheit 9). Python/Flask-Microservice via JSON-RPC: `git diff → LLM → Markdown`, schreibt `logs/actions.md` selbst; per `post-commit`-Hook nach jedem Commit ausloesbar. Details in [`doc-agent/README.md`](doc-agent/README.md).
+- **`docs/` + `mkdocs.yml`** — Stakeholder-Projektwebseite (Kurs-Einheit 10, MkDocs Material), Auto-Deploy nach GitHub Pages via `.github/workflows/docs.yml`. Lokale Vorschau: `python -m mkdocs serve`.
