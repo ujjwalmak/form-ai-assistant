@@ -1,5 +1,10 @@
 # FormAssist — KI Formular-Assistent
 
+[![Tests](https://github.com/ujjwalmak/form-ai-assistant/actions/workflows/test.yml/badge.svg)](https://github.com/ujjwalmak/form-ai-assistant/actions/workflows/test.yml)
+[![Projektwebseite deployen](https://github.com/ujjwalmak/form-ai-assistant/actions/workflows/docs.yml/badge.svg)](https://github.com/ujjwalmak/form-ai-assistant/actions/workflows/docs.yml)
+![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-deep%20purple)
+![Built with MkDocs Material](https://img.shields.io/badge/docs-MkDocs%20Material-pink)
+
 FormAssist ist eine **Chrome-Extension (Manifest V3)**, die auf Webseiten mit Formularen
 eine KI-Sidebar einblendet. Der Agent analysiert die Felder, erklärt das Formular in
 einfacher Sprache und füllt es — gespeist aus einem persönlichen Profil — weitgehend
@@ -8,6 +13,12 @@ automatisiert oder im Dialog aus.
 !!! abstract "Fallstudie"
     KI-Assistent zur korrekten Eingabe von Daten in komplexe Browser-Formulare.
     Studienprojekt im Modul *AI-Prototyping* (SS 2026, Prof. Dr. Sebastian Dünnebeil, FK07).
+
+    **Team:** Maximilian Plitzko · Ujjwal Makkar
+
+!!! warning "TODO: fachlich klären — Screenshot ergänzen"
+    Hier ein Screenshot der FormAssist-Sidebar auf einem Formular einfügen.
+    Bild unter `docs/img/` ablegen, dann einbinden mit `![FormAssist-Sidebar](img/hero.png)`.
 
 ## Welches Problem es löst
 

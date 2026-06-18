@@ -13,6 +13,13 @@
 - **Mehrere Profile** — privat/geschäftlich, mit Switcher, Import/Export als JSON.
 - **Chat-Gedächtnis pro Domain** — der Agent erinnert sich über Seitenwechsel hinweg.
 
+## Die Extension in Aktion
+
+!!! warning "TODO: fachlich klären — Screenshots ergänzen"
+    Aussagekräftige Screenshots der laufenden Extension einfügen (Sidebar, Agent beim
+    Ausfüllen, Submit-Review). Bilder unter `docs/img/` ablegen und z. B. so einbinden:
+    `![Agent füllt ein Formular](img/agent.png)`.
+
 ## Nutzungsszenario
 
 Du öffnest ein längeres Online-Formular (z. B. eine Behörden- oder Anmeldemaske), startest

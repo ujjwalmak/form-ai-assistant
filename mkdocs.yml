@@ -2,7 +2,7 @@ site_name: FormAssist — KI Formular-Assistent
 site_description: >-
   Chrome-Extension, die Online-Formulare scannt, in einfacher Sprache erklärt
   und mit einem KI-Agenten ausfüllt.
-site_author: Maximilian Plitzko
+site_author: Maximilian Plitzko und Ujjwal Makkar
 repo_url: https://github.com/ujjwalmak/form-ai-assistant
 repo_name: form-ai-assistant
 site_url: https://ujjwalmak.github.io/form-ai-assistant/
@@ -12,6 +12,8 @@ site_dir: site
 theme:
   name: material
   language: de
+  logo: img/logo.png
+  favicon: img/logo.png
   palette:
     - scheme: default
       primary: deep purple
@@ -37,6 +39,7 @@ nav:
   - Für Nutzer: nutzer.md
   - Technische Architektur: architektur.md
   - Entwicklung & Qualität: entwicklung.md
+  - Entscheidungen & Kompetenzen: entscheidungen.md
   - Projektstand & Reflexion: projektstand.md
 
 markdown_extensions:
