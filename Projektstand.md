@@ -14,8 +14,8 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Kennzahl | Stand |
 | --- | --- |
-| **Pflicht-Einheiten erfüllt** | Alle behandelten erfüllt (E2–E9; E5 entfällt abgestimmt) — keine offene Pflicht |
-| **Größte offene Punkte** | Abschlusspräsentation; E10/E11 noch nicht behandelt |
+| **Pflicht-Einheiten erfüllt** | E2–E9 erfüllt (E5 entfällt abgestimmt); E10 neu offen: Stakeholder-Webseite |
+| **Größte offene Punkte** | Stakeholder-Projektwebseite (E10); Abschlusspräsentation; E11 noch nicht behandelt |
 | **Nächster Meilenstein** | Abschlusspräsentation 02. / 09.07.2026 |
 | **Deployment** | Mit Prof abgestimmt entfallen (Chrome-Extension-Case) |
 
@@ -26,7 +26,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 **Legende:** ✅ Erfüllt · 🟡 Teilweise · ⬜ Offen · ➖ Entfällt · ⏳ Noch nicht behandelt
 *Diese Übersicht listet nur Pflichtanforderungen (Folien-Checkliste „Wo Sie stehen sollten"). Optionale Kür steht in „Nächste Maßnahmen" / „Roadmap".*
 
-**Schnellüberblick:** E2 ✅ · E3 ✅ · E4 ✅ · E5 ➖ · E6 ✅ · E7 ✅ · E8 ✅ · E9 ✅ · E10 ⏳ · E11 ⏳
+**Schnellüberblick:** E2 ✅ · E3 ✅ · E4 ✅ · E5 ➖ · E6 ✅ · E7 ✅ · E8 ✅ · E9 ✅ · E10 ⬜ · E11 ⏳
 
 ### Einheit 2 — Vibe Coding (09.04.2026)
 
@@ -86,7 +86,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
-| — | ⏳ | Einheit noch nicht behandelt |
+| Projektwebseite für Stakeholder erstellt | ⬜ | Gefordert: Webseite für Prof / Nutzer / Arbeitgeber, zugleich Bewerbungsreferenz. Empfohlenes Toolset (Folien): MkDocs Material + GitHub Pages + PlantUML. Veröffentlichung via GitHub Pages deckt zugleich den Deployment-Aspekt (E5) mit ab. |
 
 ### Einheit 11 — Model Context Protocol / MCP (25.06.2026)
 
@@ -103,9 +103,10 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | # | Maßnahme | Einheit | Prio | Aufwand |
 | :-: | --- | :-: | :-: | :-: |
-| 1 | Abschlusspräsentation vorbereiten — inkl. Deployment-Begründung & Reflektion | 12 / 13 | 🔴 | 🟡 |
-| 2 | Unit-Tests für `fa-supabase` ergänzen (chrome-Mocks, `TESTING_PLAN.md` Phase 4) — einziges Logik-Modul noch ohne Tests | 8 | 🟡 | 🟡 |
-| 3 | Form-Field-Tipps aus `form_fields` aktiv schalten — kuratierte Hinweise als Badge (keyed Lookup, Daten in Supabase vorhanden) | 4 | 🟡 | 🟢 |
+| 1 | Stakeholder-Projektwebseite erstellen — MkDocs Material + GitHub Pages (deckt zugleich Deployment-Aspekt ab) | 10 | 🔴 | 🟡 |
+| 2 | Abschlusspräsentation vorbereiten — inkl. Deployment-Begründung & Reflektion | 12 / 13 | 🔴 | 🟡 |
+| 3 | Unit-Tests für `fa-supabase` ergänzen (chrome-Mocks, `TESTING_PLAN.md` Phase 4) — einziges Logik-Modul noch ohne Tests | 8 | 🟡 | 🟡 |
+| 4 | Form-Field-Tipps aus `form_fields` aktiv schalten — kuratierte Hinweise als Badge (keyed Lookup, Daten in Supabase vorhanden) | 4 | 🟡 | 🟢 |
 
 > **Noch nicht behandelt:** Einheit 10 (Stakeholder-Interaktion, 18.06.) und Einheit 11 (MCP, 25.06.)
 > bringen ggf. neue Pflicht-Anforderungen — folgen erst nach den jeweiligen Vorlesungen.

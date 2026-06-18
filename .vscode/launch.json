@@ -26,6 +26,15 @@
       "program": "${workspaceFolder}/doc-agent/agent.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Webseite: Vorschau (mkdocs serve :8000)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "mkdocs",
+      "args": ["serve"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

@@ -15,5 +15,8 @@ doc-agent/.env
 __pycache__/
 *.pyc
 
+# MkDocs (Projektwebseite) — generierter Build
+site/
+
 # Kursfolien & lokaler Präsentations-PDF – gehören nicht ins Repo
 vorlesung/

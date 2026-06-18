@@ -1,0 +1,5 @@
+# Projektwebseite (MkDocs Material) — Kurs-Einheit 10.
+# Installation:  python -m pip install -r requirements-docs.txt
+# Vorschau:      python -m mkdocs serve   (http://127.0.0.1:8000)
+# Bauen:         python -m mkdocs build
+mkdocs-material>=9.5
