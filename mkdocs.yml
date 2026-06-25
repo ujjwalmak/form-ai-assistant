@@ -12,27 +12,44 @@ site_dir: site
 theme:
   name: material
   language: de
-  logo: img/logo.png
-  favicon: img/logo.png
+  logo: img/logo.svg
+  favicon: img/logo.svg
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
   palette:
-    - scheme: default
-      primary: deep purple
-      accent: pink
-      toggle:
-        icon: material/weather-night
-        name: Dunkelmodus
-    - scheme: slate
-      primary: deep purple
-      accent: pink
-      toggle:
-        icon: material/weather-sunny
-        name: Hellmodus
+    scheme: slate
+    primary: deep purple
+    accent: pink
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
     - navigation.tracking
-    - content.code.copy
+    - navigation.indexes
+    - navigation.footer
+    - navigation.instant
+    - navigation.instant.progress
     - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.tooltips
+    - search.suggest
+    - search.highlight
+    - search.share
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ujjwalmak/form-ai-assistant
+      name: Repository auf GitHub
+  generator: false
 
 nav:
   - Übersicht: index.md
@@ -48,6 +65,16 @@ markdown_extensions:
   - md_in_html
   - tables
   - pymdownx.details
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.caret
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
