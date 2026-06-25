@@ -442,3 +442,22 @@ Den neuen Pflichtpunkt aus Einheit 10 (Projektwebseite für Stakeholder) umsetze
 
 - Einheit 10 umgesetzt; Webseite im Team-Repo, Build grün. Offen extern: GitHub Pages aktivieren (Repo-Admin), Screenshots ergänzen.
 - E11 (MCP) noch nicht behandelt; Abschlusspräsentation steht aus.
+
+---
+
+## [2026-06-25] Einheit 11 (MCP) ausgewertet + Doku nachgezogen
+
+**Ziel:**
+Neue Vorlesung (MCP) gegen die Pflicht abgleichen und den Projektstatus aktualisieren.
+
+**Aktionen:**
+
+1. `vorlesung/10_Model_Context_Protocol_AIPT26` ausgewertet: MCP wird als **Konzept** gelehrt (Host/Client/Server, stdio/SSE, Tools/Resources/Prompts) — die „Meilensteiner der Prototypen" sind unverändert, **kein neuer Pflichtpunkt**.
+2. Abschluss-Termine geklärt: **02.07. Reflexions-Präsentation** (Interview-Stil) **und 09.07. Prototyp-Demo** (10–15 Min, Repo, Moodle) — beide vorzubereiten.
+3. `Projektstand.md` aktualisiert: Stand 2026-06-25; E10 ✅ (Webseite, Veröffentlichung wartet auf Pages-Admin), E11 ✅ (Konzept, kein Pflichtpunkt); „Auf einen Blick" + Schnellüberblick; Maßnahmen auf die zwei Präsentationen + Webseite-Live umgestellt; Backlog um „MCP-Server für doc-agent" ergänzt.
+4. `memory/short_term.md` auf Stand 2026-06-25 gebracht.
+
+**Ergebnis:**
+
+- Alle behandelten Pflicht-Einheiten (E2–E11) erfüllt bzw. erlassen (E5); E11 ohne neuen Pflichtpunkt.
+- Offen: Webseite live-schalten (Repo-Admin), zwei Abschlusspräsentationen (02./09.07.), optional Screenshots/MCP-Feature.
