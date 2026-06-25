@@ -2,7 +2,7 @@
 
 **Fallstudie:** KI-Assistent zur korrekten Eingabe von Daten in komplexe Browser-Formulare
 **Modul:** AI-Prototyping, SS2026 — Prof. Dr. Sebastian Dünnebeil (FK07)
-**Repository:** github.com/ujjwalmak/form-ai-assistant · **Stand:** 2026-06-14
+**Repository:** github.com/ujjwalmak/form-ai-assistant · **Stand:** 2026-06-25
 
 ---
 
@@ -14,9 +14,9 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Kennzahl | Stand |
 | --- | --- |
-| **Pflicht-Einheiten erfüllt** | E2–E9 erfüllt (E5 entfällt abgestimmt); E10 neu offen: Stakeholder-Webseite |
-| **Größte offene Punkte** | Stakeholder-Projektwebseite (E10); Abschlusspräsentation; E11 noch nicht behandelt |
-| **Nächster Meilenstein** | Abschlusspräsentation 02. / 09.07.2026 |
+| **Pflicht-Einheiten erfüllt** | Alle behandelten erfüllt (E2–E11; E5 erlassen) — keine offene Pflicht; E11 ohne neuen Pflichtpunkt |
+| **Größte offene Punkte** | Webseite live-schalten (GitHub Pages, Repo-Admin); zwei Abschlusspräsentationen |
+| **Nächster Meilenstein** | Reflexions-Präsentation 02.07. + Prototyp-Demo 09.07.2026 |
 | **Deployment** | Mit Prof abgestimmt entfallen (Chrome-Extension-Case) |
 
 ---
@@ -26,7 +26,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 **Legende:** ✅ Erfüllt · 🟡 Teilweise · ⬜ Offen · ➖ Entfällt · ⏳ Noch nicht behandelt
 *Diese Übersicht listet nur Pflichtanforderungen (Folien-Checkliste „Wo Sie stehen sollten"). Optionale Kür steht in „Nächste Maßnahmen" / „Roadmap".*
 
-**Schnellüberblick:** E2 ✅ · E3 ✅ · E4 ✅ · E5 ➖ · E6 ✅ · E7 ✅ · E8 ✅ · E9 ✅ · E10 ⬜ · E11 ⏳
+**Schnellüberblick:** E2 ✅ · E3 ✅ · E4 ✅ · E5 ➖ · E6 ✅ · E7 ✅ · E8 ✅ · E9 ✅ · E10 ✅ · E11 ✅
 
 ### Einheit 2 — Vibe Coding (09.04.2026)
 
@@ -86,30 +86,31 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
-| Projektwebseite für Stakeholder erstellt | ⬜ | Gefordert: Webseite für Prof / Nutzer / Arbeitgeber, zugleich Bewerbungsreferenz. Empfohlenes Toolset (Folien): MkDocs Material + GitHub Pages + PlantUML. Veröffentlichung via GitHub Pages deckt zugleich den Deployment-Aspekt (E5) mit ab. |
+| Projektwebseite für Stakeholder erstellt | ✅ | `docs/` + `mkdocs.yml` (MkDocs Material), Struktur entlang Prof / Nutzer / Arbeitgeber inkl. Kompetenz-Seite + Mermaid-Architekturdiagramm; im Repo, baut strict. Auto-Deploy via `.github/workflows/docs.yml`. **Veröffentlichung** wartet noch auf einmalige GitHub-Pages-Aktivierung durch den Repo-Admin (deckt zugleich den Deployment-Aspekt E5 ab). |
 
 ### Einheit 11 — Model Context Protocol / MCP (25.06.2026)
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
-| — | ⏳ | Einheit noch nicht behandelt |
+| — | ✅ | Behandelt (25.06.). MCP als **Konzept** gelehrt (Host/Client/Server, stdio/SSE, Tools/Resources/Prompts) — die „Meilensteiner der Prototypen" auf der Folie sind unverändert, **kein neuer Pflichtpunkt** für den Prototyp. Optional in Roadmap: MCP-Server für `doc-agent`. |
 
 ---
 
 ## Nächste Maßnahmen
 
-**Zeithorizont:** Abschlusspräsentation am 02. / 09.07.2026
+**Zeithorizont:** Reflexions-Präsentation 02.07. · Prototyp-Demo 09.07.2026
 **Legende:** Priorität 🔴 Hoch · 🟡 Optional   |   Aufwand 🟢 Niedrig · 🟡 Mittel · 🔴 Hoch
 
 | # | Maßnahme | Einheit | Prio | Aufwand |
 | :-: | --- | :-: | :-: | :-: |
-| 1 | Stakeholder-Projektwebseite erstellen — MkDocs Material + GitHub Pages (deckt zugleich Deployment-Aspekt ab) | 10 | 🔴 | 🟡 |
-| 2 | Abschlusspräsentation vorbereiten — inkl. Deployment-Begründung & Reflektion | 12 / 13 | 🔴 | 🟡 |
-| 3 | Unit-Tests für `fa-supabase` ergänzen (chrome-Mocks, `TESTING_PLAN.md` Phase 4) — einziges Logik-Modul noch ohne Tests | 8 | 🟡 | 🟡 |
-| 4 | Form-Field-Tipps aus `form_fields` aktiv schalten — kuratierte Hinweise als Badge (keyed Lookup, Daten in Supabase vorhanden) | 4 | 🟡 | 🟢 |
+| 1 | Reflexions-Präsentation (02.07.) — Interview-Stil: Problem, größte Herausforderung, Rollenverteilung, Tools, Zeitfresser, Lerneffekte, Empfehlung | 12 | 🔴 | 🟡 |
+| 2 | Prototyp-Demo (09.07.) — 10–15 Min Live-Demo, Repo bereitstellen, Präsentation auf Moodle hochladen | 13 | 🔴 | 🟡 |
+| 3 | Webseite live-schalten — GitHub Pages aktivieren (Repo-Admin) + optional Screenshots ergänzen | 10 | 🔴 | 🟢 |
+| 4 | Unit-Tests für `fa-supabase` ergänzen (chrome-Mocks, `TESTING_PLAN.md` Phase 4) — einziges Logik-Modul noch ohne Tests | 8 | 🟡 | 🟡 |
+| 5 | Form-Field-Tipps aus `form_fields` aktiv schalten — kuratierte Hinweise als Badge (keyed Lookup, Daten in Supabase vorhanden) | 4 | 🟡 | 🟢 |
 
-> **Noch nicht behandelt:** Einheit 10 (Stakeholder-Interaktion, 18.06.) und Einheit 11 (MCP, 25.06.)
-> bringen ggf. neue Pflicht-Anforderungen — folgen erst nach den jeweiligen Vorlesungen.
+> **Hinweis Abschluss:** Es gibt **zwei** Termine — 02.07. (Reflexion, Interview-Stil) und 09.07.
+> (Prototyp-Demo). Beide sind vorzubereiten (Team-Zuordnung ggf. im Moodle prüfen).
 
 ---
 
@@ -132,3 +133,4 @@ Formular-Erklärung) stehen in der Statusübersicht / `README.md`.
 | **Production-Packaging** | Backend-Proxy für Keys, Consent-Flow, Chrome-Web-Store, Firefox-Port. | 🟡 | 🔴 |
 | **Team-/Enterprise-Modus** | Geteilte Antwort-Templates via Multi-Tenancy; setzt OAuth voraus. | ⚪ | 🔴 |
 | **„Fake Filler"** | Auf Test-/Wegwerf-Seiten plausible Dummy-Daten statt echter Profildaten. | ⚪ | 🟢 |
+| **MCP-Server für `doc-agent`** | Den Doku-Agenten zusätzlich als MCP-Server (stdio) anbieten, `document_changes` als MCP-Tool für Claude/Codex CLI — verbindet E9 (Doku-Agent) + E11 (MCP), starker Aufhänger für die 09.07.-Demo. | 🟡 | 🟡 |

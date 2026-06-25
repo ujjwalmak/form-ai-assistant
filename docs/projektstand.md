@@ -15,8 +15,8 @@ Diese Seite fasst den Kursstand zusammen. Die ausführliche, laufend gepflegte Q
 | E7 | Zwischenpräsentation | ✅ |
 | E8 | Testen & Debuggen (69 Tests, CI) | ✅ |
 | E9 | Orchestrierung (Doku-Agent) | ✅ |
-| E10 | Stakeholder-Interaktion (diese Webseite) | 🔄 in Arbeit |
-| E11 | Model Context Protocol (MCP) | ⏳ noch nicht behandelt |
+| E10 | Stakeholder-Interaktion (diese Webseite) | ✅ |
+| E11 | Model Context Protocol (MCP) | ✅ Konzept (kein neuer Pflichtpunkt) |
 
 ## Reflexion: Deployment (E5)
 
@@ -40,10 +40,11 @@ Zwei Aspekte tragen diese Entscheidung:
 
 ## Ausblick
 
-- **E10:** Fertigstellung und Veröffentlichung dieser Stakeholder-Webseite.
-- **E11 (MCP):** noch nicht behandelt.
-- **Abschlusspräsentation** (02. / 09.07.2026): Coding-Ansatz + Reflexion.
+- **Webseite veröffentlichen:** GitHub Pages aktivieren (einmalige Repo-Einstellung durch den Admin); danach ist diese Seite live.
+- **Reflexions-Präsentation** (02.07.): Interview-Stil — Problem, Herausforderungen, Rollenverteilung, Tools, Lerneffekte.
+- **Prototyp-Demo** (09.07.): 10–15 Min Live-Demo, Repo bereitstellen, Präsentation auf Moodle.
+- **Optional (MCP):** der `doc-agent` ließe sich zusätzlich als MCP-Server anbieten — verbindet die Themen Orchestrierung (E9) und MCP (E11).
 
 !!! note
-    `TODO: fachlich klären` — Verbleibende offene Punkte (z. B. konkrete MCP-Umsetzung)
-    werden ergänzt, sobald die jeweilige Einheit behandelt wurde.
+    Alle behandelten Pflicht-Einheiten (E2–E11) sind erfüllt bzw. einvernehmlich erlassen (E5).
+    E11 (MCP) wurde als Konzept behandelt und bringt keinen neuen Pflichtpunkt für den Prototyp.
