@@ -2,7 +2,7 @@
 
 **Fallstudie:** KI-Assistent zur korrekten Eingabe von Daten in komplexe Browser-Formulare
 **Modul:** AI-Prototyping, SS2026 — Prof. Dr. Sebastian Dünnebeil (FK07)
-**Repository:** github.com/ujjwalmak/form-ai-assistant · **Stand:** 2026-06-25
+**Repository:** github.com/ujjwalmak/form-ai-assistant · **Stand:** 2026-06-26
 
 ---
 
@@ -15,7 +15,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Kennzahl | Stand |
 | --- | --- |
 | **Pflicht-Einheiten erfüllt** | Alle behandelten erfüllt (E2–E11; E5 erlassen) — keine offene Pflicht; E11 ohne neuen Pflichtpunkt |
-| **Größte offene Punkte** | Webseite live-schalten (GitHub Pages, Repo-Admin); zwei Abschlusspräsentationen |
+| **Größte offene Punkte** | Zwei Abschlusspräsentationen (02.07. Reflexion · 09.07. Demo) |
 | **Nächster Meilenstein** | Reflexions-Präsentation 02.07. + Prototyp-Demo 09.07.2026 |
 | **Deployment** | Mit Prof abgestimmt entfallen (Chrome-Extension-Case) |
 
@@ -86,7 +86,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
-| Projektwebseite für Stakeholder erstellt | ✅ | `docs/` + `mkdocs.yml` (MkDocs Material), Struktur entlang Prof / Nutzer / Arbeitgeber inkl. Kompetenz-Seite + Mermaid-Architekturdiagramm; im Repo, baut strict. Auto-Deploy via `.github/workflows/docs.yml`. **Veröffentlichung** wartet noch auf einmalige GitHub-Pages-Aktivierung durch den Repo-Admin (deckt zugleich den Deployment-Aspekt E5 ab). |
+| Projektwebseite für Stakeholder erstellt | ✅ | `docs/` + `mkdocs.yml` (MkDocs Material), Struktur entlang Prof / Nutzer / Arbeitgeber inkl. Kompetenz-Seite + Mermaid-Architekturdiagramm; im Repo, baut strict. Auto-Deploy via `.github/workflows/docs.yml`. **Live** unter [ujjwalmak.github.io/form-ai-assistant](https://ujjwalmak.github.io/form-ai-assistant/) (deckt zugleich den Deployment-Aspekt E5 ab). |
 
 ### Einheit 11 — Model Context Protocol / MCP (25.06.2026)
 
@@ -105,7 +105,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | :-: | --- | :-: | :-: | :-: |
 | 1 | Reflexions-Präsentation (02.07.) — Interview-Stil: Problem, größte Herausforderung, Rollenverteilung, Tools, Zeitfresser, Lerneffekte, Empfehlung | 12 | 🔴 | 🟡 |
 | 2 | Prototyp-Demo (09.07.) — 10–15 Min Live-Demo, Repo bereitstellen, Präsentation auf Moodle hochladen | 13 | 🔴 | 🟡 |
-| 3 | Webseite live-schalten — GitHub Pages aktivieren (Repo-Admin) + optional Screenshots ergänzen | 10 | 🔴 | 🟢 |
+| 3 | Webseite live ✅ ([ujjwalmak.github.io/form-ai-assistant](https://ujjwalmak.github.io/form-ai-assistant/)) — optional noch Screenshots ergänzen | 10 | 🟡 | 🟢 |
 | 4 | Unit-Tests für `fa-supabase` ergänzen (chrome-Mocks, `TESTING_PLAN.md` Phase 4) — einziges Logik-Modul noch ohne Tests | 8 | 🟡 | 🟡 |
 | 5 | Form-Field-Tipps aus `form_fields` aktiv schalten — kuratierte Hinweise als Badge (keyed Lookup, Daten in Supabase vorhanden) | 4 | 🟡 | 🟢 |
 

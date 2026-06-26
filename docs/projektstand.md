@@ -40,7 +40,7 @@ Zwei Aspekte tragen diese Entscheidung:
 
 ## Ausblick
 
-- **Webseite veröffentlichen:** GitHub Pages aktivieren (einmalige Repo-Einstellung durch den Admin); danach ist diese Seite live.
+- **Webseite live:** via GitHub Pages veröffentlicht — diese Seite ist online; optional noch Screenshots ergänzen.
 - **Reflexions-Präsentation** (02.07.): Interview-Stil — Problem, Herausforderungen, Rollenverteilung, Tools, Lerneffekte.
 - **Prototyp-Demo** (09.07.): 10–15 Min Live-Demo, Repo bereitstellen, Präsentation auf Moodle.
 - **Optional (MCP):** der `doc-agent` ließe sich zusätzlich als MCP-Server anbieten — verbindet die Themen Orchestrierung (E9) und MCP (E11).
