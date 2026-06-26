@@ -99,12 +99,12 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 
 1. Reflexions-Präsentation (02.07., Interview-Stil) vorbereiten
 2. Prototyp-Demo (09.07.) vorbereiten — Repo bereitstellen, Präsentation auf Moodle
-3. Stakeholder-Webseite veröffentlichen — GitHub Pages aktivieren (wartet auf Repo-Admin); optional Screenshots ergänzen
-4. Optional: Test-Abdeckung erweitern (`fa-supabase` mit chrome-Mocks); RAG über Supabase `form_fields`; Privacy/Consent-Flow vor KI-Analyse
+3. Optional: Test-Abdeckung erweitern (`fa-supabase` mit chrome-Mocks); RAG über Supabase `form_fields`; Privacy/Consent-Flow vor KI-Analyse
 
 Keine offene Pflicht aus behandelten Einheiten (E2–E11); E5 erlassen; E11 = MCP-Konzept ohne neuen Pflichtpunkt.
 
 Erledigt (2026-06-14): Ausführbare Tests + CI (Kurs-Einheit 8); autonomer Dokumentations-Agent `doc-agent/` (Kurs-Einheit 9).
 Erledigt (2026-06-18): Stakeholder-Projektwebseite (`docs/`, MkDocs Material) + GitHub-Pages-Auto-Deploy (Kurs-Einheit 10); doc-agent um `post-commit`-Hook + Self-Exclude erweitert.
+Erledigt (2026-06-26): GitHub Pages aktiviert — Webseite live unter ujjwalmak.github.io/form-ai-assistant.
 
 Vollständiger Status nach Kurseinheiten: siehe `Projektstand.md`.

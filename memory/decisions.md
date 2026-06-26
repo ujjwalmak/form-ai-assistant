@@ -349,5 +349,5 @@ Einheit 10 (Stakeholder-Interaktion) fordert eine „Projektwebseite für Stakeh
 **Konsequenzen:**
 
 - Webseite deckt zugleich den Deployment-Aspekt (E5) als deploytes Artefakt mit ab — stärkt die Reflexion.
-- Offen: GitHub Pages muss einmalig vom Repo-Admin aktiviert werden (Source = „GitHub Actions"); Screenshots ergänzt der Nutzer.
+- Erledigt (2026-06-26): GitHub Pages aktiviert (Source = „GitHub Actions") — Webseite live unter ujjwalmak.github.io/form-ai-assistant. Offen nur noch optional: Screenshots ergänzen.
 - Neue Dateien: `mkdocs.yml`, `docs/`, `requirements-docs.txt`, `.github/workflows/docs.yml`; `site/` gitignored; Run-Button „Webseite: Vorschau".
