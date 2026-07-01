@@ -29,8 +29,6 @@ Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein Vorst
 - **Unsere Lösung:** alle Daten in *einer* Anwendung bündeln und beim Ausfüllen geführt unterstützen.
 - **Kern ist die *korrekte* Eingabe**, nicht nur Bequemlichkeit: Felder semantisch auslesen (nicht bloß HTML-Scan), in einfacher Sprache erklären, datensparsam übertragen und **nie automatisch absenden** (harte Sicherheits-Guardrail).
 
-> **Ergänzung:** *…*
-
 ## 2. Was war die größte Herausforderung in Ihrem Projekt?
 
 **Kernaussage:** Formulare über sehr unterschiedliche Seiten zuverlässig lesen/füllen — und den Agenten dazu bringen, Gelerntes wiederzuverwenden statt neu zu fragen.
@@ -40,7 +38,7 @@ Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein Vorst
 - **Gelerntes nutzen statt neu fragen:** Den Agenten dazu zu bringen, bekannte Antworten wiederzuverwenden, kostete mehrere Umbauten — Konfidenz-Schwelle → Field-by-Field → Batch-Prompt.
 - **War Story – Constraints meistern:** Provider-Odyssee von Anthropic (Credit-Limits) über Gemini zu **Groq**, ergänzt um **OpenRouter als automatischen Fallback** bei Rate-Limit oder Ausfall.
 
-> **Ergänzung:** *…*
+> **Ergänzung (Ujjwal):** Mein konkretes Beispiel ist die *Provider-Odyssee* — die habe ich selbst durchlaufen. Zuerst Anthropic angebunden, aber in Credit-Limits gelaufen; dann Gemini 2.0 Flash, schließlich Groq. Jeder Wechsel hieß: Prompts, Modell-IDs und `max_tokens` neu justieren. Am Ende habe ich **OpenRouter als automatischen Fallback** eingebaut, sodass ein 429/5xx bei Groq den Nutzer nicht mehr blockiert — der Wechsel passiert transparent im Hintergrund (Toast). Mindestens so zäh war, den Agenten dazu zu bringen, **Gelerntes wiederzuverwenden statt neu zu fragen** — dafür kam ein Domain-Chat-Gedächtnis und die Wiederverwendung schon gegebener Antworten.
 
 ## 3. Welche Rollenverteilung hatten Sie im Team?
 
@@ -51,7 +49,7 @@ Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein Vorst
 - Deckt sich mit dem Commit-Bild (beide durchgängig aktiv) — geteilte Verantwortung statt fester Silos.
 - Bei 2 Personen empfehlenswert; bei größeren Teams kritisch zu hinterfragen.
 
-> **Ergänzung:** *…*
+> **Ergänzung (Ujjwal):** Den ersten Prototyp aufgesetzt und früh die Richtung *„maximal smart + sehr modernes UI"* getrieben — agentischer Chat, Chat-Gedächtnis, Datums-Intelligenz und das Aurora-Glass-Design. Weil wir wöchentlich neu verteilt haben, hat jeder auch im Code des anderen gearbeitet; das hat Reviews leichter gemacht und verhindert, dass Wissen bei einer Person hängen bleibt.
 
 ## 4. Welche Tools haben Sie genutzt?
 
@@ -69,19 +67,20 @@ Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein Vorst
 
 - Groq + OpenRouter (LLM-APIs mit Fallback), Supabase (DB), Vitest (Tests), GitHub Actions (CI), MkDocs Material (Webseite), Flask (Doku-Agent), Git/GitHub.
 
-> **Ergänzung:** *…*
+> **Ergänzung (Ujjwal):** Ich habe die Assistenten selbst gegeneinander getestet. Copilot war für Kleinkram okay, aber die Limits schnell weg und die Qualität bei größeren Aufgaben nicht überzeugend; Codex und Gemini (Free) lieferten brauchbar, aber der Free-Tier war rasch aufgebraucht. **Claude Code mit Opus** war für uns klar am stärksten — es hat ganze Umbauten in einem Rutsch erledigt, z. B. das komplette Aurora-Glass-Redesign unserer Projektwebseite inklusive neuem SVG-Logo. Der Preis: es arbeitet lange und die Token-Limits stoppen abrupt.
 
 ## 5. Wo haben Sie die meiste Zeit verloren?
 
 **Kernaussage:** Token-/Rate-Limits, Anforderungsstrukturierung und die Zuverlässigkeit des Form-Fillings über fremde Seiten.
 
 - Entwicklungspausen durch Token- und Rate-Limits (v. a. Claude Code).
+- **Unklare Produktvision:** Richtung und Ausbau der App waren anfangs nicht immer einig — teils haben wir in gegensätzliche Richtungen entwickelt und mussten Teile wieder neu machen.
 - Strukturierung der Anforderungen.
 - Projektmanagement, Dokumentation und „alles drumherum".
 - **Zuverlässigkeit des Form-Fillings** über fremde Seiten — mehrere Agent-Iterationen, bis Profil und gelernte Daten verlässlich genutzt wurden.
 - **War Story:** GitHub-Push-Protection blockierte einen versehentlich hardcodierten API-Key — Umbau (Key auslagern) kostete Zeit, war aber eine gute Lektion zu Secrets-Management.
 
-> **Ergänzung:** *…*
+> **Ergänzung (Ujjwal):** Am meisten Zeit habe ich an den Provider-/Token-Limits verloren — jeder Anbieterwechsel bedeutete Nachjustieren von Prompts und Modell-IDs. Was sich dagegen ausgezahlt hat: der Refactor vom großen `content.js` in **7 Module**. Danach war jede Änderung lokal und testbar, statt jedes Mal ein Risiko im Monolithen — das hätte ich rückblickend früher gemacht.
 
 ## 6. Was hat Ihnen gefehlt, um bessere Ergebnisse zu liefern?
 
@@ -89,8 +88,6 @@ Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein Vorst
 
 - Eine von Anfang an klarer definierte Vorgehensweise.
 - „Wo Sie nach der Einheit stehen sollten" war hilfreich — noch hilfreicher wären klarere Richtung und konkrete Beispiele bzw. Referenz-Architekturen in der Vorlesung gewesen.
-
-> **Ergänzung:** *…*
 
 ## 7. Was waren Ihre größten Lerneffekte für zukünftige Projekte?
 
@@ -101,7 +98,7 @@ Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein Vorst
 - „KI managen" (Kontext geben, Ergebnisse reviewen, festhalten) ist eine eigene Kompetenz.
 - **Kontext-Investment zahlt sich aus:** Regeldateien (`CLAUDE.md`), Personas und ein Memory-Log haben die KI-Ergebnisse spürbar verbessert — gute Prompts plus Projektkontext sind Arbeit, die sich lohnt.
 
-> **Ergänzung:** *…*
+> **Ergänzung (Ujjwal):** Mein größter Lerneffekt: **Kontext-Investment schlägt bessere Prompts.** Erst mit Regeldatei (`CLAUDE.md`), Personas und einem Memory-Log wurden die KI-Ergebnisse wirklich konsistent — vorher hat die KI bei jeder Sitzung Entscheidungen neu erfunden. Und: ein modernes UI entsteht **iterativ** — das Aurora-Glass-Design haben wir über mehrere Runden geschärft, nicht im ersten Wurf.
 
 ## 8. Welche Empfehlung würden Sie einer Firma bezüglich AI-Prototyping geben?
 
@@ -113,7 +110,7 @@ Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein Vorst
 - **Guardrails und Sicherheit** (API-Keys nie im Code, kein automatisches Absenden) gehören schon in den Prototyp.
 - **Provider-Kosten und Limits von Anfang an einplanen:** Free-Tiers sind schnell aufgebraucht, auch Paid-Tiers limitieren — Fallbacks und Budget vorsehen.
 
-> **Ergänzung:** *…*
+> **Ergänzung (Ujjwal):** Meine wichtigste Empfehlung aus eigener Erfahrung: **Provider-Kosten und Limits von Tag 1 einplanen.** Wir sind durch mehrere Anbieter iteriert, bis Kosten, Tempo und Zuverlässigkeit gepasst haben — ein automatischer Fallback gehört für mich in jeden ernsthaften Prototyp, nicht erst in die Produktion.
 
 ---
 
