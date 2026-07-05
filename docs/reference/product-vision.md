@@ -188,7 +188,9 @@ the brand:
 
 **Phase 0 — now (the extension, this repo):** harden the agent, build the eval
 harness, ship to Chrome Web Store as the wedge product for expats. The extension is
-the lab where the agent gets good.
+the lab where the agent gets good. As of 2026-07-05, the prototype already includes
+document OCR into the profile, deterministic live validation, and a stronger
+pre-submit logic check.
 
 **Phase 1 — the vault (3–6 mo):** Supabase auth + encrypted profile/document storage,
 backend proxy for AI calls (keys leave the client), document OCR → profile (the
@@ -254,8 +256,8 @@ The AI already answers in any language; the chrome around it should too.
 
 ### 7.8 Smaller, compounding upgrades
 - **Voice input** (Web Speech API): one button, big accessibility win, already roadmapped
-- **Document OCR → profile** (NEXT_STEPS #1): vision models on Groq make "photograph
-  your ID, profile filled" a weekend project and a killer demo
+- **Document OCR → profile** (implemented in v2.1): next step is source/provenance
+  badges per extracted value and stronger document-type-specific validation
 - **Modularize `content.js`** (3k lines, one closure): finish the `fa-*` split, add a
   build step (Vite + TypeScript) before the file becomes unmaintainable
 - **Cross-origin iframes**: `all_frames: true` + frame messaging to reach embedded forms

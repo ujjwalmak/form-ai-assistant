@@ -38,9 +38,11 @@
   }
 
   // ── CSP-safe API helpers (routed via background service worker) ──────
-  function groqRequest(key, body) {
+  // fallbackModel: optionales Modell für den OpenRouter-Fallback (z. B. Vision-
+  // Requests, die nicht auf das textbasierte Standard-Fallback-Modell dürfen)
+  function groqRequest(key, body, fallbackModel) {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: 'llm-fetch', provider: _provider, key, body }, resp => {
+      chrome.runtime.sendMessage({ type: 'llm-fetch', provider: _provider, key, body, fallbackModel }, resp => {
         if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
         if (!resp?.ok) reject(new Error(resp?.error || 'Unbekannter Fehler'));
         else {
@@ -72,7 +74,8 @@
   // fa-utils.js   → clean, formatBytes, isVisible, textFromEl, parseDateToISO,
   //                 isKendoWidget, getKendoWidget, getElementTextValue,
   //                 findButtonByText, getAgentSelector, AGENT_SELECTOR_ATTR,
-  //                 AGENT_AUTO_SELECT_CONFIDENCE
+  //                 AGENT_AUTO_SELECT_CONFIDENCE,
+  //                 detectLiveCheckKind, getLiveCheckResult (+ Validatoren)
   // fa-profile.js → PROFILE_FIELDS, FAKE_DATA
   // fa-scanner.js → SKIP_TYPES, getLabel, extractField, extractRichContext,
   //                 buildSystemPrompt, getActiveFieldContext, matchProfile, …
@@ -233,6 +236,20 @@
             <button class="pf-sw-btn" id="fa-pf-new" title="Neues Profil">+</button>
             <button class="pf-sw-btn danger" id="fa-pf-del-profile" title="Profil löschen">×</button>
           </div>
+          <div class="pf-scan">
+            <button class="pf-scan-btn" id="fa-pf-scan" type="button">
+              <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+              Dokument scannen (KI liest Ausweis, Vertrag …)
+            </button>
+            <div class="pf-scan-confirm" id="fa-pf-scan-confirm">
+              <img id="fa-pf-scan-preview" alt="Dokument-Vorschau">
+              <div class="pf-scan-note" id="fa-pf-scan-note"></div>
+              <div class="pf-scan-actions">
+                <button class="pf-scan-go" id="fa-pf-scan-go" type="button">Analysieren</button>
+                <button class="pf-scan-cancel" id="fa-pf-scan-cancel" type="button">Abbrechen</button>
+              </div>
+            </div>
+          </div>
           <div class="profile-grid" id="fa-profile-grid"></div>
           <div class="profile-actions">
             <button class="btn-primary" id="fa-pf-save">Speichern</button>
@@ -247,6 +264,10 @@
           <div class="autofill-tip" id="fa-autofill-tip">
             <strong id="fa-autofill-value"></strong>
             <button class="autofill-btn" id="fa-autofill-btn">Ausfüllen</button>
+          </div>
+          <div class="live-check" id="fa-live-check">
+            <i class="lc-icon" id="fa-live-check-icon"></i>
+            <span class="lc-text" id="fa-live-check-text"></span>
           </div>
           <div class="field-tag" id="fa-field-tag">
             <div class="dot-ind"></div>Aktives Feld: <span id="fa-field-name"></span>
@@ -555,6 +576,7 @@
       });
       saveActiveProfileToStore(() => {
         SYSTEM = buildSystemPrompt(ctx, profile, extras);
+        profileGrid.querySelectorAll('.pf-scanned').forEach(inp => inp.classList.remove('pf-scanned'));
         showToast('Profil gespeichert');
         updateProfileProgress();
       });
@@ -620,6 +642,150 @@
       });
       input.click();
     });
+
+    // ── Dokument-Scan (Vision-OCR): Bild → Vision-LLM → Profilfelder ──
+    // Ablauf: Bild wählen → verkleinern (Datenminimierung) → expliziter
+    // Bestätigungsschritt (Privacy) → Analyse → Felder nur VORbefüllen,
+    // gespeichert wird erst durch den Nutzer über "Speichern".
+    const VISION_MODELS = {
+      groq:       'meta-llama/llama-4-scout-17b-16e-instruct',
+      openrouter: 'meta-llama/llama-4-scout',
+    };
+    const VISION_FALLBACK_MODEL = 'meta-llama/llama-4-scout:free';
+    const SCAN_MAX_DIM = 1400;
+    let scanDataUrl = null;
+
+    function buildScanPrompt() {
+      const keys = PROFILE_FIELDS.map(pf => `"${pf.key}" (${pf.label})`).join(', ');
+      return [
+        'Du bist ein präziser Dokument-Extraktor. Lies das Bild (z. B. Ausweis, Visitenkarte, Rechnung, Vertrag) und extrahiere Personendaten.',
+        `Antworte NUR mit einem JSON-Objekt ohne weiteren Text. Erlaubte Schlüssel: ${keys}.`,
+        'Nimm nur Schlüssel auf, deren Wert du sicher im Dokument liest — nichts raten, nichts erfinden.',
+        'Datumsangaben im Format TT.MM.JJJJ. IBAN ohne Leerzeichen. Namen ohne Titel.',
+      ].join('\n');
+    }
+
+    function parseScanReply(text) {
+      let t = String(text || '').trim();
+      const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence) t = fence[1].trim();
+      const start = t.indexOf('{');
+      const end   = t.lastIndexOf('}');
+      if (start === -1 || end <= start) return null;
+      let obj;
+      try { obj = JSON.parse(t.slice(start, end + 1)); } catch { return null; }
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+      const values = {};
+      PROFILE_FIELDS.forEach(pf => {
+        const v = obj[pf.key];
+        if (v == null) return;
+        const s = clean(String(v));
+        if (s && s.length <= 120 && !/^(null|undefined|n\/a|unbekannt|-)$/i.test(s)) values[pf.key] = s;
+      });
+      return values;
+    }
+
+    function downscaleImage(file, maxDim = SCAN_MAX_DIM) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Bild konnte nicht geladen werden.'));
+          img.onload = () => {
+            const scale  = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width  = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    const scanBtn     = $('fa-pf-scan');
+    const scanConfirm = $('fa-pf-scan-confirm');
+    const scanPreview = $('fa-pf-scan-preview');
+
+    function resetScanBox() {
+      scanDataUrl = null;
+      scanConfirm.classList.remove('visible');
+      scanPreview.removeAttribute('src');
+    }
+
+    scanBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          scanDataUrl = await downscaleImage(file);
+          scanPreview.src = scanDataUrl;
+          $('fa-pf-scan-note').textContent =
+            `Das Bild wird verkleinert und einmalig zur Analyse an ${providerLabel()} gesendet, nicht gespeichert. ` +
+            'Erkannte Daten landen nur in den Profilfeldern unten — gespeichert wird erst mit "Speichern".';
+          scanConfirm.classList.add('visible');
+        } catch (err) {
+          showToast(err.message || 'Bild konnte nicht verarbeitet werden');
+        }
+      });
+      input.click();
+    });
+
+    $('fa-pf-scan-cancel').addEventListener('click', resetScanBox);
+
+    $('fa-pf-scan-go').addEventListener('click', async () => {
+      if (!scanDataUrl) return;
+      const goBtn = $('fa-pf-scan-go');
+      goBtn.disabled = true;
+      scanBtn.disabled = true;
+      goBtn.textContent = 'Analysiere…';
+      try {
+        const key = await loadKey();
+        if (!key) throw new Error(`Kein ${providerLabel()}-API-Key hinterlegt — siehe Einstellungen.`);
+        const body = {
+          model: VISION_MODELS[_provider] || VISION_MODELS.groq,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: buildScanPrompt() },
+              { type: 'image_url', image_url: { url: scanDataUrl } },
+            ],
+          }],
+          temperature: 0.1,
+          max_tokens: 600,
+        };
+        const data   = await groqRequest(key, body, VISION_FALLBACK_MODEL);
+        const reply  = data?.choices?.[0]?.message?.content || '';
+        const values = parseScanReply(reply);
+        if (!values || !Object.keys(values).length) throw new Error('Keine Profildaten im Dokument erkannt.');
+        let applied = 0;
+        Object.entries(values).forEach(([k, v]) => {
+          const inp = shadow.getElementById(`fa-pf-${k}`);
+          if (!inp) return;
+          inp.value = v;
+          inp.classList.add('pf-scanned');
+          applied++;
+        });
+        updateProfileProgress();
+        resetScanBox();
+        showToast(`${applied} Feld${applied === 1 ? '' : 'er'} aus dem Dokument übernommen — bitte prüfen & speichern`);
+      } catch (err) {
+        showToast(err.message || 'Dokument-Analyse fehlgeschlagen');
+      } finally {
+        goBtn.disabled = false;
+        goBtn.textContent = 'Analysieren';
+        scanBtn.disabled = false;
+      }
+    });
+
+    // Scan-Markierung verschwindet, sobald der Nutzer das Feld selbst anfasst
+    profileGrid.addEventListener('input', e => e.target?.classList?.remove('pf-scanned'));
 
     // ── Autofill tip ──────────────────────────────────────────────────
     $('fa-autofill-btn').addEventListener('click', () => {
@@ -1529,7 +1695,7 @@
       const type = (el.type || '').toLowerCase();
       if (type === 'checkbox') return el.checked ? 'true' : 'false';
       if (type === 'radio') {
-        const root = el.form || document;
+        const root = el.form || el.getRootNode?.() || document;
         const checked = el.name ? root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`) : (el.checked ? el : null);
         if (!checked) return '';
         return clean(getLabel(checked) || checked.value || 'true');
@@ -1649,7 +1815,7 @@
             let missing = false;
 
             if (type === 'radio' && el.name) {
-              const root = el.form || document;
+              const root = el.form || el.getRootNode?.() || document;
               const checked = root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`);
               missing = !!f.required && !checked;
             } else if (type === 'checkbox') {
@@ -2876,7 +3042,9 @@
       let changed = false;
       agentState.filledFields.forEach(({ label, value }) => {
         if (!label || !value) return;
-        const pf = PROFILE_FIELDS.find(p => p.kw.some(k => label.toLowerCase().includes(k)));
+        // Wortanfang-Matching wie matchProfile — sonst lernt z. B. "Hotelname"
+        // ("tel") einen falschen Wert dauerhaft ins Telefon-Profilfeld
+        const pf = PROFILE_FIELDS.find(p => p.kw.some(k => labelHasKeyword(label.toLowerCase(), k)));
         if (pf && !profile[pf.key]) { profile[pf.key] = value; changed = true; }
         else if (!pf && !extras[label]) { extras[label] = value; changed = true; }
       });
@@ -2962,7 +3130,7 @@
       if (type === 'file') return el.files?.length ? `${el.files.length} Datei(en) ausgewählt` : '';
       if (type === 'checkbox') return el.checked ? (el.value && el.value !== 'on' ? el.value : 'ausgewählt') : '';
       if (type === 'radio') {
-        const root = el.form || document;
+        const root = el.form || el.getRootNode?.() || document;
         const checked = el.name ? root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`) : (el.checked ? el : null);
         return checked ? (checked.value || getLabel(checked) || 'ausgewählt') : '';
       }
@@ -2979,8 +3147,12 @@
       const seenRadioGroups = new Set();
       const lines = [
         'Prüfe dieses Formular direkt vor dem Absenden auf fehlende Angaben, Browser-Validierungsfehler und logische Auffälligkeiten.',
+        'Prüfe AUSSERDEM auf logische Widersprüche ZWISCHEN Feldern, z. B.: Enddatum vor Startdatum,',
+        'Geburtsdatum passt nicht zu Alter/Anrede, PLZ passt nicht zu Stadt oder Land, E-Mail-Wiederholung weicht ab,',
+        'Kontodaten (IBAN/BIC) passen nicht zum angegebenen Land.',
+        'Zeilen mit "Lokale Prüfung" sind deterministische Prüfergebnisse (z. B. IBAN-Prüfsumme mod-97) — übernimm sie als Fakten.',
         'Antworte strukturiert und knapp auf Deutsch mit diesen Überschriften:',
-        'Status, Fehlende Pflichtfelder, Auffälligkeiten, Nächste Schritte.',
+        'Status, Fehlende Pflichtfelder, Logik-Check, Auffälligkeiten, Nächste Schritte.',
         'Beginne die Antwort exakt mit "Status: OK", "Status: Warnung" oder "Status: Fehlt".',
         'Wenn alles plausibel wirkt, sage klar: "Ich sehe keine offensichtlichen Probleme."',
         '',
@@ -3006,6 +3178,12 @@
         if (err) line += ` | Seitenfehler: "${err}"`;
         if (el.willValidate && !el.checkValidity()) line += ` | Browserfehler: "${el.validationMessage}"`;
         if (f.hint) line += ` | Hinweis: "${f.hint}"`;
+        // Deterministische Validierung (fa-utils) als harten Fakt mitgeben
+        if (value && ['INPUT', 'TEXTAREA'].includes(el.tagName) && !['radio', 'checkbox', 'password', 'file'].includes(type)) {
+          const kind = detectLiveCheckKind(f.label, el.type, f.autocomplete);
+          const check = kind ? getLiveCheckResult(kind, el.value, { final: true }) : null;
+          if (check) line += ` | Lokale Prüfung: "${check.msg}"`;
+        }
         lines.push(line);
       });
 
@@ -3136,6 +3314,7 @@
       const next = e.relatedTarget;
       if (next && ['INPUT','SELECT','TEXTAREA'].includes(next.tagName)) return;
       autofillTip.classList.remove('visible');
+      hideLiveCheck();
     }, true);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3189,6 +3368,77 @@
       const el = e.target;
       if (!el?.value || !el.willValidate || el.checkValidity()) return;
       scheduleFieldErrorHelp(el, 900);
+    }, true);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LIVE VALIDATION — deterministische Prüfung beim Tippen (kein API-Call)
+    // IBAN-Prüfsumme (mod-97), BIC-, E-Mail-, PLZ-Format, Telefon,
+    // Geburtsdatum-Plausibilität — Logik in fa-utils.js
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const liveCheckEl     = $('fa-live-check');
+    const liveCheckIcon   = $('fa-live-check-icon');
+    const liveCheckText   = $('fa-live-check-text');
+    const LIVE_CHECK_DEBOUNCE_MS = 550;
+    let liveCheckTimer;
+
+    function hideLiveCheck() {
+      liveCheckEl.classList.remove('visible', 'ok', 'warn');
+    }
+
+    // Dezentes Outline-Feedback direkt am Feld (Inline-Style wie highlightField,
+    // kein CSS-Leck in die Host-Seite). Originalzustand wird nur beim ersten
+    // Flash gemerkt, damit schnelle Folge-Checks ihn nicht überschreiben.
+    const outlineFlashState = new WeakMap();
+    function flashValidationOutline(el, ok) {
+      let state = outlineFlashState.get(el);
+      if (!state) {
+        state = { prevOutline: el.style.outline, prevOffset: el.style.outlineOffset, timer: null };
+        outlineFlashState.set(el, state);
+      }
+      clearTimeout(state.timer);
+      el.style.outline = `2px solid ${ok ? '#059669' : '#d97706'}`;
+      el.style.outlineOffset = '2px';
+      state.timer = setTimeout(() => {
+        el.style.outline = state.prevOutline;
+        el.style.outlineOffset = state.prevOffset;
+        outlineFlashState.delete(el);
+      }, ok ? 1200 : 1800);
+    }
+
+    // Nur textartige Felder prüfen — Checkbox/Radio & Co. feuern zwar auch
+    // input-Events, tragen aber keine prüfbaren Textwerte ("on")
+    const LIVE_CHECK_SKIP_TYPES = new Set([
+      'checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'image', 'range', 'color', 'hidden', 'password',
+    ]);
+
+    function runLiveCheck(el, { final = false } = {}) {
+      if (!el || !['INPUT', 'TEXTAREA'].includes(el.tagName)) return;
+      if (LIVE_CHECK_SKIP_TYPES.has((el.type || '').toLowerCase()) || !isVisible(el)) return;
+      const kind = detectLiveCheckKind(getLabel(el), el.type, el.getAttribute('autocomplete'));
+      if (!kind) { hideLiveCheck(); return; }
+      const result = getLiveCheckResult(kind, el.value, { final });
+      if (!result) { hideLiveCheck(); return; }
+      liveCheckIcon.textContent = result.ok ? '✓' : '⚠';
+      liveCheckText.textContent = result.msg;
+      liveCheckEl.classList.toggle('ok', result.ok);
+      liveCheckEl.classList.toggle('warn', !result.ok);
+      liveCheckEl.classList.add('visible');
+      flashValidationOutline(el, result.ok);
+    }
+
+    document.addEventListener('input', e => {
+      const el = e.target;
+      if (!el || !['INPUT', 'TEXTAREA'].includes(el.tagName)) return;
+      clearTimeout(liveCheckTimer);
+      liveCheckTimer = setTimeout(() => runLiveCheck(el), LIVE_CHECK_DEBOUNCE_MS);
+    }, true);
+
+    document.addEventListener('blur', e => {
+      const el = e.target;
+      if (!el || !['INPUT', 'TEXTAREA'].includes(el.tagName)) return;
+      clearTimeout(liveCheckTimer);
+      runLiveCheck(el, { final: true });
     }, true);
 
     // ═══════════════════════════════════════════════════════════════════════

@@ -2,7 +2,7 @@
 
 **Fallstudie:** KI-Assistent zur korrekten Eingabe von Daten in komplexe Browser-Formulare
 **Modul:** AI-Prototyping, SS2026 — Prof. Dr. Sebastian Dünnebeil (FK07)
-**Repository:** github.com/ujjwalmak/form-ai-assistant · **Stand:** 2026-06-26
+**Repository:** github.com/ujjwalmak/form-ai-assistant · **Stand:** 2026-07-05
 
 ---
 
@@ -15,9 +15,10 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Kennzahl | Stand |
 | --- | --- |
 | **Pflicht-Einheiten erfüllt** | Alle behandelten erfüllt (E2–E11; E5 erlassen) — keine offene Pflicht; E11 ohne neuen Pflichtpunkt |
-| **Größte offene Punkte** | Zwei Abschlusspräsentationen (02.07. Reflexion · 09.07. Demo) |
-| **Nächster Meilenstein** | Reflexions-Präsentation 02.07. + Prototyp-Demo 09.07.2026 |
+| **Größte offene Punkte** | Prototyp-Demo 09.07. (Reflexion 02.07. gehalten) |
+| **Nächster Meilenstein** | Prototyp-Demo 09.07.2026 |
 | **Deployment** | Mit Prof abgestimmt entfallen (Chrome-Extension-Case) |
+| **Neu (05.07., v2.1)** | Dokument-Scan (Vision-OCR), Live-Validierung beim Tippen (IBAN mod-97 u. a.), Pre-Submit-Logik-Check + Robustheits-Paket (Shadow-DOM/iFrame-Labels, Fehl-Match-Schutz, Select-Priorität) — 118 Unit-Tests grün |
 
 ---
 
@@ -73,8 +74,8 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
-| Relevante Tests identifiziert | ✅ | `TESTING_PLAN.md` |
-| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`), **69 Tests grün**, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
+| Relevante Tests identifiziert | ✅ | [`testing-plan.md`](testing-plan.md) |
+| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`), **118 Tests grün**, Branch-Coverage ~79 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
 
 ### Einheit 9 — Orchestrierung von Agenten (11.06.2026)
 
@@ -98,19 +99,19 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 
 ## Nächste Maßnahmen
 
-**Zeithorizont:** Reflexions-Präsentation 02.07. · Prototyp-Demo 09.07.2026
+**Zeithorizont:** Prototyp-Demo 09.07.2026 (Reflexions-Präsentation 02.07. gehalten)
 **Legende:** Priorität 🔴 Hoch · 🟡 Optional   |   Aufwand 🟢 Niedrig · 🟡 Mittel · 🔴 Hoch
 
 | # | Maßnahme | Einheit | Prio | Aufwand |
 | :-: | --- | :-: | :-: | :-: |
-| 1 | Reflexions-Präsentation (02.07.) — Interview-Stil: Problem, größte Herausforderung, Rollenverteilung, Tools, Zeitfresser, Lerneffekte, Empfehlung | 12 | 🔴 | 🟡 |
-| 2 | Prototyp-Demo (09.07.) — 10–15 Min Live-Demo, Repo bereitstellen, Präsentation auf Moodle hochladen | 13 | 🔴 | 🟡 |
+| 1 | Prototyp-Demo (09.07.) — 10–15 Min Live-Demo, Repo bereitstellen, Präsentation auf Moodle hochladen; v2.1-Features gezielt zeigen | 13 | 🔴 | 🟡 |
+| 2 | Demo-Skript/Beispielseiten für Dokument-Scan, Live-Validierung und Robustheitsfälle vorbereiten | 13 | 🔴 | 🟢 |
 | 3 | Webseite live ✅ ([ujjwalmak.github.io/form-ai-assistant](https://ujjwalmak.github.io/form-ai-assistant/)) — optional noch Screenshots ergänzen | 10 | 🟡 | 🟢 |
-| 4 | Unit-Tests für `fa-supabase` ergänzen (chrome-Mocks, `TESTING_PLAN.md` Phase 4) — einziges Logik-Modul noch ohne Tests | 8 | 🟡 | 🟡 |
+| 4 | Unit-Tests für `fa-supabase` ergänzen (chrome-Mocks, [`testing-plan.md`](testing-plan.md) Phase 4) — einziges Logik-Modul noch ohne Tests | 8 | 🟡 | 🟡 |
 | 5 | Form-Field-Tipps aus `form_fields` aktiv schalten — kuratierte Hinweise als Badge (keyed Lookup, Daten in Supabase vorhanden) | 4 | 🟡 | 🟢 |
 
-> **Hinweis Abschluss:** Es gibt **zwei** Termine — 02.07. (Reflexion, Interview-Stil) und 09.07.
-> (Prototyp-Demo). Beide sind vorzubereiten (Team-Zuordnung ggf. im Moodle prüfen).
+> **Hinweis Abschluss:** Die Reflexion am 02.07. ist gehalten. Offen ist noch die Prototyp-Demo
+> am 09.07. (Team-Zuordnung/Upload ggf. im Moodle prüfen).
 
 ---
 
@@ -120,14 +121,18 @@ Funktionale Ideen über den aktuellen Stand hinaus. Bereits umgesetzte Features 
 Guided Mode, Profil-Memory, Dark Mode, Submit-Review, Tastenkürzel, Datums-Intelligenz (DE/EN),
 Formular-Erklärung) stehen in der Statusübersicht / `README.md`.
 
+**Umgesetzt am 05.07.2026 (v2.1, ehemals Backlog):** ✅ **Dokument-/Foto-Upload (Vision-OCR)**
+(Llama 4 Scout via Groq/OpenRouter, Bestätigungsschritt + Review vor dem Speichern) ·
+✅ **Live-Validierung beim Tippen** (deterministisch: IBAN mod-97, BIC, E-Mail, PLZ, Telefon,
+Geburtsdatum — bewusst ohne KI-Call, siehe `memory/decisions.md`) · ✅ **Erweiterte
+Pre-Submit-Logikprüfung** (Widersprüche zwischen Feldern; lokale Prüfergebnisse als Fakten im
+Review-Prompt). Details in `README.md`.
+
 **Legende:** Nutzen 🟢 Hoch · 🟡 Mittel · ⚪ Niedrig   |   Aufwand 🟢 Niedrig · 🟡 Mittel · 🔴 Hoch
 
 | Idee | Beschreibung | Nutzen | Aufwand |
 | --- | --- | :-: | :-: |
-| **Dokument-/Foto-Upload (Vision-OCR)** | Ausweis o. Ä. als Bild hochladen → Vision-LLM liest Daten und füllt Profil/Formular. | 🟢 | 🟡 |
-| **Live-KI-Validierung beim Tippen** | Eingaben in Echtzeit prüfen (PLZ, Datum, IBAN-Prüfsumme). | 🟢 | 🟡 |
-| **Erweiterte Pre-Submit-Logikprüfung** | Vor dem Absenden auf logische Widersprüche prüfen (baut auf Submit-Review auf). | 🟡 | 🟢 |
-| **Sprachsteuerung (Voice Input)** | Felder per Mikrofon befüllen (Web Speech API) → LLM mappt auf Felder. | 🟡 | 🟡 |
+| **Sprachsteuerung (Voice Input)** | Felder per Mikrofon befüllen (Web Speech API) → LLM mappt auf Felder. Bewusst nicht für die Live-Demo umgesetzt (Mikrofon-Berechtigungen sind demo-riskant). | 🟡 | 🟡 |
 | **Echtes RAG über persönliche Dokumente** | CV, Mietvertrag etc. chunked + embedded (pgvector); pro Feld semantische Suche. Das einzige der drei „RAG"-Themen, das wirklich Retrieval ist (`form_fields`-Tipps sind nur ein keyed Lookup, siehe Maßnahme 4). | 🟢 | 🔴 |
 | **Supabase Auth (OAuth)** | Geräte-UUID durch echte Accounts ersetzen → geräteübergreifend, RLS pro Nutzer. | 🟡 | 🟡 |
 | **Production-Packaging** | Backend-Proxy für Keys, Consent-Flow, Chrome-Web-Store, Firefox-Port. | 🟡 | 🔴 |

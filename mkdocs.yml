@@ -58,6 +58,11 @@ nav:
   - Entwicklung & Qualität: entwicklung.md
   - Entscheidungen & Kompetenzen: entscheidungen.md
   - Projektstand & Reflexion: projektstand.md
+  - Referenz:
+      - Vollständiger Projektstand: reference/projektstand-vollstaendig.md
+      - Reflexion: reference/reflexion.md
+      - Testing Plan: reference/testing-plan.md
+      - Product Vision: reference/product-vision.md
 
 markdown_extensions:
   - admonition

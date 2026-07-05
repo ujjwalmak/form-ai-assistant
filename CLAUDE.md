@@ -34,7 +34,7 @@ npm-Dependencies zur Laufzeit.
 
 - **Storage-Keys und Klassennamen nicht ohne Grund umbenennen** — bricht bestehende Code-Pfade,
   gespeicherte Profile und Migrationen. Key-Liste steht in `README.md`.
-- **Doku-Sprache: Deutsch.** Ausnahme: `TESTING_PLAN.md` ist Englisch.
+- **Doku-Sprache: Deutsch.** Ausnahmen: `docs/reference/testing-plan.md` und `docs/reference/product-vision.md` sind Englisch.
 - Vanilla JS im bestehenden Stil; keine Frameworks/Build-Tools für den Extension-Code einführen.
 - Neue `host_permissions`/`permissions` nur wenn nötig und im PR begründen.
 
@@ -55,4 +55,4 @@ npm-Dependencies zur Laufzeit.
   (kein Detailspam).
 - Wiederverwendbare Rollen-Prompts liegen in [personas/](personas/) — vor einer Aufgabe die
   passende Persona als Kontext geben.
-- Projektstatus gegenüber dem Kurs: `Projektstand.md` aktuell halten.
+- Projektstatus gegenüber dem Kurs: `docs/reference/projektstand-vollstaendig.md` aktuell halten; `docs/projektstand.md` ist die kurze Website-Zusammenfassung.

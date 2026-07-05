@@ -11,7 +11,7 @@ einschätzen wollen.
 Host-Seite (Bootstrap, Tailwind, eigenes CSS).
 
 **Entscheidung:** Die gesamte UI läuft in einem **Shadow DOM** (`attachShadow`), die Laufzeit
-als ein orchestrierendes `content.js` statt verteilter Module ohne Isolation.
+als feste Content-Script-Modulfolge mit einem orchestrierenden `content.js`.
 
 **Kompetenz:** Abwägen konkurrierender Ansätze (iFrame vs. CSS-Namespacing vs. Shadow DOM)
 und Entscheidung anhand von Isolations- und Kommunikationskosten.
@@ -46,11 +46,39 @@ nachschärfen — und dabei frühere Erkenntnisse bewusst erhalten.
 Ladereihenfolge, kein `import`/`export`) — schwer testbar ohne Umbau.
 
 **Entscheidung:** **Vitest (jsdom)** mit einem browser-sicheren `module.exports`-Shim pro Datei
-und jsdom-Polyfills — **69 Tests**, ~77 % Branch-Coverage, CI bei jedem Push. Kein Umbau der
+und jsdom-Polyfills — **118 Tests**, 78,93 % Branch-Coverage (~79 %), CI bei jedem Push. Kein Umbau der
 Laufzeit nötig.
 
 **Kompetenz:** Testbarkeit herstellen, ohne die Architektur zu brechen; pragmatische Lösung
 statt großem Refactor.
+
+## Demo-Paket v2.1: Validierung, Logik-Check, Dokument-Scan
+
+**Problem:** Für die Abschlussdemo sollte der Prototyp sichtbarer, robuster und trotzdem
+risikoarm werden: mehr Hilfe vor dem Absenden, weniger Fehlbefüllungen, schnelleres
+Profil-Anlegen.
+
+**Entscheidung:** Drei Backlog-Ideen wurden umgesetzt: deterministische Live-Validierung
+beim Tippen, ein erweiterter Submit-Review mit Logik-Check und ein Dokument-Scan per
+Vision-OCR. Bilder werden clientseitig verkleinert und erst nach expliziter Bestätigung
+an den Provider gesendet; erkannte Werte werden nur vorbefüllt.
+
+**Kompetenz:** KI dort einsetzen, wo sie Mehrwert bringt, aber mathematische Prüfungen
+lokal und deterministisch halten. Das Ergebnis ist demonstrierbar, testbar und mit
+klaren Datenschutz-Gates versehen.
+
+## Robustheits-Paket: lieber fragen als falsch füllen
+
+**Problem:** Fremde Webseiten nutzen Shadow DOM, same-origin iFrames, Tabellenlayouts,
+Custom-Widgets und uneindeutige Labels. Substring-Matching konnte falsche Profilwerte
+zuordnen.
+
+**Entscheidung:** Root-korrekte DOM-Lookups, rekursiver Shadow-DOM-Scan, Tabellen-Label-
+Fallback, Wortanfang-Matching für Profil-Keywords und priorisiertes Select-Matching.
+Passwortfelder werden grundsätzlich nicht mit Profildaten gefüllt.
+
+**Kompetenz:** False Positives aktiv reduzieren. Unsichere Felder gehen lieber an den
+Agenten oder an eine Rückfrage, statt dauerhaft falsche Daten ins Profil zu lernen.
 
 ## Agenten-Orchestrierung: der Dokumentations-Agent
 
@@ -67,8 +95,9 @@ ein lauffähiges, orchestriertes Werkzeug überführen.
 ## Transparenz & Kommunikation
 
 Entscheidungen werden in `memory/decisions.md` mit Kontext, Alternativen und Konsequenzen
-festgehalten; Sessions in `logs/actions.md`; der Projektstatus in `Projektstand.md`. Diese
-Webseite selbst ist Teil davon — Kommunikation der eigenen Arbeit als bewusster Bestandteil.
+festgehalten; Sessions in `logs/actions.md`; der vollständige Projektstatus in
+[`docs/reference/projektstand-vollstaendig.md`](reference/projektstand-vollstaendig.md).
+Diese Webseite selbst ist Teil davon — Kommunikation der eigenen Arbeit als bewusster Bestandteil.
 
 ## Team
 

@@ -1,4 +1,4 @@
-const { fillField, normalizeTemporalValue } = require('../../fa-fill.js');
+const { fillField, normalizeTemporalValue, findSelectOption, normalizeDecimalString } = require('../../fa-fill.js');
 
 afterEach(() => { document.body.innerHTML = ''; });
 
@@ -72,5 +72,84 @@ describe('fillField', () => {
 
     expect(document.querySelector('input[value="w"]').checked).toBe(true);
     expect(document.querySelector('input[value="m"]').checked).toBe(false);
+  });
+});
+
+// ── Robustheit: Select-Priorität, Multi-Select, Zahlen, maxlength ────────────
+
+describe('findSelectOption — priorisierte Suche', () => {
+  function makeSelect(pairs, attrs = '') {
+    document.body.innerHTML = `<select ${attrs}>` +
+      pairs.map(([text, value]) => `<option value="${value}">${text}</option>`).join('') +
+      `</select>`;
+    return document.querySelector('select');
+  }
+
+  it('exakter Wert schlägt Teilstring — "DE" greift nicht in "Niederlande"', () => {
+    const sel = makeSelect([['Niederlande', 'NL'], ['Deutschland', 'DE']]);
+    expect(findSelectOption(sel.options, 'DE').value).toBe('DE');
+  });
+
+  it('exaktes Label schlägt Wortanfang', () => {
+    const sel = makeSelect([['Deutschland (alt)', 'x'], ['Deutschland', 'de']]);
+    expect(findSelectOption(sel.options, 'Deutschland').value).toBe('de');
+  });
+
+  it('Kürzel unter 3 Zeichen matchen nur exakt (kein Zufallstreffer)', () => {
+    const sel = makeSelect([['Niederlande', 'NL'], ['Belgien', 'BE']]);
+    expect(findSelectOption(sel.options, 'de')).toBeNull();
+  });
+
+  it('umgekehrtes Enthalten: "Herr Dr." findet Option "Herr"', () => {
+    const sel = makeSelect([['Frau', 'f'], ['Herr', 'm']]);
+    expect(findSelectOption(sel.options, 'Herr Dr.').value).toBe('m');
+  });
+
+  it('gibt null für leere Eingaben zurück', () => {
+    const sel = makeSelect([['Frau', 'f']]);
+    expect(findSelectOption(sel.options, '')).toBeNull();
+    expect(findSelectOption(sel.options, null)).toBeNull();
+  });
+});
+
+describe('normalizeDecimalString', () => {
+  it('wandelt deutsche Schreibweisen um', () => {
+    expect(normalizeDecimalString('1.234,56')).toBe('1234.56');
+    expect(normalizeDecimalString('3,5')).toBe('3.5');
+    expect(normalizeDecimalString('10.000')).toBe('10000');
+    expect(normalizeDecimalString('-1.234,5')).toBe('-1234.5');
+  });
+
+  it('lässt US-/ISO-Schreibweise und Nicht-Zahlen unangetastet (null)', () => {
+    expect(normalizeDecimalString('1234.56')).toBe(null);
+    expect(normalizeDecimalString('42')).toBe(null);
+    expect(normalizeDecimalString('abc')).toBe(null);
+  });
+});
+
+describe('fillField — Multi-Select, Zahlen, maxlength', () => {
+  it('wählt bei <select multiple> alle genannten Optionen', () => {
+    document.body.innerHTML =
+      `<select multiple>` +
+      `<option value="de">Deutsch</option><option value="en">Englisch</option><option value="fr">Französisch</option>` +
+      `</select>`;
+    const sel = document.querySelector('select');
+    fillField(sel, 'Deutsch, Englisch');
+    const selected = Array.from(sel.selectedOptions).map(o => o.value);
+    expect(selected).toEqual(['de', 'en']);
+  });
+
+  it('füllt type=number mit deutschem Dezimalkomma korrekt', () => {
+    document.body.innerHTML = `<input type="number" step="0.01" id="x">`;
+    const el = document.getElementById('x');
+    fillField(el, '1.234,56');
+    expect(el.value).toBe('1234.56');
+  });
+
+  it('kappt Text auf maxlength (programmatisches Setzen umgeht die Browser-Grenze)', () => {
+    document.body.innerHTML = `<input id="x" maxlength="5">`;
+    const el = document.getElementById('x');
+    fillField(el, 'München');
+    expect(el.value).toBe('Münch');
   });
 });

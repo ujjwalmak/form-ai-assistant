@@ -9,7 +9,7 @@ Das Content-Script ist in Module aufgeteilt, die das Manifest in dieser Reihenfo
 | Datei | Zweck |
 | --- | --- |
 | `content.js` | Orchestrierung der Laufzeit: Shadow-DOM-UI, Chat, Agent, Guided/Field-by-Field, Profil-Panel, Submit-Review |
-| `fa-utils.js` | Hilfsfunktionen: `clean`, `formatBytes`, `parseDateToISO`/`parseRelativeDate`, Kendo-Erkennung, `getAgentSelector` |
+| `fa-utils.js` | Hilfsfunktionen: `clean`, `formatBytes`, `parseDateToISO`/`parseRelativeDate`, Kendo-Erkennung, `getAgentSelector`, deterministische Validatoren (`isValidIBAN` mod-97, BIC, E-Mail, PLZ, Telefon, Geburtsdatum) |
 | `fa-profile.js` | `PROFILE_FIELDS` (15 Standardfelder mit Keywords/Autocomplete) + `FAKE_DATA` |
 | `fa-scanner.js` | Feldanalyse: `getLabel`/`getHint`/`getError`, `extractField`, `matchProfile`, `buildSystemPrompt`, Step-Erkennung |
 | `fa-fill.js` | `fillField` für alle Feldtypen inkl. Datepicker-Libs und temporaler Normalisierung |
@@ -26,7 +26,7 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 ### KI-Agent
 
 - **⚡ Agent** analysiert Formularfelder und füllt sie automatisch aus
-- **Agentischer Chat**: Die KI kann Felder direkt aus dem Chat heraus ausfüllen ("Trag bei E-Mail x@y.de ein") — Antworten enthalten einen `<<<ACTIONS … ACTIONS>>>`-Block (toleranter Parser: auch ```json-Fences und nackte JSON-Arrays), der validiert und ausgeführt wird: fill/select/**check inkl. Abwählen** ("nein"), Radios per Optionstext, niemals submit
+- **Agentischer Chat**: Die KI kann Felder direkt aus dem Chat heraus ausfüllen ("Trag bei E-Mail `x@y.de` ein") — Antworten enthalten einen `<<<ACTIONS … ACTIONS>>>`-Block (toleranter Parser: auch ```json-Fences und nackte JSON-Arrays), der validiert und ausgeführt wird: fill/select/**check inkl. Abwählen** ("nein"), Radios per Optionstext, niemals submit
 - **Datums-Intelligenz**: `fillField` normalisiert Werte für `date`/`month`/`week`/`time`/`datetime-local` — inkl. relativer Angaben ("nächster Monat", "in 2 Wochen", "ab sofort", DE+EN) und Formaten wie `20.02.2000` oder `02.2027`
 - **Antwort-Normalisierung**: Tippt der Nutzer auf eine Agent-Rückfrage etwas, das das Feld ablehnt ("Next month" in ein Datumsfeld), wird die Antwort verifiziert, per Mini-KI-Call ins Feldformat konvertiert und erneut gefüllt; erst nach 2 Fehlversuchen kommt eine Rückfrage
 - **Chat-Gedächtnis**: Konversationen werden pro Domain gespeichert (`faChatMem`, max. 24 Nachrichten, 12 Domains LRU) und beim nächsten Seitenaufruf wiederhergestellt — der Agent erinnert sich über Seitenwechsel und Sessions hinweg
@@ -56,11 +56,13 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 ### Formularhilfe
 
 - **Formular erklaeren**: Zweck, Pflichtfelder, Stolperstellen in Kurzform
-- **Submit-Review vor Absenden** mit Status (`OK`, `Warnung`, `Fehlt`)
+- **Live-Validierung beim Tippen** (deterministisch, ohne API-Call): IBAN-Prüfsumme (ISO 7064 mod-97 + Länder-Sollängen), BIC-, E-Mail-, PLZ-Format, Telefon-Plausibilität, Geburtsdatum (Zukunft/älter als 120 Jahre). Feedback als ✓/⚠-Badge in der Sidebar + dezentes Outline am Feld; beim Tippen tolerant (unvollständige Werte werden nicht angemeckert), bei `blur` streng
+- **Submit-Review vor Absenden** mit Status (`OK`, `Warnung`, `Fehlt`) — inkl. **Logik-Check auf Widersprüche zwischen Feldern** (z. B. Enddatum vor Startdatum, PLZ passt nicht zur Stadt); die deterministischen Prüfergebnisse (z. B. IBAN-Prüfsumme) gehen als „Lokale Prüfung"-Fakten in den Review-Prompt ein
 - **Proaktive Fehlerhilfe** bei invaliden Feldern (kurze, konkrete Korrekturhinweise)
 
 ### Profil & Daten
 
+- **Dokument-Scan (Vision-OCR)**: Foto von Ausweis, Visitenkarte, Rechnung o. Ä. hochladen → Vision-LLM (Groq `meta-llama/llama-4-scout-17b-16e-instruct`, OpenRouter `meta-llama/llama-4-scout`) extrahiert Profilfelder als JSON. Datenminimierung: Bild wird clientseitig auf max. 1400 px verkleinert; expliziter Bestätigungsschritt vor dem Senden; erkannte Werte werden nur **vor**befüllt und markiert — gespeichert wird erst per „Speichern"
 - **15** Standardfelder (Person, Adresse, Kontakt, Bank, Beruf)
 - Zusatzdaten (`faExtras`) fuer gelernte Freitext-Felder, im Profil bearbeitbar/loeschbar
 - **Mehrere Profile** — Switcher, Anlegen, Loeschen
@@ -70,10 +72,13 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 
 ### Formularerkennung
 
-- Shadow DOM: erkennt Felder in Web Components und Custom Elements
+- Shadow DOM: erkennt Felder in Web Components und Custom Elements — **rekursiv** auch in verschachtelten Shadow Roots (Design-Systeme); Label/Hint/Error/Radio-Gruppen werden über `getRootNode()` im richtigen Baum aufgelöst (Shadow DOM **und** same-origin iFrames)
+- **Tabellen-Layouts**: bei Legacy-/Behördenformularen dient die linke Tabellenzelle als Label-Fallback
+- **Fehl-Match-Schutz**: Profil-Keywords matchen am Wortanfang statt als Substring („Hotelname" ist kein Telefonfeld, „Sportart"/„Passwort" keine Stadt); Passwortfelder bekommen nie Profildaten; deutsche Komposita („Wohnort", „Mobiltelefon", „Geboren am") sind über kuratierte Keywords abgedeckt — gilt auch fürs Lernen neuer Profilwerte nach Agent-Läufen
 - Nav-Filter: ignoriert Felder in `nav`, `header`, `footer`, `[role=search]`
 - Datepicker-Support: Flatpickr, Pikaday, jQuery UI Datepicker, Bootstrap DateTimePicker
 - Radio-Button-Fix: nutzt `click()` statt `checked = true` fuer React/Vue-Kompatibilitaet
+- **Robustes Ausfüllen**: priorisiertes `<select>`-Matching (exakter Wert/Label vor Teilstring — „DE" landet nicht in „Niederlande"), `<select multiple>` per Kommaliste, deutsches Dezimalkomma für Zahlenfelder („1.234,56" → `1234.56`), Werte werden auf `maxlength` gekappt
 
 ### History
 
@@ -110,6 +115,9 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 | Endpunkt | `https://api.groq.com/openai/v1/chat/completions` | `https://openrouter.ai/api/v1/chat/completions` |
 | Standard-Modell | `llama-3.3-70b-versatile` | `openrouter/auto` |
 | Fallback-Modell | — | `meta-llama/llama-3.3-70b-instruct:free` |
+| Vision-Modell (Dokument-Scan) | `meta-llama/llama-4-scout-17b-16e-instruct` | `meta-llama/llama-4-scout` (Fallback: `:free`) |
+
+Vision-Requests schicken ihr eigenes Fallback-Modell mit (`fallbackModel` in der `llm-fetch`-Message), damit der automatische Groq→OpenRouter-Fallback nicht auf das text-only Standard-Fallback-Modell wechselt.
 
 **Automatischer Fallback:** Wenn Groq mit 429 (Rate Limit) oder 5xx (Server-Fehler) antwortet und ein OpenRouter-Key gespeichert ist, wird die Anfrage automatisch ueber OpenRouter wiederholt. Der Nutzer sieht einen kurzen Toast.
 
@@ -151,11 +159,11 @@ npm run test:watch # Watch-Modus
 npm run coverage   # Tests + Abdeckungsbericht (coverage/index.html)
 ```
 
-- Tests liegen in `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`) — **69 Tests**, Branch-Coverage ~77 % der Logik-Module.
+- Tests liegen in `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`) — **118 Tests** (inkl. Live-Validierung IBAN/BIC/E-Mail/PLZ/Telefon/Geburtsdatum, Fehl-Match-Schutz, Shadow-DOM-Labels, Select-Priorität), Branch-Coverage ~79 % der Logik-Module.
 - `tests/setup.js` stellt die Module als Globals bereit (die Extension-Dateien sind klassische Skripte ohne `import`/`export`) und polyfillt jsdom-Luecken (`CSS.escape`, `offsetWidth`).
 - Jede getestete Quelldatei hat am Ende einen `module.exports`-Shim, der im Browser (kein `module`) uebersprungen wird — die Extension-Laufzeit bleibt unveraendert.
 - CI: `.github/workflows/test.yml` fuehrt die Suite bei jedem Push/PR aus (Regression).
-- Bewusst nicht unit-getestet: Netzwerk-I/O, DOM-Orchestrierung in `content.js`, CSS — Kandidaten fuer E2E, siehe `TESTING_PLAN.md`.
+- Bewusst nicht unit-getestet: Netzwerk-I/O, DOM-Orchestrierung in `content.js`, CSS — Kandidaten fuer E2E, siehe `docs/reference/testing-plan.md`.
 
 ## Weitere Bestandteile
 

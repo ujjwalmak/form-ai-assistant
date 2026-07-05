@@ -461,3 +461,44 @@ Neue Vorlesung (MCP) gegen die Pflicht abgleichen und den Projektstatus aktualis
 
 - Alle behandelten Pflicht-Einheiten (E2–E11) erfüllt bzw. erlassen (E5); E11 ohne neuen Pflichtpunkt.
 - Offen: Webseite live-schalten (Repo-Admin), zwei Abschlusspräsentationen (02./09.07.), optional Screenshots/MCP-Feature.
+
+---
+
+## [2026-07-05] Demo-Feature-Paket v2.1: Live-Validierung, Logik-Check, Dokument-Scan
+
+**Ziel:**
+Extension für die Prototyp-Demo (09.07.) mit drei Backlog-Features schärfen — ohne Risiko für die Live-Demo.
+
+**Aktionen:**
+
+1. **Live-Validierung beim Tippen** (`fa-utils.js` + Wiring in `content.js`): deterministische Prüfungen (IBAN ISO-7064-mod-97 inkl. Länder-Sollängen, BIC, E-Mail, PLZ, Telefon, Geburtsdatum-Plausibilität), ✓/⚠-Badge in der Sidebar + Outline-Flash am Feld; tolerant beim Tippen, streng bei blur.
+2. **Pre-Submit-Logikprüfung**: Submit-Review-Prompt prüft jetzt Widersprüche zwischen Feldern (Logik-Check) und bekommt die deterministischen Ergebnisse als "Lokale Prüfung"-Fakten.
+3. **Dokument-Scan (Vision-OCR)** im Profil-Panel: Bild → Downscale 1400 px → Privacy-Bestätigung → Llama 4 Scout (Groq, verifizierte Modell-ID) → JSON → Profilfelder vorbefüllt mit Review-Pflicht. `background.js` unterstützt dafür ein request-eigenes `fallbackModel`.
+4. **Tests**: +29 Unit-Tests (Validatoren, Feld-Klassifizierung, Fallback-Model-Resolver) — Suite 98/98 grün, Branch-Coverage ~80 %.
+5. Doku nachgezogen: `README.md`, `Projektstand.md` (Backlog → umgesetzt), `memory/short_term.md`, `memory/decisions.md`; `manifest.json` auf v2.1.
+
+**Ergebnis:**
+
+- Drei sichtbare Demo-Features, alle offline-robust bzw. mit Fallback; keine Storage-Key- oder Architektur-Brüche.
+- Guardrails intakt: kein Auto-Submit, UI im Shadow Root, Netzwerk nur via `background.js`.
+
+---
+
+## [2026-07-05] Robustheits-Paket: Feld-Erkennung/-Befüllung auf breiter Webseiten-Basis gehärtet
+
+**Ziel:**
+Zuverlässigkeit auf möglichst allen Webseiten: alle Felder korrekt erkennen und befüllen, Fehl-Befüllungen ausschließen.
+
+**Aktionen:**
+
+1. **Shadow DOM/iFrames korrekt**: Label-/Hint-/Error-/Radio-Lookups über `getRootNode()` statt `document` (`byIdInRoot`); rekursiver Scan verschachtelter Shadow Roots; `isVisible` über `ownerDocument.defaultView`.
+2. **Fehl-Match-Schutz**: Profil-Keyword-Matching am Wortanfang statt Substring — behebt "Hotelname"→Telefon und "Sportart"/"Passwort"→Stadt, auch in `learnAgentFields` (dort drohte dauerhafte Profil-Korruption); Passwortfelder grundsätzlich ausgeschlossen; Compound-Keywords (`mobil`, `rufnummer`, `wohnort`, `geboren`) ergänzt.
+3. **Befüllung gehärtet** (`fa-fill.js`): priorisiertes Select-Matching (exakt vor Teilstring — "DE" greift nicht in "Niederlande"), `<select multiple>`, deutsches Dezimalkomma für Zahlenfelder, `maxlength`-Kappung.
+4. **Tabellen-Layouts**: linke Zelle als Label-Fallback (Behörden-/Legacy-Formulare).
+5. **Tests**: +20 Unit-Tests für alle Fixes — Suite 118/118 grün, Branch-Coverage ~79 %; `extractRichContext` exportiert.
+6. Doku nachgezogen: `README.md`, `Projektstand.md`, `memory/short_term.md`, `memory/decisions.md`.
+
+**Ergebnis:**
+
+- Erkennungs- und Befüllungspfad funktionieren jetzt auch in Web-Component-/iFrame-/Tabellen-Layouts; Fehl-Befüllungs-Klassen sind per Test abgesichert.
+- Bekannte, technisch bedingte Grenzen bleiben dokumentiert (Cross-Origin-iFrames, closed Shadow Roots, nativer PDF-Viewer — `memory/known_issues.md`).

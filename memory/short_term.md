@@ -1,13 +1,13 @@
 ---
 name: short-term-snapshot
-description: Current runtime state, implemented features, and storage keys — snapshot as of 2026-06-25
+description: Current runtime state, implemented features, and storage keys — snapshot as of 2026-07-05
 metadata:
   type: project
 ---
 
 # Short-Term Memory — FormAssist
 
-Stand: 2026-06-25
+Stand: 2026-07-05 (v2.1)
 
 ## Aktueller Stand
 
@@ -39,7 +39,7 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 - Agent-Resume-Status in `chrome.storage.session` (`faAgentResume`)
 - **15** Standard-Profilfelder (`PROFILE_FIELDS`) + freie `faExtras`
 - Automatischer Fallback: Groq 429/5xx → OpenRouter (Toast im Sidebar)
-- Unit-Tests: Vitest in `tests/unit/` (69 Tests, ~77 % Branch-Coverage der Logik-Module), CI via GitHub Actions; Icons in `icons/`
+- Unit-Tests: Vitest in `tests/unit/` (118 Tests, ~79 % Branch-Coverage der Logik-Module), CI via GitHub Actions; Icons in `icons/`
 
 ## Implementierte Features
 
@@ -64,10 +64,14 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 
 ### Formularerkennung
 
-- Shadow DOM: Web Components und Custom Elements werden gescannt
+- Shadow DOM: Web Components und Custom Elements werden gescannt — seit 2026-07-05 **rekursiv** (verschachtelte Shadow Roots, `collectShadowRoots` mit Tiefenlimit 6)
+- Label/Hint/Error/Radio-Lookups laufen über `el.getRootNode()` statt `document` (`byIdInRoot` in `fa-scanner.js`) — korrekt in Shadow DOM und same-origin iFrames; `isVisible` nutzt `ownerDocument.defaultView`
+- Tabellen-Layout-Fallback: linke Zelle (`td`/`th`) als Label (Behörden-/Legacy-Formulare)
+- **Fehl-Match-Schutz** (2026-07-05): `matchProfile` + `learnAgentFields` matchen Keywords am Wortanfang (`labelHasKeyword`) statt Substring — "Hotelname"≠Telefon, "Sportart"/"Passwort"≠Stadt; Passwortfelder nie; Compound-Keywords ergänzt (`mobil`, `rufnummer`, `wohnort`, `geboren`)
 - Nav-Filter: `nav`, `header`, `footer`, `[role=search]` ausgeschlossen
 - Datepicker-Support: Flatpickr, Pikaday, jQuery UI, Bootstrap DateTimePicker
 - Radio-Button-Fix: `click()` statt `checked = true` (React/Vue-Kompatibilität)
+- Robustes Füllen (2026-07-05, `fa-fill.js`): priorisiertes Select-Matching (`findSelectOption`: exakt → Wortanfang → enthält ab 3 Zeichen), `<select multiple>` per Kommaliste, deutsches Dezimalkomma für `type=number` (`normalizeDecimalString`), `maxlength`-Kappung
 
 ### Profil & Daten
 
@@ -79,8 +83,14 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 ### Formularhilfe
 
 - Formular-Zusammenfassung ("Formular erklären")
-- Submit-Review vor Absenden mit Status (`OK` / `Warnung` / `Fehlt`)
+- Submit-Review vor Absenden mit Status (`OK` / `Warnung` / `Fehlt`) + Logik-Check auf Feld-Widersprüche; deterministische Prüfergebnisse gehen als "Lokale Prüfung" in den Prompt
 - Proaktive Fehlerhilfe bei invaliden Feldern
+- **Live-Validierung beim Tippen** (seit 2026-07-05, `fa-utils.js`): IBAN mod-97, BIC, E-Mail, PLZ, Telefon, Geburtsdatum — deterministisch ohne API-Call; ✓/⚠-Badge in der Sidebar (`fa-live-check`) + Outline-Flash am Feld; tolerant beim Tippen, streng bei blur
+
+### Dokument-Scan (Vision-OCR, seit 2026-07-05)
+
+- Profil-Panel-Button `fa-pf-scan`: Bild → clientseitig auf 1400 px verkleinert (JPEG q0.85) → Bestätigungsschritt (Privacy) → Vision-LLM → JSON → Profilfelder vorbefüllt (`pf-scanned`-Markierung), Speichern erst durch Nutzer
+- Vision-Modelle: Groq `meta-llama/llama-4-scout-17b-16e-instruct`, OpenRouter `meta-llama/llama-4-scout`; eigener Vision-Fallback via `fallbackModel` in der `llm-fetch`-Message (`meta-llama/llama-4-scout:free`), damit der Groq→OpenRouter-Fallback nicht auf das text-only Modell wechselt
 
 ### UI
 
@@ -91,15 +101,13 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 
 ## Derzeit bewusst nicht vorhanden
 
-- Kein Voice-Input (Web Speech)
-- Kein Foto-/OCR-Upload für Dokumente
+- Kein Voice-Input (Web Speech) — bewusst nicht für die Demo (Mikrofon-Berechtigungen riskant)
 - Kein Reverse-Fallback OpenRouter → Groq
 
 ## Nächste sinnvolle Schritte
 
-1. Reflexions-Präsentation (02.07., Interview-Stil) vorbereiten
-2. Prototyp-Demo (09.07.) vorbereiten — Repo bereitstellen, Präsentation auf Moodle
-3. Optional: Test-Abdeckung erweitern (`fa-supabase` mit chrome-Mocks); RAG über Supabase `form_fields`; Privacy/Consent-Flow vor KI-Analyse
+1. Prototyp-Demo (09.07.) vorbereiten — Repo bereitstellen, Präsentation auf Moodle; neue v2.1-Features (Dokument-Scan, Live-Validierung, Logik-Check) in die Demo einbauen
+2. Optional: Test-Abdeckung erweitern (`fa-supabase` mit chrome-Mocks); RAG über Supabase `form_fields`
 
 Keine offene Pflicht aus behandelten Einheiten (E2–E11); E5 erlassen; E11 = MCP-Konzept ohne neuen Pflichtpunkt.
 
@@ -107,4 +115,4 @@ Erledigt (2026-06-14): Ausführbare Tests + CI (Kurs-Einheit 8); autonomer Dokum
 Erledigt (2026-06-18): Stakeholder-Projektwebseite (`docs/`, MkDocs Material) + GitHub-Pages-Auto-Deploy (Kurs-Einheit 10); doc-agent um `post-commit`-Hook + Self-Exclude erweitert.
 Erledigt (2026-06-26): GitHub Pages aktiviert — Webseite live unter ujjwalmak.github.io/form-ai-assistant.
 
-Vollständiger Status nach Kurseinheiten: siehe `Projektstand.md`.
+Vollständiger Status nach Kurseinheiten: siehe `docs/reference/projektstand-vollstaendig.md`.

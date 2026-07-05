@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FormAssist Test Site
 
-## Getting Started
+Lokale Next.js-Testseite mit absichtlich komplexen Formularen für die Chrome-Extension.
+Sie dient als manuelle Fixture-Sammlung und als Grundlage für spätere Playwright-E2E-Tests.
 
-First, run the development server:
+## Enthaltene Szenarien
+
+- `registration` — mehrstufige Registrierung mit Autocomplete, Labels, Adresse und Account-Feldern.
+- `application` — Bewerbung mit Datei-Upload, Checkboxen, Multi-Select und bedingten Feldern.
+- `medical` — deutscher Intake-Flow mit Labels wie Vorname, Geburtsdatum und Postleitzahl.
+- `checkout` — Checkout mit Versand, Zahlung, Validierung und Fehlermeldungen.
+- `insurance` — Versicherungsformular mit Kendo-artigen Widgets und dynamischen Bereichen.
+- `survey` — Survey über viele Input-Typen: Text, Datum/Zeit, Select, Radio, Checkbox, Range, Datei.
+
+## Starten
 
 ```bash
+cd test-site
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Danach `http://localhost:3000` öffnen, FormAssist als entpackte Extension laden und Smart Fill
+mit `Alt+Shift+S` testen. Die Formulare haben bewusst Next/Back-Navigation, damit auch
+mehrseitiges Füllen und Auto-Advance geprüft werden können.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Nächster Ausbau
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Die Seite ist noch keine automatisierte E2E-Suite. Der nächste sinnvolle Schritt ist eine
+Playwright-Suite, die die Extension im persistenten Chromium-Kontext lädt, ein Fixture-Profil
+setzt und pro Formular Fill-Accuracy misst.

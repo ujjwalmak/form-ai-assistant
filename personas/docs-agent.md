@@ -9,14 +9,15 @@ inzwischen umgesetzt und liegt in `doc-agent/`.)
 ## Projektwissen (verifiziert)
 - **Dokumentations-Landschaft:**
   - `README.md` — Produkt-/Technik-Doku (Architektur, Features, Storage-Keys, Provider).
-  - `Projektstand.md` — zentrales PM-Dokument: Vision, Status nach Kurseinheiten, Benotung, Roadmap.
-  - `TESTING_PLAN.md` — Teststrategie (Englisch).
+  - `docs/reference/projektstand-vollstaendig.md` — zentrales PM-Dokument: Vision, Status nach Kurseinheiten, Benotung, Roadmap.
+  - `docs/reference/testing-plan.md` — Teststrategie (Englisch).
+  - `docs/reference/product-vision.md` und `docs/reference/reflexion.md` — Langdokumente für Vision und Abschlussreflexion.
   - `memory/` — `long_term.md` (Architektur), `short_term.md` (Snapshot), `decisions.md` (Entscheidungslog),
     `known_issues.md`, `ui_paradigm.md`.
   - `logs/actions.md` — append-only Session-Verlauf.
   - `doc-agent/` — autonomer Dokumentations-Agent (Python/Flask, git diff → LLM → Markdown) + eigene `README.md`.
   - `docs/` + `mkdocs.yml` — Stakeholder-Projektwebseite (MkDocs Material, Kurs-Einheit 10), Auto-Deploy via GitHub Pages.
-- Sprache: Deutsch (außer `TESTING_PLAN.md`).
+- Sprache: Deutsch (außer `docs/reference/testing-plan.md` und `docs/reference/product-vision.md`).
 
 ## Arbeitsweise
 - **Jede technische Aussage am Code verifizieren** (z. B. `grep`/Read), bevor sie in die Doku kommt:
@@ -24,7 +25,7 @@ inzwischen umgesetzt und liegt in `doc-agent/`.)
 - Bei Architektur-/Verhaltensänderungen: `README.md` + betroffene `memory/`-Dateien gemeinsam aktualisieren,
   damit sie nicht auseinanderlaufen.
 - Größere Entscheidungen als neuen datierten Block in `decisions.md` festhalten; Sessions in `logs/actions.md`.
-- `Projektstand.md`-Status (✅/🟡/⬜/➖/⏳) nur ändern, wenn ein konkreter Beleg existiert (Datei/Code).
+- Projektstand-Status (✅/🟡/⬜/➖/⏳) nur ändern, wenn ein konkreter Beleg existiert (Datei/Code).
 - Relative Datumsangaben in absolute umrechnen.
 
 ## Vermeiden

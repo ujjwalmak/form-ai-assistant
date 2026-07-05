@@ -313,8 +313,8 @@ s = new_slide("bg_content.png")
 eyebrow(s, 220, 118, "Auf einen Blick")
 text(s, 220, 152, 1200, 60, [{"t": "Eckdaten des Projekts", "f": SGS, "c": "FFFFFF"}], 26)
 tiles = [("11", "Wochen · 09.04.–25.06.2026"), ("52", "Commits · 2er-Team"),
-         ("7", "Module · Shadow-DOM-UI"), ("69", "Unit-Tests · Vitest"),
-         ("~77 %", "Branch-Coverage + CI"), ("0", "Auto-Submits — harte Guardrail")]
+         ("7", "Module · Shadow-DOM-UI"), ("118", "Unit-Tests · Vitest"),
+         ("~79 %", "Branch-Coverage + CI"), ("0", "Auto-Submits — harte Guardrail")]
 for i, (num, lab) in enumerate(tiles):
     stat_tile(s, 220 + (i % 3) * 505, 240 + (i // 3) * 200, 470, 170, num, lab)
 bullet_stack(s, 220, 1480, [
@@ -329,7 +329,7 @@ Elf Wochen Projektlaufzeit, 52 Commits, zwei Personen — beide durchgängig akt
 
 Das Produkt ist eine Chrome-Extension nach Manifest V3, bewusst in Vanilla JS ohne Build-Step gebaut, in sieben Module gegliedert; die komplette UI läuft isoliert im Shadow DOM.
 
-Als LLM-Provider nutzen wir Groq, mit OpenRouter als automatischem Fallback, dazu Supabase für den optionalen Sync. Qualität: 69 Unit-Tests mit rund 77 Prozent Branch-Coverage, die bei jedem Push in der CI laufen.
+Als LLM-Provider nutzen wir Groq, mit OpenRouter als automatischem Fallback, dazu Supabase für den optionalen Sync. Qualität: 118 Unit-Tests mit rund 79 Prozent Branch-Coverage, die bei jedem Push in der CI laufen.
 
 Zwei Extras, auf die wir noch zu sprechen kommen: ein eigener autonomer Doku-Agent, der per Git-Hook nach jedem Commit dokumentiert, und eine Stakeholder-Webseite, live auf GitHub Pages.
 
@@ -541,7 +541,7 @@ y = 316
 for segs, hi in [
     ([W("Batch-Agent: "), N("1 statt 12 API-Calls pro Formularseite.")], False),
     ([W("Auto-Fallback Groq → OpenRouter, "), N("transparent per Toast.")], False),
-    ([W("~77 % Coverage + CI "), N("bei Vanilla JS ohne Build-Step.")], False),
+    ([W("~79 % Branch-Coverage + CI "), N("bei Vanilla JS ohne Build-Step.")], False),
     ([W("Autonomer Doku-Agent "), N("dokumentiert via Git-Hook nach jedem Commit.")], False),
 ]:
     y = chip(s, 220, y, 710, segs, size=11.5, hi=hi) + 16
@@ -550,7 +550,8 @@ y = 316
 for segs, hi in [
     ([W("Client-seitiger API-Key = Prototyp-Niveau "), N("→ produktiv: Backend-Proxy + Consent-Flow.")], False),
     ([W("Nicht erreichbar: "), N("cross-origin iFrames & Chrome-PDF-Viewer.")], False),
-    ([W("Ausblick: "), N("Vision-OCR · RAG über persönliche Dokumente (pgvector) · MCP-Server.")], True),
+    ([W("v2.1 umgesetzt: "), N("Vision-OCR · Live-Validierung · Logik-Check.")], True),
+    ([W("Ausblick: "), N("RAG über persönliche Dokumente (pgvector) · MCP-Server · Backend-Proxy.")], True),
 ]:
     y = chip(s, 990, y, 710, segs, size=11.5, hi=hi) + 16
 link_pill(s, 560, 820, 800, 64)
@@ -563,7 +564,7 @@ Worauf wir stolz sind: der Batch-Agent — ein API-Call statt zwölf pro Formula
 
 Genauso klar benennen wir die Grenzen: Der client-seitige API-Key ist Prototyp-Niveau — produktiv bräuchte es einen Backend-Proxy und einen Consent-Flow pro Formular. Cross-origin iFrames und der native Chrome-PDF-Viewer sind technisch nicht erreichbar.
 
-Der Ausblick: Vision-OCR — also Ausweis fotografieren statt abtippen —, echtes RAG über persönliche Dokumente mit pgvector, und ein MCP-Server für den Doku-Agenten.
+Neu in v2.1 umgesetzt sind Vision-OCR, Live-Validierung und der Logik-Check vor dem Absenden. Der Ausblick: echtes RAG über persönliche Dokumente mit pgvector, ein MCP-Server für den Doku-Agenten und ein Backend-Proxy für Produktion.
 
 Alles davon ist öffentlich dokumentiert — auf unserer Stakeholder-Webseite.""")
 

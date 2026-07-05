@@ -25,8 +25,8 @@ erklärt und mit einem Agenten ausfüllt — datensparsam, lokal, und nie ohne d
 </div>
 
 <div class="fa-stats" markdown>
-<div class="fa-stat"><b>69</b><span>Unit-Tests</span></div>
-<div class="fa-stat"><b>~77 %</b><span>Branch-Coverage</span></div>
+<div class="fa-stat"><b>118</b><span>Unit-Tests</span></div>
+<div class="fa-stat"><b>~79 %</b><span>Branch-Coverage</span></div>
 <div class="fa-stat"><b>15</b><span>Profilfelder</span></div>
 <div class="fa-stat"><b>0</b><span>Auto-Submits</span></div>
 </div>
@@ -85,8 +85,8 @@ Werte aus einem gespeicherten Profil — mit Rückfragen, wo etwas unklar ist.
 
     ---
 
-    Profile liegen lokal im Browser; nur für KI-Funktionen werden relevante
-    Daten an den gewählten Provider übertragen.
+    Profile liegen lokal im Browser; Dokument-Scans brauchen eine explizite
+    Bestätigung und werden clientseitig verkleinert.
 
 -   :material-calendar-clock:{ .lg .middle } __Datums-Intelligenz__
 
@@ -94,6 +94,20 @@ Werte aus einem gespeicherten Profil — mit Rückfragen, wo etwas unklar ist.
 
     Versteht „nächster Monat", „in 2 Wochen" (DE + EN) und normalisiert
     Formate ins jeweilige Feldformat.
+
+-   :material-check-decagram:{ .lg .middle } __Prüft vor dem Absenden__
+
+    ---
+
+    Live-Validierung für IBAN, BIC, E-Mail, PLZ, Telefon und Geburtsdatum
+    plus Logik-Check im Submit-Review.
+
+-   :material-file-eye:{ .lg .middle } __Liest Dokumente ins Profil__
+
+    ---
+
+    Fotos von Ausweis, Visitenkarte oder Rechnung können per Vision-OCR
+    Profilfelder vorbefüllen — gespeichert wird erst nach Review.
 
 </div>
 

@@ -828,6 +828,60 @@ const FA_CSS = `
       .gq-hint { font-size: 10.5px; color: var(--text3); line-height: 1.45; }
 
       /* ════════════════════════════════════════════════════════════════
+         Live check — deterministische Feld-Validierung (input-area)
+         ════════════════════════════════════════════════════════════════ */
+      .live-check {
+        display: none; align-items: center; gap: 7px; margin-bottom: 7px;
+        padding: 7px 10px; border-radius: 10px; font-size: 11.5px; font-weight: 600;
+        min-width: 0; animation: msg-in 0.2s var(--spring);
+      }
+      .live-check.visible { display: flex; }
+      .live-check.ok   { background: var(--ok-l);   color: var(--ok);   border: 1px solid var(--ok); }
+      .live-check.warn { background: var(--warn-l); color: var(--warn); border: 1px solid var(--warn); }
+      .live-check .lc-icon { flex-shrink: 0; font-style: normal; }
+      .live-check .lc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+      /* ════════════════════════════════════════════════════════════════
+         Document scan — Vision-OCR im Profil-Panel
+         ════════════════════════════════════════════════════════════════ */
+      .pf-scan { padding: 10px 18px 0; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+      .pf-scan-btn {
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+        width: 100%; padding: 9px; border-radius: 10px; cursor: pointer;
+        border: 1px dashed var(--accent-b); background: var(--accent-l); color: var(--accent);
+        font: 600 11.5px/1 var(--font);
+        transition: border-color 0.15s, transform 0.12s var(--spring), box-shadow 0.15s;
+      }
+      .pf-scan-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+      .pf-scan-btn:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 6px 14px -5px rgba(124,92,255,0.4); }
+      .pf-scan-btn:focus-visible { outline: none; box-shadow: var(--focus); }
+      .pf-scan-btn:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
+      .pf-scan-confirm {
+        display: none; flex-direction: column; gap: 8px; padding: 10px;
+        border: 1px solid var(--border2); border-radius: 12px; background: var(--surface2);
+        animation: msg-in 0.2s var(--spring);
+      }
+      .pf-scan-confirm.visible { display: flex; }
+      .pf-scan-confirm img { max-height: 90px; max-width: 100%; border-radius: 8px; object-fit: cover; align-self: flex-start; border: 1px solid var(--border); }
+      .pf-scan-note { font-size: 10.5px; color: var(--text3); line-height: 1.45; }
+      .pf-scan-actions { display: flex; gap: 7px; }
+      .pf-scan-go {
+        flex: 1; padding: 7px 11px; border: none; border-radius: 8px; cursor: pointer;
+        background: var(--grad); color: #fff; font: 700 11px/1 var(--font);
+        box-shadow: 0 3px 10px -3px rgba(168,85,247,0.5);
+        transition: transform 0.12s var(--spring), box-shadow 0.15s;
+      }
+      .pf-scan-go:hover { transform: translateY(-1px); box-shadow: var(--glow); }
+      .pf-scan-go:focus-visible { outline: none; box-shadow: var(--focus); }
+      .pf-scan-cancel {
+        padding: 7px 11px; border: 1px solid var(--border2); border-radius: 8px; cursor: pointer;
+        background: var(--surface); color: var(--text2); font: 600 11px/1 var(--font);
+        transition: color 0.15s, border-color 0.15s;
+      }
+      .pf-scan-cancel:hover { color: var(--text); border-color: var(--text3); }
+      .pf input.pf-scanned { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-l); }
+
+      /* ════════════════════════════════════════════════════════════════
          Responsive
          ════════════════════════════════════════════════════════════════ */
       @media (max-width: 440px) {

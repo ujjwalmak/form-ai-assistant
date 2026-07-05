@@ -262,6 +262,11 @@ Projektmanagement-Inhalte waren über mehrere Dateien verteilt (`Ideas`, `NEXT_S
 - README bleibt Produkt-/Technik-Doku, `Projektstand.md` ist der PM-Hub
 - `TESTING_PLAN.md` (technisch) bleibt separat; `PPT_BRIEFING.md` wurde in derselben Aufräumrunde entfernt (siehe nächste Entscheidung)
 
+**Nachtrag 2026-07-05 (Doku-Struktur):** Der PM-Hub wurde aus dem Repo-Root nach
+`docs/reference/projektstand-vollstaendig.md` verschoben. `docs/projektstand.md` ist nur noch
+die kurze Website-Zusammenfassung. Der Testing-Plan liegt jetzt als
+`docs/reference/testing-plan.md`.
+
 ---
 
 ## [2026-06-14] Entscheidung: Ordnerstruktur + Kursfolien aus dem Repo
@@ -299,7 +304,7 @@ Kurs-Einheit 8 fordert „relevante Tests identifiziert und in die Entwicklung e
 **Alternativen:**
 
 - Umbau auf ES-Module: verworfen — bricht klassisches Content-Script-Laden + Reihenfolge (vgl. Entscheidung gegen `src/`).
-- E2E (Playwright) statt Unit: höherer Aufwand, für die Pflicht nicht nötig (Kür, in `TESTING_PLAN.md`).
+- E2E (Playwright) statt Unit: höherer Aufwand, für die Pflicht nicht nötig (Kür, in `docs/reference/testing-plan.md`).
 
 **Konsequenzen:**
 
@@ -351,3 +356,56 @@ Einheit 10 (Stakeholder-Interaktion) fordert eine „Projektwebseite für Stakeh
 - Webseite deckt zugleich den Deployment-Aspekt (E5) als deploytes Artefakt mit ab — stärkt die Reflexion.
 - Erledigt (2026-06-26): GitHub Pages aktiviert (Source = „GitHub Actions") — Webseite live unter ujjwalmak.github.io/form-ai-assistant. Offen nur noch optional: Screenshots ergänzen.
 - Neue Dateien: `mkdocs.yml`, `docs/`, `requirements-docs.txt`, `.github/workflows/docs.yml`; `site/` gitignored; Run-Button „Webseite: Vorschau".
+
+---
+
+## [2026-07-05] Entscheidung: Demo-Feature-Paket v2.1 — deterministisch vor KI, Vision mit Consent
+
+**Kontext:**
+Prototyp-Demo am 09.07. Drei Backlog-Ideen wurden umgesetzt: Live-Validierung beim Tippen, erweiterte Pre-Submit-Logikprüfung, Dokument-Scan (Vision-OCR).
+
+**Entscheidung:**
+
+1. **Live-Validierung ist rein deterministisch** (`fa-utils.js`: IBAN mod-97 + Länder-Sollängen, BIC, E-Mail, PLZ, Telefon, Geburtsdatum) — kein KI-Call beim Tippen. Beim Tippen tolerant (unvollständige Werte → keine Aussage), bei `blur` streng (`final: true`).
+2. **Deterministische Ergebnisse füttern die KI**: Der Submit-Review-Prompt bekommt sie als "Lokale Prüfung"-Fakten; die KI prüft zusätzlich Feld-übergreifende Logik (Logik-Check-Überschrift).
+3. **Vision-OCR mit Privacy-Gate**: Bild wird clientseitig auf max. 1400 px verkleinert (Datenminimierung), vor dem Senden expliziter Bestätigungsschritt mit Provider-Nennung, erkannte Werte nur vorbefüllt (`pf-scanned`) — gespeichert wird erst per "Speichern".
+4. **Vision-Modelle**: Groq `meta-llama/llama-4-scout-17b-16e-instruct`, OpenRouter `meta-llama/llama-4-scout` (IDs am 05.07.2026 gegen Groq-/OpenRouter-Doku verifiziert). Vision-Requests schicken ein eigenes `fallbackModel` (`meta-llama/llama-4-scout:free`) mit, weil der automatische Groq→OpenRouter-Fallback sonst auf das text-only Standard-Modell wechseln würde (`resolveFallbackModel` in `background.js`).
+5. **Kein Voice-Input** für die Demo: Mikrofon-Berechtigungen sind in Live-Demos ein vermeidbares Risiko.
+
+**Alternativen:**
+
+- Live-Validierung per KI-Call: teurer, langsamer, halluzinationsanfällig — Prüfsummen sind mathematisch, dafür braucht es kein LLM
+- Validatoren als neues Modul `fa-validate.js`: hätte die fixe Manifest-Ladereihenfolge angefasst — Validatoren sind Hilfsfunktionen und passen in `fa-utils.js`
+- Vision-Scan ohne Bestätigungsschritt: schnellere UX, aber Ausweisbilder ohne expliziten Consent an einen LLM-Provider zu senden widerspricht der Datenminimierungs-Regel in `CLAUDE.md`
+
+**Konsequenzen:**
+
+- `fa-utils.js` + 29 neue Unit-Tests (Suite: 98 grün, Branch-Coverage ~80 %), `manifest.json` v2.1
+- Neue UI-Elemente: `fa-live-check`-Badge (input-area), `fa-pf-scan`-Box (Profil-Panel) — beides im Shadow Root, Styles in `FA_CSS`
+- `llm-fetch`-Message unterstützt optionales `fallbackModel`; Storage-Keys unverändert
+
+---
+
+## [2026-07-05] Entscheidung: Robustheits-Paket — Wortanfang-Matching, Root-korrekte Lookups, priorisiertes Select-Matching
+
+**Kontext:**
+Ziel "funktioniert auf allen Webseiten, keine Fehl-Befüllungen". Analyse fand fünf Lückenklassen: (1) Label-/Hint-/Error-Suche lief über `document` und scheiterte in Shadow DOM/iFrames, (2) verschachtelte Shadow Roots wurden nicht gescannt, (3) Substring-Keyword-Matching erzeugte Fehl-Matches ("Hotelname"→Telefon, "Sportart"/"Passwort"→Stadt — auch beim dauerhaften **Lernen** ins Profil), (4) Select-Matching nahm den ersten Teilstring-Treffer, (5) Tabellen-Label, Dezimalkomma und maxlength fehlten.
+
+**Entscheidung:**
+
+1. **Root-korrekte DOM-Lookups**: `byIdInRoot(el, id)` + `el.getRootNode()` für label[for], aria-labelledby/-describedby/-errormessage und Radio-Gruppen (fa-scanner, fa-fill, content.js); `isVisible` nutzt `ownerDocument.defaultView`. Shadow-Root-Scan rekursiv (`collectShadowRoots`, Tiefenlimit 6).
+2. **Wortanfang- statt Substring-Matching** für Profil-Keywords (`labelHasKeyword`): Keyword muss an Position 0 oder nach einem Nicht-Buchstaben beginnen. Gilt in `matchProfile` UND `learnAgentFields` (dort verhinderte es dauerhafte Profil-Korruption). Passwortfelder sind komplett ausgeschlossen.
+3. **Kuratierte Compound-Keywords** statt Substring-Toleranz: `mobil`, `rufnummer` (Telefon), `wohnort` (Stadt), `geboren` (Geburtsdatum) — deckt deutsche Komposita ab, die das strengere Matching sonst verlieren würde.
+4. **Priorisiertes Select-Matching** (`findSelectOption`): exaktes Label/Value → Wortanfang → enthält (erst ab 3 Zeichen) → umgekehrtes Enthalten. Plus `<select multiple>` per Kommaliste, deutsches Dezimalkomma für `type=number`, `maxlength`-Kappung, Tabellenzellen-Label-Fallback.
+
+**Alternativen:**
+
+- Fuzzy-/Levenshtein-Matching für Labels: mächtiger, aber schwer erklärbar und mit eigenen False-Positives — Wortanfang + kuratierte Keywords sind deterministisch und testbar
+- Substring-Matching behalten und Blocklist pflegen ("hotel", "sport", …): Whack-a-Mole, skaliert nicht
+- Closed Shadow Roots / Cross-Origin-iFrames: technisch nicht zugänglich — bleibt dokumentierte Grenze in `known_issues.md`
+
+**Konsequenzen:**
+
+- 20 neue Unit-Tests (Fehl-Match-Schutz, Shadow-Labels, Tabellen-Labels, Select-Priorität, Dezimalkomma, maxlength, Multi-Select, verschachtelte Shadow Roots) — Suite: 118 grün
+- `extractRichContext` ist jetzt exportiert und testbar
+- Verhalten leicht strenger: Felder, die vorher nur per Substring-Zufall matchten, gehen jetzt an die KI statt ans Profil (gewollt: lieber fragen als falsch füllen)

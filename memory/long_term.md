@@ -1,13 +1,13 @@
 ---
 name: long-term-architecture
-description: Extension architecture, provider/API setup, agent flow, storage keys, prompt structure — current as of 2026-06-18
+description: Extension architecture, provider/API setup, agent flow, storage keys, prompt structure — current as of 2026-07-05
 metadata:
   type: project
 ---
 
 # Long-Term Memory — FormAssist
 
-## Architektur (Stand 2026-06-18)
+## Architektur (Stand 2026-07-05)
 
 ### Extension-Typ
 
@@ -29,7 +29,11 @@ Der gesamte UI-Code wird in ein `attachShadow({ mode: 'open' })` injiziert, das 
 
 ### Formularerkennung
 
-- Standard-DOM + Shadow DOM (Web Components, Custom Elements)
+- Standard-DOM + offene/verschachtelte Shadow Roots (Web Components, Custom Elements)
+- Same-origin iFrames; cross-origin iFrames bleiben wegen Same-Origin-Policy unzugänglich
+- Root-korrekte Lookups über `getRootNode()` für Labels, Hinweise, Fehler und Radio-Gruppen
+- Tabellen-Layout-Fallback: linke Tabellenzelle als Label
+- Fehl-Match-Schutz: Profil-Keywords matchen am Wortanfang; Passwortfelder nie per Profil
 - Nav-Filter: Felder in `nav`, `header`, `footer`, `[role=search]`, `[role=navigation]` werden ignoriert
 - Datepicker-Support: Flatpickr (`_flatpickr`), Pikaday (`_pikaday`), jQuery UI / Bootstrap DateTimePicker
 
@@ -76,9 +80,11 @@ Beide Provider sind OpenAI-kompatibel (messages array, choices[0].message.conten
 
 **Automatischer Fallback:** Groq 429 oder 5xx → OpenRouter mit `meta-llama/llama-3.3-70b-instruct:free`. Modell-IDs ohne `/` (Groq-spezifisch) werden automatisch ersetzt. Toast im Sidebar.
 
+**Vision-Modelle (Dokument-Scan):** Groq `meta-llama/llama-4-scout-17b-16e-instruct`, OpenRouter `meta-llama/llama-4-scout` mit optionalem Request-`fallbackModel` (`meta-llama/llama-4-scout:free`), damit Vision-Requests beim Fallback nicht auf ein text-only Modell wechseln.
+
 **Message-Typen background.js:**
 
-- Non-Streaming: `{ type: 'llm-fetch', provider, key, body }` → `{ ok, data, usedFallback }`
+- Non-Streaming: `{ type: 'llm-fetch', provider, key, body, fallbackModel? }` → `{ ok, data, usedFallback }`
 - Streaming: Port `llm-stream`, Nachrichten `{ type: 'chunk'|'done'|'error'|'fallback' }`
 
 **Timeouts:** Non-Streaming 25s, Streaming 40s. Retries: `MAX_RETRIES = 2` (also bis zu 3 Versuche) für retryable Status (`RETRYABLE_STATUS` = 408, 409, 425, 429, 500, 502, 503, 504).
@@ -193,10 +199,17 @@ guidedAskState = { active, queue, navAction }
 
 ## Submit-Review & Fehlerhilfe
 
-- Vor finalem Absenden wird das Formular abgefangen und per KI auf fehlende/auffällige Angaben geprüft
+- Vor finalem Absenden wird das Formular abgefangen und per KI auf fehlende/auffällige Angaben sowie logische Widersprüche zwischen Feldern geprüft
+- Lokale Prüfergebnisse aus den deterministischen Validatoren gehen als "Lokale Prüfung" in den Prompt
 - KI-Antwort startet mit `Status: OK`, `Status: Warnung` oder `Status: Fehlt`
 - User kann danach erneut prüfen oder bewusst "Trotzdem absenden"
 - Bei Feld-Validierungsfehlern wird proaktiv kontextbezogene Hilfe eingeblendet
+
+## Live-Validierung & Dokument-Scan
+
+- Live-Validierung läuft lokal/deterministisch in `fa-utils.js`: IBAN ISO-7064 mod-97 inkl. Länder-Sollängen, BIC, E-Mail, PLZ, Telefon, Geburtsdatum-Plausibilität.
+- Beim Tippen tolerant, bei `blur` streng; Anzeige über `fa-live-check`-Badge und dezente Feld-Outline.
+- Dokument-Scan im Profil-Panel: Bild wird im Browser auf max. 1400 px verkleinert, nach Privacy-Bestätigung an Vision-LLM gesendet, erkannte Profilwerte werden markiert vorbefüllt und erst per "Speichern" übernommen.
 
 ## UI & Styling
 
@@ -222,13 +235,13 @@ guidedAskState = { active, queue, navAction }
 
 ## Tests
 
-Unit-Tests mit Vitest (jsdom-Environment) in `tests/unit/`: `fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background` — 69 Tests, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`).
+Unit-Tests mit Vitest (jsdom-Environment) in `tests/unit/`: `fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background` — 118 Tests, Branch-Coverage 78,93 % (~79 %) der Logik-Module (`npm run coverage`, Stand 2026-07-05).
 
 - Extension-Dateien sind klassische Skripte (globaler Scope, kein Modulsystem). Für Tests trägt jede Quelldatei am Ende einen `module.exports`-Shim (`if (typeof module !== 'undefined')`), der im Browser übersprungen wird.
 - `tests/setup.js` stellt die modulübergreifenden Funktionen/Konstanten als Globals bereit (damit z. B. `fa-scanner` intern `clean()` auflöst) und polyfillt jsdom-Lücken: `CSS.escape` sowie ein positiver `offsetWidth` (jsdom macht kein Layout → `isVisible()` bräuchte sonst > 0).
 - `background.js`: die `chrome.*`-Event-Listener sind in `if (typeof chrome !== 'undefined' && chrome.runtime)` gekapselt, damit der Service Worker im Node-Test importierbar ist.
 - CI: `.github/workflows/test.yml` (`npm install && npm test`) bei jedem Push/PR.
-- Bewusst nicht unit-getestet: Netzwerk/Retry (`background`), DOM-Orchestrierung (`content.js`), Kendo-/Datepicker-Library-Pfade, CSS — Kandidaten für E2E (Playwright), siehe `TESTING_PLAN.md`.
+- Bewusst nicht unit-getestet: echte Netzwerk-I/O, DOM-Orchestrierung (`content.js`), Kendo-/Datepicker-Library-Pfade, CSS — Kandidaten für E2E (Playwright), siehe `docs/reference/testing-plan.md`.
 
 Icons liegen unter `icons/` (Manifest referenziert `icons/icon*.png`).
 

@@ -4,6 +4,12 @@
 
 FormAssist is a Manifest V3 Chrome extension. Its code runs in three isolated contexts:
 
+**Current implementation status (2026-07-05):** Vitest is set up and verified with
+118 passing unit tests across `fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, and
+`background`. Branch coverage is 78.93% (~79%) for the tested logic modules. The plan
+below remains the broader testing roadmap, especially for Supabase, E2E, prompt, and
+security tests.
+
 | Context | Files | Testing approach |
 |---|---|---|
 | Content script | `fa-*.js`, `content.js` | Unit (jsdom) + E2E |
@@ -38,6 +44,7 @@ FormAssist is a Manifest V3 Chrome extension. Its code runs in three isolated co
 | `parseDateToISO(text)` | DD.MM.YYYY → YYYY-MM-DD; MM/DD/YYYY → YYYY-MM-DD; already ISO passthrough; invalid string returns `null`; single-digit day/month gets zero-padded |
 | `isKendoWidget(el)` | `data-role="dropdown"` maps to `"dropdownlist"`; unknown role returns `null`; no attribute returns `null` |
 | `getAgentSelector(el)` | `id` preferred; falls back to `name`; assigns incremental `data-fa-selector-id` when neither present |
+| Validator helpers | IBAN mod-97 + country lengths, BIC, email, postal code, phone, birthdate plausibility; tolerant while typing, strict on final/blur |
 
 ### 1.2 `background.js`
 
@@ -47,6 +54,7 @@ FormAssist is a Manifest V3 Chrome extension. Its code runs in three isolated co
 | `normalizeModelForProvider(model, provider)` | Remaps `"openrouter/free"` and `"openrouter/owl-alpha"`; passes through unknown models; ignores remap for groq provider |
 | `backoffDelay(attempt, header)` | `attempt=0` → 500 ms; `attempt=4` caps at 12 000 ms; valid `Retry-After: 5` → 5 000 ms; `Retry-After: 0` → 0 ms; `Retry-After: "abc"` falls back to exponential |
 | `resolveProviderKey()` | `messageKey` takes priority over storage; returns stored `faGroqApiKey` for groq, `faOpenRouterApiKey` for openrouter; falls back to legacy `faApiKey` |
+| `resolveFallbackModel()` | Uses request-level `fallbackModel` for Vision requests; otherwise falls back to the text default |
 
 ---
 
@@ -85,7 +93,7 @@ Priority order to test:
 ### 2.4 `fa-scanner.js` — `matchProfile(el, profile)`
 
 - Autocomplete attribute match (`autocomplete="email"` → `email` key)
-- Keyword match in label text (case-insensitive, partial)
+- Keyword match in label text (case-insensitive, word-start based; avoids false positives like `Hotelname` → phone)
 - No match → returns `null`
 - German keywords: `"vorname"`, `"nachname"`, `"postleitzahl"`, etc.
 
@@ -96,6 +104,9 @@ Priority order to test:
 | `<input type="text">` | Value set; `input` and `change` events both dispatched |
 | `<input type="date">` | `"01.01.1990"` → `"1990-01-01"` written to `.value` |
 | `<select>` | Exact match; partial match; case-insensitive; no match leaves value unchanged |
+| `<select multiple>` | Comma-separated values select all matching options |
+| `<input type="number">` | German decimal comma and thousands separators normalize to browser-compatible decimal notation |
+| `maxlength` | Long values are capped before dispatching events |
 | `<input type="checkbox">` | `"ja"`, `"yes"`, `"1"`, `"x"` → checked; `"no"`, `"false"`, `""` → unchecked |
 | `<input type="radio">` | Correct radio in group is `.click()`-ed by label; by value fallback |
 | React synthetic events | Native value setter called via `Object.getOwnPropertyDescriptor` |
@@ -246,9 +257,9 @@ Test the JSON parsing logic in `content.js` against:
 
 | Phase | Scope | Effort |
 |---|---|---|
-| **Phase 1** | Unit tests for `fa-utils.js` and `background.js` pure functions | ~1 day |
-| **Phase 2** | DOM tests for `fa-scanner.js` (`getLabel`, `extractField`, `matchProfile`) | ~2 days |
-| **Phase 3** | DOM tests for `fa-fill.js` (`fillField` all input types) | ~1 day |
+| **Phase 1** | Unit tests for `fa-utils.js` and `background.js` pure functions | Implemented, extend as helpers change |
+| **Phase 2** | DOM tests for `fa-scanner.js` (`getLabel`, `extractField`, `matchProfile`) | Implemented for core + v2.1 robustness cases |
+| **Phase 3** | DOM tests for `fa-fill.js` (`fillField` all input types) | Implemented for core + v2.1 robustness cases |
 | **Phase 4** | Chrome API mock tests for `fa-supabase.js` and background message handler | ~2 days |
 | **Phase 5** | Playwright E2E — happy path Smart Fill + options CRUD | ~3 days |
 | **Phase 6** | DB schema tests, prompt snapshot tests, security tests | ~2 days |

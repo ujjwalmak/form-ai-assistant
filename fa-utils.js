@@ -13,7 +13,10 @@ function formatBytes(bytes) {
 // ── DOM visibility ───────────────────────────────────────────────────────────
 function isVisible(el) {
   if (el.disabled) return false;
-  const s = window.getComputedStyle(el);
+  // getComputedStyle über das eigene Fenster des Elements — für Felder in
+  // same-origin iFrames liefert das Top-Window sonst falsche Ergebnisse
+  const win = el.ownerDocument?.defaultView || window;
+  const s = win.getComputedStyle(el);
   return s.display !== 'none' && s.visibility !== 'hidden' && el.offsetWidth > 0;
 }
 
@@ -111,6 +114,134 @@ function getKendoWidget(el, role) {
   return key ? jq.data(key) : null;
 }
 
+// ── Live field validation (deterministic, no API calls) ─────────────────────
+// IBAN-Sollängen der häufigsten Länder (Rest wird nur per mod-97 geprüft)
+const IBAN_LENGTHS = {
+  DE: 22, AT: 20, CH: 21, FR: 27, GB: 22, IT: 27, ES: 24, NL: 18, BE: 16,
+  LU: 20, PL: 28, DK: 18, SE: 24, NO: 15, FI: 18, PT: 25, IE: 22,
+};
+
+// ISO 7064 mod-97: erste 4 Zeichen ans Ende, Buchstaben → Zahlen (A=10 … Z=35)
+function isValidIBAN(value) {
+  const iban = String(value || '').replace(/\s+/g, '').toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return false;
+  const expected = IBAN_LENGTHS[iban.slice(0, 2)];
+  if (expected && iban.length !== expected) return false;
+  const rearranged = iban.slice(4) + iban.slice(0, 4);
+  let remainder = 0;
+  for (const ch of rearranged) {
+    const code = ch >= 'A' ? String(ch.charCodeAt(0) - 55) : ch;
+    for (const digit of code) remainder = (remainder * 10 + (digit.charCodeAt(0) - 48)) % 97;
+  }
+  return remainder === 1;
+}
+
+function isValidBIC(value) {
+  return /^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(String(value || '').replace(/\s+/g, '').toUpperCase());
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(String(value || '').trim());
+}
+
+function isValidGermanZip(value) {
+  return /^\d{5}$/.test(String(value || '').trim());
+}
+
+function isValidPhone(value) {
+  const v = String(value || '').trim();
+  if (!/^[+\d][\d\s\-/().]*$/.test(v)) return false;
+  const digits = v.replace(/\D/g, '');
+  return digits.length >= 6 && digits.length <= 15;
+}
+
+// '' = plausibel, sonst deutsche Fehlermeldung; null = Wert (noch) nicht parsebar
+function getBirthdateIssue(value) {
+  const iso = parseDateToISO(String(value || '').trim());
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d)) return null;
+  const now = new Date();
+  if (d > now) return 'Das Geburtsdatum liegt in der Zukunft.';
+  const age = (now - d) / (365.25 * 24 * 3600 * 1000);
+  if (age > 120) return 'Das Geburtsdatum liegt über 120 Jahre zurück.';
+  return '';
+}
+
+// Keyword am Wortanfang (Position 0 oder nach Nicht-Buchstabe), damit z. B.
+// "tel" nicht in "Stelle" oder "Hotel" matcht
+function labelHasKeyword(label, kw) {
+  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-zäöüß])${escaped}`, 'i').test(String(label || ''));
+}
+
+const LIVE_CHECK_KINDS = [
+  { kind: 'iban',      kw: ['iban'] },
+  { kind: 'bic',       kw: ['bic', 'swift'] },
+  { kind: 'email',     kw: ['e-mail', 'email', 'mail'] },
+  { kind: 'zip-de',    kw: ['plz', 'postleitzahl'] },
+  { kind: 'birthdate', kw: ['geburtsdatum', 'geburtstag', 'birthdate', 'birthday', 'birth date', 'date of birth'] },
+  { kind: 'phone',     kw: ['telefon', 'handy', 'mobile', 'phone', 'tel'] },
+];
+
+// Feld-Typ/Autocomplete zuerst (verlässlich), dann Label-Keywords
+function detectLiveCheckKind(label, type, autocomplete) {
+  const t  = String(type || '').toLowerCase();
+  const ac = String(autocomplete || '').toLowerCase();
+  if (t === 'email' || ac === 'email') return 'email';
+  if (t === 'tel'   || ac === 'tel')   return 'phone';
+  if (ac === 'bday') return 'birthdate';
+  for (const { kind, kw } of LIVE_CHECK_KINDS) {
+    if (kw.some(k => labelHasKeyword(label, k))) return kind;
+  }
+  return '';
+}
+
+// null = keine Aussage (leer / noch beim Tippen), sonst { ok, msg }.
+// final=true (z. B. bei blur): auch unvollständige Werte streng bewerten.
+function getLiveCheckResult(kind, value, { final = false } = {}) {
+  const v = String(value || '').trim();
+  if (!kind || !v) return null;
+  const compact = v.replace(/\s+/g, '');
+
+  if (kind === 'iban') {
+    if (!final && compact.length < 15) return null;
+    return isValidIBAN(v)
+      ? { ok: true,  msg: 'IBAN-Prüfsumme korrekt' }
+      : { ok: false, msg: 'IBAN ungültig – Prüfsumme oder Länge stimmt nicht' };
+  }
+  if (kind === 'bic') {
+    if (!final && compact.length < 8) return null;
+    return isValidBIC(v)
+      ? { ok: true,  msg: 'BIC-Format korrekt' }
+      : { ok: false, msg: 'BIC ungültig – 8 oder 11 Stellen (z. B. COBADEFFXXX)' };
+  }
+  if (kind === 'email') {
+    if (!final && !/@.+\./.test(v)) return null;
+    return isValidEmail(v)
+      ? { ok: true,  msg: 'E-Mail-Format korrekt' }
+      : { ok: false, msg: 'E-Mail-Format ungültig (name@domain.tld)' };
+  }
+  if (kind === 'zip-de') {
+    if (!final && compact.length < 5) return null;
+    return isValidGermanZip(v)
+      ? { ok: true,  msg: 'PLZ-Format korrekt' }
+      : { ok: false, msg: 'PLZ muss aus genau 5 Ziffern bestehen' };
+  }
+  if (kind === 'phone') {
+    if (!final && compact.replace(/\D/g, '').length < 6) return null;
+    return isValidPhone(v)
+      ? { ok: true,  msg: 'Telefonnummer plausibel' }
+      : { ok: false, msg: 'Telefonnummer wirkt ungültig' };
+  }
+  if (kind === 'birthdate') {
+    const issue = getBirthdateIssue(v);
+    if (issue === null) return final ? { ok: false, msg: 'Datum nicht lesbar (TT.MM.JJJJ)' } : null;
+    return issue ? { ok: false, msg: issue } : { ok: true, msg: 'Geburtsdatum plausibel' };
+  }
+  return null;
+}
+
 // ── Agent element selectors ──────────────────────────────────────────────────
 const AGENT_SELECTOR_ATTR = 'data-fa-selector-id';
 const AGENT_AUTO_SELECT_CONFIDENCE = 0.82;
@@ -135,5 +266,7 @@ if (typeof module !== 'undefined' && module.exports) {
     clean, formatBytes, isVisible, textFromEl, getElementTextValue, findButtonByText,
     parseDateToISO, toISODate, parseRelativeDate, isKendoWidget, getKendoWidget,
     getAgentSelector,
+    isValidIBAN, isValidBIC, isValidEmail, isValidGermanZip, isValidPhone,
+    getBirthdateIssue, labelHasKeyword, detectLiveCheckKind, getLiveCheckResult,
   };
 }

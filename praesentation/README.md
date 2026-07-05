@@ -1,4 +1,4 @@
-# Präsentation — Reflexion (02.07.2026)
+# Präsentation — Reflexion (02.07.2026, gehalten)
 
 Reflexions-Folien im **Aurora-Glass-Design** der FormAssist-Webseite — in zwei Formaten:
 
@@ -35,5 +35,9 @@ python3 deck-src/build_deck.py        # baut ../FormAssist_Reflexion.pptx
 ## Inhalt
 
 Titel · Eckdaten · die **8 Reflexionsfragen** · Ehrliche Bilanz (Stolz / Grenzen / Ausblick) · Danke.
-Inhalt gespiegelt aus [`../Reflexion.md`](../Reflexion.md); Hervorhebungen (Gradient-Rahmen)
+Inhalt gespiegelt aus [`../docs/reference/reflexion.md`](../docs/reference/reflexion.md); Hervorhebungen (Gradient-Rahmen)
 markieren Kernaussagen und die War Stories (Provider-Odyssee, Push-Protection).
+
+Hinweis: Das Deck ist ein historischer Stand der Reflexionspräsentation vom 02.07.2026.
+Die späteren v2.1-Demo-Features vom 05.07.2026 sind in der Projekt- und Webdoku
+dokumentiert, aber nicht rückwirkend in diese gehaltene Präsentation eingearbeitet.
