@@ -44,6 +44,9 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
+copyright: >-
+  © 2026 FormAssist — Studienprojekt im Modul AI-Prototyping (HM, FK07)
+
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -52,12 +55,12 @@ extra:
   generator: false
 
 nav:
-  - Übersicht: index.md
-  - Für Nutzer: nutzer.md
-  - Technische Architektur: architektur.md
-  - Entwicklung & Qualität: entwicklung.md
-  - Entscheidungen & Kompetenzen: entscheidungen.md
-  - Projektstand & Reflexion: projektstand.md
+  - Start: index.md
+  - Produkt: nutzer.md
+  - Technologie: architektur.md
+  - Engineering: entwicklung.md
+  - Entscheidungen: entscheidungen.md
+  - Status & Reflexion: projektstand.md
   - Referenz:
       - Vollständiger Projektstand: reference/projektstand-vollstaendig.md
       - Reflexion: reference/reflexion.md
@@ -75,6 +78,7 @@ markdown_extensions:
   - pymdownx.caret
   - pymdownx.tasklist:
       custom_checkbox: true
+  - pymdownx.keys
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg

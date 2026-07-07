@@ -211,7 +211,7 @@ Formularkontext — Netzwerkzugriffe laufen ausschließlich über den Service Wo
 
     Was kann ich, wie nutze ich es, wie sicher ist es?
 
-    [:octicons-arrow-right-24: Für Nutzer](nutzer.md)
+    [:octicons-arrow-right-24: Produkt](nutzer.md)
 
 -   :material-code-tags:{ .lg .middle } __Entwickler__
 
@@ -219,8 +219,8 @@ Formularkontext — Netzwerkzugriffe laufen ausschließlich über den Service Wo
 
     Wie ist FormAssist gebaut und getestet?
 
-    [:octicons-arrow-right-24: Architektur](architektur.md) ·
-    [Entwicklung](entwicklung.md)
+    [:octicons-arrow-right-24: Technologie](architektur.md) ·
+    [Engineering](entwicklung.md)
 
 -   :material-clipboard-check:{ .lg .middle } __Bewertung & Kontext__
 
@@ -228,7 +228,7 @@ Formularkontext — Netzwerkzugriffe laufen ausschließlich über den Service Wo
 
     Stand, Entscheidungen und ehrliche Reflexion.
 
-    [:octicons-arrow-right-24: Projektstand](projektstand.md)
+    [:octicons-arrow-right-24: Status & Reflexion](projektstand.md)
 
 </div>
 
@@ -256,7 +256,7 @@ unabhängig davon, was das Sprachmodell vorschlägt. Absenden tust nur du.
 <summary>Was brauche ich, um FormAssist zu nutzen?</summary>
 Chrome und einen API-Key von Groq oder OpenRouter (gespeichert in `chrome.storage.sync`,
 niemals im Code). Die Extension wird als „entpackte Erweiterung" geladen — kein Build-Step,
-keine Registrierung. Anleitung: [Für Nutzer](nutzer.md).
+keine Registrierung. Anleitung: [Produkt](nutzer.md).
 </details>
 
 <details class="fa-faq" markdown>

@@ -771,22 +771,6 @@ const FA_CSS = `
       .undo-toast-btn:active { transform: translateY(0) scale(0.97); }
 
       /* ════════════════════════════════════════════════════════════════
-         Fill-FX — Häkchen über gerade gefüllten Feldern (Shadow Root)
-         ════════════════════════════════════════════════════════════════ */
-      .fa-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 2147483646; }
-      .fa-fx-check {
-        position: absolute; width: 20px; height: 20px; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        font-family: var(--font); font-size: 12px; font-weight: 800; color: #fff;
-        background: linear-gradient(135deg, #22c55e, #16a34a);
-        box-shadow: 0 4px 14px -2px rgba(34,197,94,0.6), 0 0 0 3px rgba(34,197,94,0.18);
-        opacity: 0; transform: scale(0.4) translateY(4px);
-        transition: opacity 0.18s ease, transform 0.28s var(--spring);
-      }
-      .fa-fx-check.in  { opacity: 1; transform: scale(1) translateY(0); }
-      .fa-fx-check.out { opacity: 0; transform: scale(0.85) translateY(-6px); }
-
-      /* ════════════════════════════════════════════════════════════════
          Smart-Fill preview (agent preview table)
          ════════════════════════════════════════════════════════════════ */
       .sf-preview { display: flex; flex-direction: column; gap: 0; margin-top: 8px; border: 1px solid var(--border); border-radius: 13px; overflow: hidden; background: var(--surface); }
@@ -944,7 +928,5 @@ const FA_CSS = `
         .sidebar::before, .trigger::after, .re-icon::after, .logo-name,
         .action-panel::before, .action-panel::after, .gp-bar,
         .trigger, .re-icon, .msg.ai::before, .typing-row::before, .trust-dot { animation: none !important; }
-        .fa-fx-check { transition: opacity 0.18s ease !important; transform: none !important; }
-        .fa-fx-check.in, .fa-fx-check.out { transform: none !important; }
       }
 `;

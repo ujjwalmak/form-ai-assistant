@@ -147,12 +147,6 @@
     style.textContent = FA_CSS;
     shadow.appendChild(style);
 
-    // ── Fill-FX layer: Häkchen über gerade gefüllten Feldern.
-    // Liegt im Shadow Root (kein DOM-Leck auf die Host-Seite), fixed über dem Viewport.
-    const fxLayer = document.createElement('div');
-    fxLayer.className = 'fa-fx-layer';
-    shadow.appendChild(fxLayer);
-
     // ── DOM ───────────────────────────────────────────────────────────
     const wrap = document.createElement('div');
     wrap.innerHTML = `
@@ -1609,7 +1603,7 @@
     // FILL-CHOREOGRAFIE + UNDO — sichtbares Ausfüllen, ein Klick zurück
     // ═══════════════════════════════════════════════════════════════════════
 
-    // Grüner Puls am Feld + Häkchen-Chip im FX-Layer (Shadow Root).
+    // Grüner Puls am Feld.
     // `delay` staffelt rein visuell (z. B. für die synchrone Deterministik-Runde).
     function flashFilled(el, delay = 0) {
       if (!el || typeof el.getBoundingClientRect !== 'function') return;
@@ -1623,16 +1617,6 @@
         el.style.outline = '2px solid #22c55e';
         el.style.outlineOffset = '2px';
         setTimeout(() => { el.style.outline = prevOutline; el.style.outlineOffset = prevOffset; }, 1100);
-        // Häkchen-Chip oben rechts am Feld — bleibt im Shadow Root
-        const chip = document.createElement('div');
-        chip.className = 'fa-fx-check';
-        chip.textContent = '✓';
-        chip.style.left = `${Math.min(rect.right, window.innerWidth - 4) - 14}px`;
-        chip.style.top  = `${Math.max(rect.top - 6, 2)}px`;
-        fxLayer.appendChild(chip);
-        requestAnimationFrame(() => chip.classList.add('in'));
-        setTimeout(() => { chip.classList.remove('in'); chip.classList.add('out'); }, 850);
-        setTimeout(() => chip.remove(), 1250);
       };
       if (delay > 0) setTimeout(run, delay); else run();
     }

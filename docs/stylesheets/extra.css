@@ -859,6 +859,353 @@ body::after {
 }
 
 /* ===================================================================
+   PAGE-HERO — kompakter Seitenkopf für alle Unterseiten
+   =================================================================== */
+.md-typeset .fa-page-hero {
+  margin: 0.4rem 0 2.4rem;
+  padding: 2.4rem 2rem 2.2rem;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background:
+    linear-gradient(135deg, rgba(139, 92, 246, 0.10), rgba(244, 114, 182, 0.05)),
+    rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow: 0 24px 60px -36px rgba(139, 92, 246, 0.6);
+  position: relative;
+  overflow: hidden;
+}
+.md-typeset .fa-page-hero::before {
+  content: "";
+  position: absolute;
+  inset: -60% -30%;
+  z-index: -1;
+  background: radial-gradient(40% 55% at 85% 0%, rgba(217, 70, 239, 0.18), transparent 70%);
+  pointer-events: none;
+}
+.md-typeset .fa-page-hero h1 {
+  margin: 0.25em 0 0.3em;
+  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+  letter-spacing: -0.03em;
+  background: linear-gradient(110deg, #ffffff 10%, #e9d5ff 45%, #f9a8d4 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.md-typeset .fa-page-hero p.fa-lede {
+  max-width: 60ch;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--md-default-fg-color--light);
+}
+
+/* ===================================================================
+   CHIPS — kleine Tech-/Fakten-Pillen (z. B. „Manifest V3")
+   =================================================================== */
+.md-typeset .fa-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1.1rem 0 0;
+}
+.md-typeset .fa-chips span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.3em 0.85em;
+  border-radius: 999px;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+}
+.md-typeset .fa-chips span::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--fa-grad);
+  flex: none;
+}
+
+/* ===================================================================
+   STATUS-PILLS — für Tabellen (Projektstand)
+   =================================================================== */
+.md-typeset .fa-pill {
+  display: inline-block;
+  padding: 0.18em 0.75em;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.md-typeset .fa-pill--ok {
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.12);
+}
+.md-typeset .fa-pill--waived {
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  background: rgba(139, 92, 246, 0.14);
+}
+.md-typeset .fa-pill--concept {
+  color: #f0abfc;
+  border: 1px solid rgba(217, 70, 239, 0.4);
+  background: rgba(217, 70, 239, 0.12);
+}
+
+/* ===================================================================
+   DECISION-CARDS — Problem → Entscheidung → Kompetenz
+   =================================================================== */
+.md-typeset .fa-decision {
+  margin: 1.2rem 0;
+  padding: 1.4rem 1.5rem 1.3rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 14px 40px -24px rgba(10, 5, 25, 0.8);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s;
+}
+.md-typeset .fa-decision:hover {
+  transform: translateY(-3px);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+.md-typeset .fa-decision h3 {
+  margin: 0 0 0.7em;
+  font-size: 1.05rem;
+}
+.md-typeset .fa-decision p {
+  font-size: 0.82rem;
+  color: var(--md-default-fg-color--light);
+  margin: 0.5em 0;
+}
+.md-typeset .fa-tag {
+  display: inline-block;
+  margin-right: 0.5em;
+  padding: 0.14em 0.7em;
+  border-radius: 999px;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.md-typeset .fa-tag--problem {
+  color: #fda4af;
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.1);
+}
+.md-typeset .fa-tag--entscheidung {
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  background: rgba(139, 92, 246, 0.12);
+}
+.md-typeset .fa-tag--kompetenz {
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+/* ===================================================================
+   TIMELINE / CHANGELOG
+   =================================================================== */
+.md-typeset .fa-timeline {
+  position: relative;
+  margin: 1.4rem 0 1.8rem;
+  padding-left: 1.4rem;
+}
+.md-typeset .fa-timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.28rem;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--fa-violet), var(--fa-pink));
+  opacity: 0.5;
+}
+.md-typeset .fa-timeline__item {
+  position: relative;
+  padding: 0 0 1.1rem;
+}
+.md-typeset .fa-timeline__item::before {
+  content: "";
+  position: absolute;
+  left: -1.4rem;
+  top: 0.42em;
+  width: 9px;
+  height: 9px;
+  margin-left: 0.05rem;
+  border-radius: 999px;
+  background: var(--fa-grad);
+  box-shadow: 0 0 10px rgba(217, 70, 239, 0.6);
+}
+.md-typeset .fa-timeline__item:last-child {
+  padding-bottom: 0;
+}
+.md-typeset .fa-timeline__date {
+  display: inline-block;
+  margin-right: 0.6em;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #e9d5ff;
+  padding: 0.1em 0.6em;
+  border-radius: 999px;
+  border: 1px solid rgba(217, 70, 239, 0.35);
+  background: rgba(217, 70, 239, 0.1);
+}
+.md-typeset .fa-timeline__item p {
+  margin: 0.25em 0 0;
+  font-size: 0.82rem;
+  color: var(--md-default-fg-color--light);
+}
+
+/* ===================================================================
+   TEAM — Avatar-Karten mit Gradient-Initialen
+   =================================================================== */
+.md-typeset .fa-team {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+  margin: 1.2rem 0 1.6rem;
+}
+.md-typeset .fa-team__card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+}
+.md-typeset .fa-team__avatar {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #fff;
+  background: var(--fa-grad);
+  box-shadow: 0 10px 24px -10px rgba(217, 70, 239, 0.7);
+}
+.md-typeset .fa-team__card strong {
+  display: block;
+  color: #fff;
+  font-family: "Space Grotesk", sans-serif;
+}
+.md-typeset .fa-team__card small {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.72rem;
+}
+
+/* ===================================================================
+   GENERISCHES GLAS-PANEL (Szenario, Hinweise)
+   =================================================================== */
+.md-typeset .fa-panel {
+  margin: 1.2rem 0;
+  padding: 1.3rem 1.4rem;
+  border-radius: 20px;
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  background:
+    linear-gradient(135deg, rgba(139, 92, 246, 0.10), rgba(244, 114, 182, 0.05)),
+    rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 18px 50px -30px rgba(139, 92, 246, 0.7);
+}
+.md-typeset .fa-panel > :first-child { margin-top: 0; }
+.md-typeset .fa-panel > :last-child { margin-bottom: 0; }
+
+/* ===================================================================
+   GRENZEN / LIMITS — ehrliche Einschränkungen als gedämpfte Karten
+   =================================================================== */
+.md-typeset .fa-limits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.9rem;
+  margin: 1.2rem 0 1.6rem;
+}
+.md-typeset .fa-limit {
+  padding: 1.1rem 1.2rem;
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.025);
+}
+.md-typeset .fa-limit strong {
+  display: block;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.88);
+  margin-bottom: 0.3em;
+}
+.md-typeset .fa-limit p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--md-default-fg-color--light);
+}
+
+/* ===================================================================
+   CHECK-LISTE — Robustheits-/Feature-Aufzählungen mit Gradient-Haken
+   =================================================================== */
+.md-typeset ul.fa-checks {
+  list-style: none;
+  margin-left: 0;
+  padding-left: 0;
+}
+.md-typeset ul.fa-checks > li {
+  position: relative;
+  margin: 0.5em 0;
+  padding-left: 1.9em;
+  font-size: 0.86rem;
+}
+.md-typeset ul.fa-checks > li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: -0.05em;
+  width: 1.35em;
+  height: 1.35em;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.72em;
+  font-weight: 800;
+  color: #fff;
+  background: var(--fa-grad);
+  box-shadow: 0 4px 12px -4px rgba(217, 70, 239, 0.6);
+}
+
+/* ===================================================================
+   Tastatur-Shortcuts (pymdownx.keys / kbd)
+   =================================================================== */
+.md-typeset kbd,
+.md-typeset .keys kbd {
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: #e9d5ff;
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* ===================================================================
    Barrierefreiheit — Bewegung reduzieren
    =================================================================== */
 @media (prefers-reduced-motion: reduce) {
