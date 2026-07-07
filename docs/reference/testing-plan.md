@@ -1,4 +1,13 @@
+<div class="fa-page-hero" markdown>
+<span class="fa-kicker">Reference · Quality</span>
+
 # FormAssist — Testing Plan
+
+<p class="fa-lede" markdown>
+The testing strategy across FormAssist's isolated runtime contexts — from the current
+Vitest unit suite to the broader roadmap for Supabase, E2E, prompt, and security tests.
+</p>
+</div>
 
 ## Overview
 

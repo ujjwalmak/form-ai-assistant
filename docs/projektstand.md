@@ -1,5 +1,7 @@
 ---
 title: Projektstand
+hide:
+  - navigation
 ---
 
 <div class="fa-page-hero" markdown>
@@ -58,7 +60,7 @@ Zwei Aspekte tragen diese Entscheidung:
 ## Was bewusst (noch) nicht enthalten ist
 </div>
 
-<div class="fa-limits" markdown>
+<div class="fa-limits fa-limits--3" markdown>
 
 <div class="fa-limit" markdown>
 **Backend-Proxy & Consent-Flow**

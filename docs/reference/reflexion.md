@@ -1,7 +1,14 @@
+<div class="fa-page-hero" markdown>
+<span class="fa-kicker">Referenz · Reflexion</span>
+
 # Reflexion — FormAssist
 
-**Präsentation zur Reflektion · 02.07.2026 · 15 Minuten pro Team**
-Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein Vorstellungsgespräch).
+<p class="fa-lede" markdown>
+**Präsentation zur Reflektion · 02.07.2026 · 15 Minuten pro Team.**
+Gliederung entlang der acht Leitfragen aus der Vorlesung (angelehnt an ein
+Vorstellungsgespräch).
+</p>
+</div>
 
 > **Hinweise zur Präsentation**
 >

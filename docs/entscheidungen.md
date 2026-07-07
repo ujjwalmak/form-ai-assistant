@@ -1,5 +1,7 @@
 ---
 title: Entscheidungen
+hide:
+  - navigation
 ---
 
 <div class="fa-page-hero" markdown>

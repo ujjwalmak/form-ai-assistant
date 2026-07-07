@@ -29,7 +29,7 @@ von **dir**.
 ## Was FormAssist kann
 </div>
 
-<div class="grid cards" markdown>
+<div class="grid cards fa-cols-3" markdown>
 
 -   :material-lightning-bolt:{ .lg .middle } __⚡ Agent ausfüllen__
 

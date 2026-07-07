@@ -1,5 +1,7 @@
 ---
 title: Engineering
+hide:
+  - navigation
 ---
 
 <div class="fa-page-hero" markdown>

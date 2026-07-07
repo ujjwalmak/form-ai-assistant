@@ -1,5 +1,7 @@
 ---
 title: Technologie
+hide:
+  - navigation
 ---
 
 <div class="fa-page-hero" markdown>
@@ -64,7 +66,7 @@ Das Content-Script ist in Module aufgeteilt, die das Manifest in **fester Reihen
 ## Vier Leitprinzipien
 </div>
 
-<div class="grid cards" markdown>
+<div class="grid cards fa-cols-2" markdown>
 
 -   :material-select-off:{ .lg .middle } __Shadow-DOM-Isolation__
 
@@ -135,7 +137,7 @@ Mehrfachauswahl, deutsches Dezimalkomma und <code>maxlength</code>.</li>
 ## Wo welche Daten liegen
 </div>
 
-<div class="grid cards" markdown>
+<div class="grid cards fa-cols-3" markdown>
 
 -   :material-laptop:{ .lg .middle } __Lokal — `chrome.storage.local`__
 

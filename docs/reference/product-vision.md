@@ -1,7 +1,13 @@
-# From FormAssist to a Bureaucracy Companion
-### A product vision — June 2026
+<div class="fa-page-hero" markdown>
+<span class="fa-kicker">Reference · Product Vision</span>
 
----
+# From FormAssist to a Bureaucracy Companion
+
+<p class="fa-lede" markdown>
+A product vision — June 2026. Where FormAssist could go beyond form-filling: from saving
+keystrokes to guiding people through the bureaucracy that surrounds the form.
+</p>
+</div>
 
 ## 1. The reframe: we are not in the form-filling business
 

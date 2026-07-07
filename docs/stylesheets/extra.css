@@ -212,6 +212,17 @@ body::after {
   opacity: 1;
 }
 
+/* Feste Spaltenzahl für Card-Grids — verhindert verwaiste Einzel-Kacheln
+   (Material nutzt sonst auto-fit und lässt je nach Breite eine Kachel allein). */
+.md-typeset .grid.cards.fa-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.md-typeset .grid.cards.fa-cols-2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 55rem) {
+  .md-typeset .grid.cards.fa-cols-3 { grid-template-columns: 1fr; }
+}
+@media (max-width: 45rem) {
+  .md-typeset .grid.cards.fa-cols-2 { grid-template-columns: 1fr; }
+}
+
 /* ===================================================================
    Buttons
    =================================================================== */
@@ -724,7 +735,7 @@ body::after {
    =================================================================== */
 .fa-trust {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.9rem;
   margin: 0 0 1.5rem;
   padding: 1.4rem;
@@ -735,6 +746,9 @@ body::after {
     rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(16px) saturate(1.5);
   box-shadow: 0 24px 60px -34px rgba(139, 92, 246, 0.7);
+}
+@media (max-width: 55rem) {
+  .fa-trust { grid-template-columns: 1fr; }
 }
 .fa-trust__item strong {
   display: block;
@@ -1138,9 +1152,19 @@ body::after {
    =================================================================== */
 .md-typeset .fa-limits {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.9rem;
   margin: 1.2rem 0 1.6rem;
+}
+/* Drei-Karten-Variante: 3 nebeneinander, sonst gestapelt — nie 2+1 */
+.md-typeset .fa-limits--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 55rem) {
+  .md-typeset .fa-limits--3 { grid-template-columns: 1fr; }
+}
+@media (max-width: 45rem) {
+  .md-typeset .fa-limits { grid-template-columns: 1fr; }
 }
 .md-typeset .fa-limit {
   padding: 1.1rem 1.2rem;
