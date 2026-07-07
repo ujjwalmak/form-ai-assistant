@@ -89,6 +89,23 @@ function parseRelativeDate(text) {
   return null;
 }
 
+// ── Custom-Widget-Erkennung (ARIA-Combobox, Rich-Text) ───────────────────────
+// React-Select, MUI, Headless UI & Co. rendern Dropdowns ohne natives <select>
+function isAriaCombobox(el) {
+  if (!el || !el.getAttribute || el.tagName === 'SELECT') return false;
+  if ((el.getAttribute('role') || '').toLowerCase() === 'combobox') return true;
+  return el.tagName === 'INPUT' && (el.getAttribute('aria-haspopup') || '').toLowerCase() === 'listbox';
+}
+
+// contenteditable-Editoren (Rich-Text-Felder, z. B. Anschreiben in Bewerbungen)
+function isRichTextField(el) {
+  if (!el || !el.getAttribute) return false;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return false;
+  const ce = el.getAttribute('contenteditable');
+  if (ce === '' || ce === 'true') return true;
+  return (el.getAttribute('role') || '').toLowerCase() === 'textbox' && el.isContentEditable === true;
+}
+
 // ── Kendo widget detection ───────────────────────────────────────────────────
 function isKendoWidget(el) {
   if (!el) return null;
@@ -268,5 +285,6 @@ if (typeof module !== 'undefined' && module.exports) {
     getAgentSelector,
     isValidIBAN, isValidBIC, isValidEmail, isValidGermanZip, isValidPhone,
     getBirthdateIssue, labelHasKeyword, detectLiveCheckKind, getLiveCheckResult,
+    isAriaCombobox, isRichTextField,
   };
 }

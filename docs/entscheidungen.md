@@ -46,7 +46,7 @@ nachschärfen — und dabei frühere Erkenntnisse bewusst erhalten.
 Ladereihenfolge, kein `import`/`export`) — schwer testbar ohne Umbau.
 
 **Entscheidung:** **Vitest (jsdom)** mit einem browser-sicheren `module.exports`-Shim pro Datei
-und jsdom-Polyfills — **118 Tests**, 78,93 % Branch-Coverage (~79 %), CI bei jedem Push. Kein Umbau der
+und jsdom-Polyfills — **133 Tests**, Branch-Coverage ~77 %, CI bei jedem Push. Kein Umbau der
 Laufzeit nötig.
 
 **Kompetenz:** Testbarkeit herstellen, ohne die Architektur zu brechen; pragmatische Lösung

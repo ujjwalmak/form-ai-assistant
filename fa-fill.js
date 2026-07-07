@@ -51,6 +51,101 @@ function tryDatePickerLib(el, text) {
   return false;
 }
 
+// ── ARIA-Combobox & Rich-Text (React-Select, MUI, contenteditable …) ─────────
+const COMBO_OPTION_WAIT_MS = 350;
+
+// Priorisierte Auswahl offener [role=option]-Elemente per sichtbarem Text
+function pickOptionByText(els, text) {
+  const wanted = clean(String(text ?? '')).toLowerCase();
+  if (!wanted) return null;
+  const label = el => clean(el.textContent).toLowerCase();
+  return els.find(el => label(el) === wanted)
+      || (wanted.length >= 3 ? els.find(el => label(el).startsWith(wanted)) : null)
+      || (wanted.length >= 3 ? els.find(el => label(el).includes(wanted)) : null)
+      || els.find(el => { const l = label(el); return l.length >= 3 && wanted.includes(l); })
+      || null;
+}
+
+// Offene Optionen finden: erst aria-controls/aria-owns, dann Portale —
+// viele Widgets rendern die Liste direkt unter document.body
+function findAriaOptions(el) {
+  const root = el.getRootNode?.() || document;
+  const out = [];
+  const ids = `${el.getAttribute('aria-controls') || ''} ${el.getAttribute('aria-owns') || ''}`.trim();
+  for (const id of ids.split(/\s+/).filter(Boolean)) {
+    const scope = (typeof root.getElementById === 'function' ? root.getElementById(id) : null)
+      || document.getElementById(id);
+    if (scope) out.push(...scope.querySelectorAll('[role="option"]'));
+  }
+  if (!out.length) {
+    const scopes = root === document ? [document] : [root, document];
+    scopes.forEach(s => { try { out.push(...s.querySelectorAll('[role="option"]')); } catch {} });
+  }
+  return [...new Set(out)].filter(isVisible);
+}
+
+// Klick-Sequenz wie eine echte Interaktion — React-Select & Co. reagieren
+// auf mousedown/pointerdown, nicht nur auf click
+function dispatchClickSequence(el) {
+  // view muss das Window des Elements sein (iFrames!), nicht das globale
+  const view = el.ownerDocument?.defaultView || undefined;
+  ['pointerdown', 'mousedown', 'mouseup', 'click'].forEach(type => {
+    try {
+      const Ctor = type.startsWith('pointer') && typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+      el.dispatchEvent(new Ctor(type, { bubbles: true, cancelable: true, view }));
+    } catch {
+      try { el.dispatchEvent(new Event(type, { bubbles: true, cancelable: true })); } catch {}
+    }
+  });
+}
+
+// Async: Wert tippen (bzw. Widget öffnen), auf Options-Liste warten, besten
+// Treffer anklicken. Bewusst KEIN synthetisches Enter — Guardrail: das könnte
+// Site-JS als Submit interpretieren.
+async function fillAriaCombobox(el, text) {
+  try { el.focus?.({ preventScroll: true }); } catch { try { el.focus?.(); } catch {} }
+  if (el.tagName === 'INPUT') {
+    try {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (setter) setter.call(el, text); else el.value = text;
+    } catch { el.value = text; }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  } else {
+    dispatchClickSequence(el); // öffnet z. B. MUI-Selects (div[role=combobox])
+  }
+  await new Promise(r => setTimeout(r, COMBO_OPTION_WAIT_MS));
+  const match = pickOptionByText(findAriaOptions(el), text);
+  if (match) {
+    dispatchClickSequence(match);
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+  // Kein Treffer: Liste per Escape schließen, getippten Text stehen lassen
+  try { el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); } catch {}
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return false;
+}
+
+// contenteditable-Editoren: execCommand hält den internen State von
+// ProseMirror/Slate & Co. intakt; textContent ist der robuste Fallback
+function fillRichText(el, text) {
+  try { el.focus?.(); } catch {}
+  let inserted = false;
+  try {
+    const doc = el.ownerDocument || document;
+    if (typeof doc.execCommand === 'function') {
+      const range = doc.createRange();
+      range.selectNodeContents(el);
+      const sel = doc.defaultView?.getSelection?.();
+      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+      inserted = doc.execCommand('insertText', false, text);
+    }
+  } catch {}
+  if (!inserted || clean(el.textContent) !== clean(text)) el.textContent = text;
+  el.dispatchEvent(new Event('input',  { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 // Priorisierte Options-Suche: exaktes Label/Value → Wortanfang → enthält.
 // "Enthält" erst ab 3 Zeichen, damit Kürzel wie "DE" nicht zufällig in
 // längeren Optionstexten hängen bleiben, sondern nur exakt matchen.
@@ -128,6 +223,9 @@ function fillField(el, value) {
       return;
     }
   }
+  // Custom-Widgets: liefern ein Promise — Aufrufer mit Verifikation await'en
+  if (isAriaCombobox(el)) return fillAriaCombobox(el, text);
+  if (isRichTextField(el)) { fillRichText(el, text); return; }
 
   if (el.tagName === 'SELECT') {
     if (el.multiple && /[,;]/.test(text)) {
@@ -166,6 +264,8 @@ function fillField(el, value) {
     if (el.maxLength > 0 && el.maxLength < 9999 && text.length > el.maxLength) {
       text = text.slice(0, el.maxLength);
     }
+    // Fokus vor dem Setzen: manche Seiten initialisieren/validieren erst dann
+    try { el.focus?.({ preventScroll: true }); } catch {}
     try {
       const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -175,9 +275,18 @@ function fillField(el, value) {
   }
   el.dispatchEvent(new Event('input',  { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
+  // Blur nach dem Füllen löst on-blur-Validierung der Seite aus —
+  // die Korrektur-Runde des Agenten sieht Fehler dadurch sofort
+  if (['INPUT', 'TEXTAREA'].includes(el.tagName) && (el.ownerDocument || document).activeElement === el) {
+    try { el.blur?.(); } catch {}
+  }
 }
 
 // ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { setKendoValue, tryDatePickerLib, normalizeTemporalValue, fillField, findSelectOption, normalizeDecimalString };
+  module.exports = {
+    setKendoValue, tryDatePickerLib, normalizeTemporalValue, fillField,
+    findSelectOption, normalizeDecimalString,
+    pickOptionByText, findAriaOptions, fillAriaCombobox, fillRichText,
+  };
 }

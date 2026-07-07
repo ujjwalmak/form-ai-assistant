@@ -355,3 +355,37 @@ describe('getLiveCheckResult', () => {
     expect(getLiveCheckResult('iban', '   ')).toBe(null);
   });
 });
+
+// ── Custom-Widget-Erkennung ──────────────────────────────────────────────────
+
+describe('isAriaCombobox', () => {
+  const make = html => { document.body.innerHTML = html; return document.body.firstElementChild; };
+
+  it('erkennt input/div mit role=combobox und input mit aria-haspopup=listbox', () => {
+    expect(isAriaCombobox(make(`<input role="combobox">`))).toBe(true);
+    expect(isAriaCombobox(make(`<div role="combobox"></div>`))).toBe(true);
+    expect(isAriaCombobox(make(`<input aria-haspopup="listbox">`))).toBe(true);
+  });
+
+  it('ignoriert native Selects und normale Inputs', () => {
+    expect(isAriaCombobox(make(`<select role="combobox"><option>a</option></select>`))).toBe(false);
+    expect(isAriaCombobox(make(`<input type="text">`))).toBe(false);
+    expect(isAriaCombobox(null)).toBe(false);
+  });
+});
+
+describe('isRichTextField', () => {
+  const make = html => { document.body.innerHTML = html; return document.body.firstElementChild; };
+
+  it('erkennt contenteditable-Elemente (auch leeres Attribut)', () => {
+    expect(isRichTextField(make(`<div contenteditable="true"></div>`))).toBe(true);
+    expect(isRichTextField(make(`<div contenteditable=""></div>`))).toBe(true);
+  });
+
+  it('ignoriert native Felder und normale Divs', () => {
+    expect(isRichTextField(make(`<textarea></textarea>`))).toBe(false);
+    expect(isRichTextField(make(`<div></div>`))).toBe(false);
+    expect(isRichTextField(make(`<div contenteditable="false"></div>`))).toBe(false);
+    expect(isRichTextField(null)).toBe(false);
+  });
+});

@@ -147,6 +147,12 @@
     style.textContent = FA_CSS;
     shadow.appendChild(style);
 
+    // ── Fill-FX layer: Häkchen über gerade gefüllten Feldern.
+    // Liegt im Shadow Root (kein DOM-Leck auf die Host-Seite), fixed über dem Viewport.
+    const fxLayer = document.createElement('div');
+    fxLayer.className = 'fa-fx-layer';
+    shadow.appendChild(fxLayer);
+
     // ── DOM ───────────────────────────────────────────────────────────
     const wrap = document.createElement('div');
     wrap.innerHTML = `
@@ -156,6 +162,10 @@
       </button>
       <div class="sidebar" id="fa-sidebar">
         <div class="toast" id="fa-toast"></div>
+        <div class="undo-toast" id="fa-undo-toast">
+          <span class="undo-toast-msg" id="fa-undo-toast-msg"></span>
+          <button class="undo-toast-btn" id="fa-undo-toast-btn" type="button">Rückgängig</button>
+        </div>
         <div class="resize-handle resize-n"  data-resize="n"></div>
         <div class="resize-handle resize-e"  data-resize="e"></div>
         <div class="resize-handle resize-s"  data-resize="s"></div>
@@ -315,6 +325,26 @@
       toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
     }
     _onProviderFallback = () => showToast('Groq nicht erreichbar – OpenRouter als Backup');
+
+    // ── Undo-Toast: Sicherheitsnetz nach einem Agent-Lauf ──────────────
+    const undoToastEl = $('fa-undo-toast');
+    let undoToastTimer;
+    function showUndoToast(n) {
+      const msgEl = $('fa-undo-toast-msg');
+      if (msgEl) msgEl.textContent = `${n} Feld${n !== 1 ? 'er' : ''} ausgefüllt`;
+      undoToastEl.classList.add('show');
+      clearTimeout(undoToastTimer);
+      undoToastTimer = setTimeout(() => undoToastEl.classList.remove('show'), 6000);
+    }
+    function hideUndoToast() {
+      undoToastEl?.classList.remove('show');
+      clearTimeout(undoToastTimer);
+    }
+    function maybeShowUndoToast() {
+      const n = agentState?.undo?.length || 0;
+      if (n > 0) showUndoToast(n);
+    }
+    $('fa-undo-toast-btn')?.addEventListener('click', () => undoAgentFill());
 
     // ═══════════════════════════════════════════════════════════════════════
     // PROFILE PANEL
@@ -1329,7 +1359,7 @@
         if (act.action === 'check') {
           const wantOff = /^(nein|no|false|0|aus|off|uncheck(?:ed)?)$/i.test(String(act.value || '').trim());
           if (type === 'radio') {
-            fillField(el, act.value || act.label || '');
+            await fillField(el, act.value || act.label || '');
             ok = isActionApplied(el, 'check');
           } else {
             if (el.checked === wantOff) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -1337,7 +1367,7 @@
             note = wantOff ? 'abgewählt' : 'angekreuzt';
           }
         } else {
-          fillField(el, act.value || '');
+          await fillField(el, act.value || '');
           ok = isActionApplied(el, act.action, act.value || '');
         }
 
@@ -1575,6 +1605,106 @@
       }, 1800);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // FILL-CHOREOGRAFIE + UNDO — sichtbares Ausfüllen, ein Klick zurück
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Grüner Puls am Feld + Häkchen-Chip im FX-Layer (Shadow Root).
+    // `delay` staffelt rein visuell (z. B. für die synchrone Deterministik-Runde).
+    function flashFilled(el, delay = 0) {
+      if (!el || typeof el.getBoundingClientRect !== 'function') return;
+      const run = () => {
+        let rect;
+        try { rect = el.getBoundingClientRect(); } catch { return; }
+        if (!rect || (rect.width === 0 && rect.height === 0)) return;
+        // Transienter grüner Outline-Puls (gleiche Technik wie highlightField)
+        const prevOutline = el.style.outline;
+        const prevOffset  = el.style.outlineOffset;
+        el.style.outline = '2px solid #22c55e';
+        el.style.outlineOffset = '2px';
+        setTimeout(() => { el.style.outline = prevOutline; el.style.outlineOffset = prevOffset; }, 1100);
+        // Häkchen-Chip oben rechts am Feld — bleibt im Shadow Root
+        const chip = document.createElement('div');
+        chip.className = 'fa-fx-check';
+        chip.textContent = '✓';
+        chip.style.left = `${Math.min(rect.right, window.innerWidth - 4) - 14}px`;
+        chip.style.top  = `${Math.max(rect.top - 6, 2)}px`;
+        fxLayer.appendChild(chip);
+        requestAnimationFrame(() => chip.classList.add('in'));
+        setTimeout(() => { chip.classList.remove('in'); chip.classList.add('out'); }, 850);
+        setTimeout(() => chip.remove(), 1250);
+      };
+      if (delay > 0) setTimeout(run, delay); else run();
+    }
+
+    function setNativeValue(el, val) {
+      try {
+        const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (setter) setter.call(el, val); else el.value = val;
+      } catch { el.value = val; }
+    }
+
+    // Restaurierbaren Zustand eines Feldes erfassen (vor dem Füllen).
+    function fieldUndoState(el) {
+      if (!el) return null;
+      const t = (el.type || '').toLowerCase();
+      if (t === 'radio') {
+        const root = el.form || el.getRootNode?.() || document;
+        const els = el.name
+          ? Array.from(root.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`))
+          : [el];
+        return { kind: 'radio', els, checked: els.map(r => r.checked) };
+      }
+      if (t === 'checkbox') return { kind: 'checkbox', el, checked: el.checked };
+      if (el.tagName === 'SELECT') return { kind: 'select', el, selected: Array.from(el.options).map(o => o.selected) };
+      if (el.isContentEditable) return { kind: 'html', el, html: el.innerHTML };
+      return { kind: 'value', el, value: el.value };
+    }
+
+    // Snapshot in den Undo-Stack des laufenden Agent-Runs (nur der erste je Feld).
+    function pushUndo(el) {
+      if (!el || !agentState) return;
+      agentState.undo = agentState.undo || [];
+      const already = agentState.undo.some(s => s.el === el || (s.els && s.els.includes(el)));
+      if (already) return;
+      const snap = fieldUndoState(el);
+      if (snap) agentState.undo.push(snap);
+    }
+
+    function restoreUndoState(s) {
+      try {
+        if (s.kind === 'radio') {
+          s.els.forEach((r, i) => { r.checked = s.checked[i]; });
+          (s.els.find((r, i) => s.checked[i]) || s.els[0])?.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (s.kind === 'checkbox') {
+          s.el.checked = s.checked;
+          s.el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (s.kind === 'select') {
+          Array.from(s.el.options).forEach((o, i) => { o.selected = !!s.selected[i]; });
+          s.el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (s.kind === 'html') {
+          s.el.innerHTML = s.html;
+          s.el.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          setNativeValue(s.el, s.value);
+          s.el.dispatchEvent(new Event('input',  { bubbles: true }));
+          s.el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      } catch {}
+    }
+
+    function undoAgentFill() {
+      const stack = agentState?.undo || [];
+      if (!stack.length) return;
+      for (let i = stack.length - 1; i >= 0; i--) restoreUndoState(stack[i]);
+      const n = stack.length;
+      agentState.undo = [];
+      agentState.filledFields = [];
+      hideUndoToast();
+      showToast(`Ausfüllen rückgängig gemacht (${n} Feld${n !== 1 ? 'er' : ''})`);
+    }
+
     function askFormSummary() {
       if (profileVisible) hideProfile();
       open();
@@ -1665,11 +1795,11 @@
     // Fill + verify; if the raw value is rejected by the field, normalize it
     // via AI and retry once. Returns the value that stuck, or null.
     async function fillFieldVerified(el, label, raw) {
-      fillField(el, raw);
+      await fillField(el, raw);
       if (isActionApplied(el, 'fill', raw)) return raw;
       const norm = await aiNormalizeFieldValue(el, label, raw);
       if (norm && normalizeForCompare(norm) !== normalizeForCompare(raw)) {
-        fillField(el, norm);
+        await fillField(el, norm);
         if (isActionApplied(el, 'fill', norm)) return norm;
       }
       return null;
@@ -1679,7 +1809,14 @@
       const total = agentState.filledFields.length;
       const pages = (agentState.pages || 0) + 1;
       const pageNote = pages > 1 ? ` über ${pages} Seiten` : '';
-      return `✅ Fertig — ${total} Feld${total === 1 ? '' : 'er'} ausgefüllt${pageNote}.`;
+      let msg = `✅ Fertig — ${total} Feld${total === 1 ? '' : 'er'} ausgefüllt${pageNote}.`;
+      const skipped = agentState.skippedOptional || [];
+      if (skipped.length) {
+        const shown = skipped.slice(0, 4).map(l => `„${l}"`).join(', ');
+        const more  = skipped.length > 4 ? ` und ${skipped.length - 4} weitere` : '';
+        msg += `\n${skipped.length} optionale${skipped.length === 1 ? 's' : ''} Feld${skipped.length === 1 ? '' : 'er'} ohne passende Daten leer gelassen: ${shown}${more}. Sag mir einfach, was ich dort eintragen soll.`;
+      }
+      return msg;
     }
 
     function getActionConfidence(action) {
@@ -1699,6 +1836,10 @@
         const checked = el.name ? root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`) : (el.checked ? el : null);
         if (!checked) return '';
         return clean(getLabel(checked) || checked.value || 'true');
+      }
+      // Custom-Widgets (div-Combobox, contenteditable) tragen den Wert im Text
+      if (isRichTextField(el) || (isAriaCombobox(el) && el.tagName !== 'INPUT')) {
+        return clean(el.textContent || '');
       }
       if (el.tagName === 'SELECT') {
         const selected = Array.from(el.selectedOptions || []);
@@ -1783,8 +1924,10 @@
         if (current && !hasError) continue;
 
         const value = profile[pf.key];
+        pushUndo(el);
         fillField(el, value);
         if (isActionApplied(el, 'fill', value)) {
+          flashFilled(el, filled * 90);
           filled++;
           agentState.filledFields.push({ label: f.label || pf.label, value, url: location.href });
         }
@@ -2045,7 +2188,7 @@
         'FORMAT (ein Objekt pro Feld):',
         '[{"action":"fill"|"select"|"check"|"click"|"submit"|"ask"|"done","selector":"[name=\\"x\\"]","value":"...","label":"...","source":"profile"|"inferred"|"suggestion","confidence":0.0-1.0,"isNavigation":true,"question":"...","options":["A","B"]}]',
         '',
-        'action="ask": Wert nicht ableitbar → Frage an Nutzer. Felder: "label" (Feldname), "question" (verständliche Frage auf Deutsch), "options" (max. 4 wahrscheinliche Antworten als String-Array, leer wenn Freitext). Nur verwenden wenn wirklich kein Wert aus Profil/Kontext ableitbar ist.',
+        'action="ask": Wert nicht ableitbar → Frage an Nutzer. Felder: "label" (Feldname), "question" (verständliche Frage auf Deutsch), "options" (max. 4 wahrscheinliche Antworten als String-Array, leer wenn Freitext). NUR für Pflichtfelder verwenden, wenn wirklich kein Wert aus Profil/Kontext ableitbar ist — OPTIONALE Felder ohne ableitbaren Wert bekommen KEINE Aktion (einfach leer lassen, nicht nachfragen).',
         '',
         'AUSFÜLL-STRATEGIE — versuche JEDES Feld zu befüllen:',
         '',
@@ -2197,10 +2340,14 @@
         if (hdr) hdr.textContent = status;
       };
 
-      const applyAgentValue = (f, value) => {
-        fillField(f.el, value);
+      const applyAgentValue = async (f, value) => {
+        // Sichtbar machen: lazy/virtualisierte Formulare rendern erst beim Scrollen
+        try { f.el.scrollIntoView({ block: 'center' }); } catch {}
+        pushUndo(f.el);
+        await fillField(f.el, value);
         if (isActionApplied(f.el, 'fill', value)) {
           appendAgentRow('✓', f.label, value);
+          flashFilled(f.el);
           agentState.filledFields.push({ label: f.label, value, url: location.href });
           filled++;
         } else {
@@ -2221,7 +2368,7 @@
         if (!agentState.active) break;
         const directValue = findStoredAnswer(f.label);
         if (directValue !== null) {
-          applyAgentValue(f, directValue);
+          await applyAgentValue(f, directValue);
           done++;
           setAgentProgress(`Agent läuft… ${done}/${fields.length}`);
           await sleep(40);
@@ -2302,8 +2449,19 @@
               continue;
             }
           }
-          if (isUnknown(rawVal)) queueAsk(f);
-          else applyAgentValue(f, sanitizeValue(rawVal));
+          if (isUnknown(rawVal)) {
+            if (f.required) {
+              queueAsk(f);
+            } else {
+              // Optionale Felder ohne Datenbasis NICHT erfragen — leer lassen
+              // und am Ende gesammelt erwähnen (verhindert Rückfragen-Spam
+              // bei Feldern wie "Middle Name")
+              (agentState.skippedOptional = agentState.skippedOptional || []).push(f.label);
+              appendAgentRow('·', f.label, 'leer gelassen (optional)');
+            }
+          } else {
+            await applyAgentValue(f, sanitizeValue(rawVal));
+          }
           done++;
           setAgentProgress(`Agent läuft… ${done}/${fields.length}`);
           await sleep(50);
@@ -2342,10 +2500,12 @@
               });
               const v = sanitizeValue(raw);
               if (!isUnknown(v) && normalizeForCompare(v) !== normalizeForCompare(curVal)) {
-                fillField(f.el, v);
+                pushUndo(f.el);
+                await fillField(f.el, v);
                 if (isActionApplied(f.el, 'fill', v)) {
                   corrected++;
                   appendAgentRow('✓', f.label, v);
+                  flashFilled(f.el);
                   agentState.filledFields.push({ label: f.label, value: v, url: location.href });
                   continue;
                 }
@@ -2384,7 +2544,8 @@
       const autoNav = $('fa-auto-nav')?.checked !== false;
       const mode = getAssistantMode();
       const guided = mode !== 'classic';
-      agentState = { active: true, guided, autoNavigate: autoNav, sessionAnswers: {}, filledFields: [], startUrl: location.href, correctionRound: 0, lastFailures: [], pages: 0 };
+      hideUndoToast();
+      agentState = { active: true, guided, autoNavigate: autoNav, sessionAnswers: {}, filledFields: [], skippedOptional: [], startUrl: location.href, correctionRound: 0, lastFailures: [], pages: 0, undo: [] };
       guidedAskState = { active: false, queue: [], navAction: null };
       manualAssistState.pending = null;
       if (guided) {
@@ -2668,9 +2829,11 @@
         if (!agentState.active) break;
         const el = resolveActionElement(act);
         if ((act.action === 'fill' || act.action === 'select') && el) {
-          fillField(el, act.value || '');
+          pushUndo(el);
+          await fillField(el, act.value || '');
           if (isActionApplied(el, act.action, act.value || '')) {
             appendAgentRow('✓', act.label || act.selector, act.value);
+            flashFilled(el);
             agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
             filled++;
           } else {
@@ -2679,8 +2842,10 @@
           }
           await sleep(80);
         } else if (act.action === 'check' && el) {
+          pushUndo(el);
           if (!el.checked) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
           appendAgentRow('✓', act.label || act.selector, '');
+          flashFilled(el);
           agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
           filled++;
           await sleep(80);
@@ -2894,9 +3059,11 @@
         const el = resolveActionElement(act);
 
         if ((act.action === 'fill' || act.action === 'select') && el) {
-          fillField(el, act.value || '');
+          pushUndo(el);
+          await fillField(el, act.value || '');
           if (isActionApplied(el, act.action, act.value || '')) {
             appendAgentRow('✓', act.label || act.selector, act.value);
+            flashFilled(el);
             agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
             filled++;
           } else {
@@ -2905,8 +3072,9 @@
           }
           await sleep(100);
         } else if (act.action === 'check' && el) {
+          pushUndo(el);
           if (!el.checked) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
-          if (isActionApplied(el, act.action)) appendAgentRow('✓', act.label || act.selector, '');
+          if (isActionApplied(el, act.action)) { appendAgentRow('✓', act.label || act.selector, ''); flashFilled(el); }
           else {
             appendAgentRow('✗', act.label || act.selector, 'nicht gesetzt');
             failedActions.push({ selector: act.selector, label: act.label, reason: 'Checkbox/Option nicht gesetzt' });
@@ -3010,6 +3178,7 @@
       const hdr = agentStatusBubble?.querySelector('.fa-agent-hdr');
       if (hdr) hdr.textContent = `Agent: ${filled} Feld${filled !== 1 ? 'er' : ''} ausgefüllt`;
       agentStatusBubble?.querySelector('.fa-agent-stop')?.remove();
+      maybeShowUndoToast();
     }
 
     function agentAskSubmit(label) {
@@ -3137,6 +3306,9 @@
       if (el.tagName === 'SELECT') {
         const selected = Array.from(el.selectedOptions || []).map(o => clean(o.text || o.value)).filter(Boolean);
         return selected.join(', ');
+      }
+      if (isRichTextField(el) || (isAriaCombobox(el) && el.tagName !== 'INPUT')) {
+        return clean(el.textContent || '').slice(0, 240);
       }
       return clean(el.value || '').slice(0, 240);
     }
@@ -3296,6 +3468,7 @@
     // ═══════════════════════════════════════════════════════════════════════
 
     document.addEventListener('focusin', e => {
+      if (agentState.active) return; // Agent füllt gerade selbst — kein Tipp-Flackern
       const el = e.target;
       if (!['INPUT','SELECT','TEXTAREA'].includes(el.tagName) || el.type === 'hidden' || !isVisible(el)) return;
       activeFieldEl = el;
@@ -3334,6 +3507,9 @@
 
     function scheduleFieldErrorHelp(el, delay = 700) {
       if (!el) return;
+      // Während der Agent läuft, übernimmt seine Korrektur-Runde die Fehler —
+      // keine parallele Einzelfeld-KI-Hilfe starten
+      if (agentState.active) return;
       const problem = getFieldProblem(el);
       if (!problem) return;
       if (reviewingSubmits.has(el.form)) return;

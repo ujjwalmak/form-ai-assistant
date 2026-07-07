@@ -153,3 +153,76 @@ describe('fillField — Multi-Select, Zahlen, maxlength', () => {
     expect(el.value).toBe('Münch');
   });
 });
+
+// ── ARIA-Combobox & Rich-Text ────────────────────────────────────────────────
+
+describe('pickOptionByText', () => {
+  function makeOptions(texts) {
+    document.body.innerHTML = `<ul role="listbox">` +
+      texts.map(t => `<li role="option">${t}</li>`).join('') + `</ul>`;
+    return Array.from(document.querySelectorAll('[role="option"]'));
+  }
+
+  it('exakter Text schlägt Teilstring', () => {
+    const opts = makeOptions(['Deutschland (veraltet)', 'Deutschland']);
+    expect(pickOptionByText(opts, 'Deutschland').textContent).toBe('Deutschland');
+  });
+
+  it('Kürzel unter 3 Zeichen matchen nur exakt', () => {
+    const opts = makeOptions(['Niederlande', 'Belgien']);
+    expect(pickOptionByText(opts, 'de')).toBeNull();
+    expect(pickOptionByText(makeOptions(['DE', 'AT']), 'de').textContent).toBe('DE');
+  });
+});
+
+describe('fillField — ARIA-Combobox (React-Select-Muster)', () => {
+  it('tippt den Wert und klickt die passende Option aus der aria-controls-Liste', async () => {
+    document.body.innerHTML =
+      `<input role="combobox" aria-controls="lb" id="c">` +
+      `<ul id="lb" role="listbox">` +
+      `<li role="option">Niederlande</li><li role="option">Deutschland</li>` +
+      `</ul>`;
+    const input = document.getElementById('c');
+    const chosen = [];
+    document.querySelectorAll('[role="option"]').forEach(o =>
+      o.addEventListener('click', () => { chosen.push(o.textContent); input.value = o.textContent; })
+    );
+    await fillField(input, 'Deutschland');
+    expect(chosen).toEqual(['Deutschland']);
+    expect(input.value).toBe('Deutschland');
+  });
+
+  it('lässt ohne passende Option den getippten Text stehen (kein Enter, kein Submit)', async () => {
+    document.body.innerHTML =
+      `<input role="combobox" aria-controls="lb" id="c">` +
+      `<ul id="lb" role="listbox"><li role="option">Frankreich</li></ul>`;
+    const input = document.getElementById('c');
+    await fillField(input, 'Xyz Fantasieland');
+    expect(input.value).toBe('Xyz Fantasieland');
+  });
+
+  it('div[role=combobox] (MUI-Muster): öffnen per Klick, Option wählen', async () => {
+    document.body.innerHTML =
+      `<div role="combobox" aria-controls="lb" id="c" tabindex="0"></div>` +
+      `<ul id="lb" role="listbox"><li role="option">Herr</li><li role="option">Frau</li></ul>`;
+    const combo = document.getElementById('c');
+    document.querySelectorAll('[role="option"]').forEach(o =>
+      o.addEventListener('click', () => { combo.textContent = o.textContent; })
+    );
+    await fillField(combo, 'Frau');
+    expect(combo.textContent).toBe('Frau');
+  });
+});
+
+describe('fillField — contenteditable (Rich-Text)', () => {
+  it('setzt den Text und feuert input/change', () => {
+    document.body.innerHTML = `<div contenteditable="true" id="rt"></div>`;
+    const el = document.getElementById('rt');
+    const events = [];
+    el.addEventListener('input', () => events.push('input'));
+    el.addEventListener('change', () => events.push('change'));
+    fillField(el, 'Sehr geehrte Damen und Herren,');
+    expect(el.textContent).toBe('Sehr geehrte Damen und Herren,');
+    expect(events).toEqual(['input', 'change']);
+  });
+});

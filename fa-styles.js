@@ -745,6 +745,47 @@ const FA_CSS = `
       }
       .toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 
+      /* Undo-Toast — Sicherheitsnetz mit klickbarem Button */
+      .undo-toast {
+        position: absolute; top: 70px; left: 50%; max-width: calc(100% - 32px);
+        transform: translateX(-50%) translateY(-8px) scale(0.97);
+        display: flex; align-items: center; gap: 12px;
+        background: rgba(20, 18, 31, 0.94); color: #f4f2ff;
+        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(52, 211, 153, 0.38);
+        font-family: var(--font); font-size: 12px; font-weight: 500;
+        padding: 7px 7px 7px 16px; border-radius: 999px;
+        opacity: 0; transition: opacity 0.2s, transform 0.25s var(--spring);
+        pointer-events: none; white-space: nowrap; z-index: 21;
+        box-shadow: 0 14px 32px -8px rgba(0,0,0,0.5), 0 0 18px -4px rgba(52,211,153,0.4);
+      }
+      .undo-toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); pointer-events: auto; }
+      .undo-toast-btn {
+        font-family: var(--font); font-size: 12px; font-weight: 700; cursor: pointer;
+        color: #fff; border: none; border-radius: 999px; padding: 6px 15px;
+        background: linear-gradient(135deg, #34d399, #10b981);
+        box-shadow: 0 4px 12px -3px rgba(16,185,129,0.6);
+        transition: transform 0.12s var(--spring), filter 0.12s;
+      }
+      .undo-toast-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+      .undo-toast-btn:active { transform: translateY(0) scale(0.97); }
+
+      /* ════════════════════════════════════════════════════════════════
+         Fill-FX — Häkchen über gerade gefüllten Feldern (Shadow Root)
+         ════════════════════════════════════════════════════════════════ */
+      .fa-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 2147483646; }
+      .fa-fx-check {
+        position: absolute; width: 20px; height: 20px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-family: var(--font); font-size: 12px; font-weight: 800; color: #fff;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        box-shadow: 0 4px 14px -2px rgba(34,197,94,0.6), 0 0 0 3px rgba(34,197,94,0.18);
+        opacity: 0; transform: scale(0.4) translateY(4px);
+        transition: opacity 0.18s ease, transform 0.28s var(--spring);
+      }
+      .fa-fx-check.in  { opacity: 1; transform: scale(1) translateY(0); }
+      .fa-fx-check.out { opacity: 0; transform: scale(0.85) translateY(-6px); }
+
       /* ════════════════════════════════════════════════════════════════
          Smart-Fill preview (agent preview table)
          ════════════════════════════════════════════════════════════════ */
@@ -903,5 +944,7 @@ const FA_CSS = `
         .sidebar::before, .trigger::after, .re-icon::after, .logo-name,
         .action-panel::before, .action-panel::after, .gp-bar,
         .trigger, .re-icon, .msg.ai::before, .typing-row::before, .trust-dot { animation: none !important; }
+        .fa-fx-check { transition: opacity 0.18s ease !important; transform: none !important; }
+        .fa-fx-check.in, .fa-fx-check.out { transform: none !important; }
       }
 `;

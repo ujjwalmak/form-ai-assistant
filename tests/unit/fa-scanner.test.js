@@ -166,3 +166,48 @@ describe('extractRichContext — verschachtelte Shadow Roots', () => {
     expect(labels).toContain('E-Mail');
   });
 });
+
+// ── Custom-Widgets im Scanner ────────────────────────────────────────────────
+
+describe('extractField — Custom-Widgets', () => {
+  it('erkennt div[role=combobox] als Typ "combobox"', () => {
+    document.body.innerHTML = `<div role="combobox" aria-label="Anrede" id="x"></div>`;
+    const f = extractField(document.getElementById('x'));
+    expect(f).not.toBeNull();
+    expect(f.type).toBe('combobox');
+    expect(f.label).toBe('Anrede');
+  });
+
+  it('erkennt contenteditable als Typ "richtext"', () => {
+    document.body.innerHTML = `<div contenteditable="true" aria-label="Anschreiben" id="x"></div>`;
+    const f = extractField(document.getElementById('x'));
+    expect(f).not.toBeNull();
+    expect(f.type).toBe('richtext');
+  });
+
+  it('ignoriert Custom-Widgets ohne erkennbares Label', () => {
+    document.body.innerHTML = `<div contenteditable="true"></div>`;
+    expect(extractField(document.body.firstElementChild)).toBeNull();
+  });
+});
+
+describe('groupIntoSections — Custom-Widgets', () => {
+  it('nimmt div-Comboboxen und Rich-Text-Felder in die Feldliste auf', () => {
+    document.body.innerHTML =
+      `<form id="f">` +
+      `<label for="n">Name</label><input id="n">` +
+      `<div role="combobox" aria-label="Land"></div>` +
+      `<div contenteditable="true" aria-label="Nachricht"></div>` +
+      `</form>`;
+    const sections = groupIntoSections(document.getElementById('f'));
+    const labels = sections.flatMap(s => s.fields).map(f => f.label);
+    expect(labels).toEqual(['Name', 'Land', 'Nachricht']);
+  });
+});
+
+describe('getFieldValueBrief — Custom-Widgets', () => {
+  it('liest den Wert aus dem Textinhalt', () => {
+    document.body.innerHTML = `<div role="combobox" aria-label="Anrede" id="x">Frau</div>`;
+    expect(getFieldValueBrief(document.getElementById('x'))).toBe('Frau');
+  });
+});

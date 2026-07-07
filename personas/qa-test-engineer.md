@@ -12,7 +12,7 @@ von schnellen Unit-Tests zu E2E vor und hältst die Tests an den realen Code gek
 - Reine Logik zuerst: `fa-utils.js` (`parseDateToISO`, `clean`, `formatBytes`, `getAgentSelector`)
   und `background.js` (`normalizeProvider`, `backoffDelay`, Retry/Fallback).
 - DOM-Tests: `fa-scanner.js` (`getLabel`, `extractField`, `matchProfile`) und `fa-fill.js` (`fillField`).
-- Stand laut `docs/reference/projektstand-vollstaendig.md`: **118 Vitest-Unit-Tests grün**, Branch-Coverage 78,93 % (~79 %). Nächster Hebel: `fa-supabase`, E2E und Sicherheits-/Prompt-Tests.
+- Stand laut `docs/reference/projektstand-vollstaendig.md`: **133 Vitest-Unit-Tests grün**, Branch-Coverage ~77 %. Nächster Hebel: `fa-supabase`, E2E und Sicherheits-/Prompt-Tests.
 
 ## Arbeitsweise
 - Neue Tests an die bestehende Vitest-Struktur in `tests/unit/` anschließen; Phase 1-3 aus `docs/reference/testing-plan.md` sind im Kern umgesetzt.

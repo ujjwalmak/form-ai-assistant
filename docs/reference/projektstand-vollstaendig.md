@@ -18,7 +18,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | **Größte offene Punkte** | Prototyp-Demo 09.07. (Reflexion 02.07. gehalten) |
 | **Nächster Meilenstein** | Prototyp-Demo 09.07.2026 |
 | **Deployment** | Mit Prof abgestimmt entfallen (Chrome-Extension-Case) |
-| **Neu (05.07., v2.1)** | Dokument-Scan (Vision-OCR), Live-Validierung beim Tippen (IBAN mod-97 u. a.), Pre-Submit-Logik-Check + Robustheits-Paket (Shadow-DOM/iFrame-Labels, Fehl-Match-Schutz, Select-Priorität) — 118 Unit-Tests grün |
+| **Neu (05.–07.07., v2.1)** | Dokument-Scan (Vision-OCR), Live-Validierung beim Tippen (IBAN mod-97 u. a.), Pre-Submit-Logik-Check + Robustheits-Paket (Shadow-DOM/iFrame-Labels, Fehl-Match-Schutz, Select-Priorität) + Custom-Widget-Support (ARIA-Combobox/React-Select, contenteditable) + Rückfragen nur bei Pflichtfeldern — 133 Unit-Tests grün |
 
 ---
 
@@ -75,7 +75,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
 | Relevante Tests identifiziert | ✅ | [`testing-plan.md`](testing-plan.md) |
-| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`), **118 Tests grün**, Branch-Coverage ~79 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
+| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`), **133 Tests grün**, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
 
 ### Einheit 9 — Orchestrierung von Agenten (11.06.2026)
 

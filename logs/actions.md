@@ -502,3 +502,41 @@ Zuverlässigkeit auf möglichst allen Webseiten: alle Felder korrekt erkennen un
 
 - Erkennungs- und Befüllungspfad funktionieren jetzt auch in Web-Component-/iFrame-/Tabellen-Layouts; Fehl-Befüllungs-Klassen sind per Test abgesichert.
 - Bekannte, technisch bedingte Grenzen bleiben dokumentiert (Cross-Origin-iFrames, closed Shadow Roots, nativer PDF-Viewer — `memory/known_issues.md`).
+
+---
+
+## [2026-07-07] Projektwebseite: Startseite als Startup-Landing-Page ausgebaut
+
+**Ziel:**
+Die GitHub-Pages-Startseite soll wie die Landing-Page eines echten Startups wirken — innerhalb der bestehenden „Aurora Glass"-Designphilosophie (Violett→Fuchsia→Pink auf dunklem Glas).
+
+**Aktionen:**
+
+1. **Hero erweitert** (`docs/index.md`): Tagline-Headline statt reinem Produktnamen, plus reines CSS-Produkt-Mockup (Browserfenster mit Beispiel-Formular + FormAssist-Sidebar inkl. animiertem Tipp-Cursor und Fortschrittsbalken, `aria-hidden`).
+2. **Neue Sektionen**: Feature-Ticker (Marquee mit echten Fähigkeiten), „So funktioniert's" (3 nummerierte Schritte), Trust-Band „Sicherheit ist Architektur" (Kein Auto-Submit / Profil lokal / Datenminimierung), FAQ (5 Glas-Accordions), Abschluss-CTA-Panel; Sektions-Kicker + zentrierte Section-Heads.
+3. **CSS** (`docs/stylesheets/extra.css`): ~330 Zeilen neue Komponenten im bestehenden Token-System (`--fa-grad` etc.); alle neuen Animationen unter `prefers-reduced-motion` deaktiviert; Icons als SVG (Material-Shortcodes), keine Emojis.
+4. **Inhaltstreue**: keine erfundenen Zahlen/Testimonials — nur belegbare Aussagen (118 Tests, ~79 % Coverage, Submit-Guardrail, optionaler Supabase-Sync).
+
+**Ergebnis:**
+
+- `mkdocs build --strict` grün; Rendering per Headless-Chrome-Screenshots (Hero, Features, Trust, FAQ, CTA) visuell verifiziert; ein Markdown-Einrückungs-Bug im Mockup und ein harter Gradient-Rand im CTA wurden dabei gefunden und behoben.
+
+---
+
+## [2026-07-07] Custom-Widget-Support: ARIA-Comboboxen, Rich-Text, framework-treues Füllen
+
+**Ziel:**
+"Agent funktioniert auf jeder Seite": moderne Framework-Widgets (React-Select, MUI, contenteditable) erkennen und zuverlässig befüllen.
+
+**Aktionen:**
+
+1. Detektoren `isAriaCombobox`/`isRichTextField` in `fa-utils.js`; Scanner erfasst beide Typen (`combobox`/`richtext`) in Formularen und als lose Felder, Wert-Lesen via `textContent`.
+2. `fillAriaCombobox` (async) in `fa-fill.js`: tippen/öffnen → Options-Liste via `aria-controls`/`aria-owns`/Portale → bester Treffer per pointerdown→mousedown→mouseup→click. Kein synthetisches Enter (Submit-Guardrail). `fillRichText` mit execCommand + Fallback.
+3. `fillField` liefert für Comboboxen ein Promise; alle Verifikations-Stellen in `content.js` await'en jetzt. Fokus vor/Blur nach dem Setzen (on-blur-Validierung), Agent scrollt Felder in den Viewport, Guards gegen Tipp-/Fehlerhilfe-Spam während Agent-Läufen.
+4. Bugfix aus dem Test heraus: `MouseEvent`-`view` muss `el.ownerDocument.defaultView` sein, nicht `window` — wäre in same-origin iFrames fehlgeschlagen.
+5. +15 Unit-Tests → Suite **133/133 grün**, Branch-Coverage ~77 %. Doku nachgezogen (README, docs/-Webseite inkl. Stat-Kacheln, projektstand-vollstaendig, memory/, Persona QA).
+
+**Ergebnis:**
+
+- Erkennungs-/Füll-Pfad deckt jetzt native Felder, Kendo, Datepicker-Libs, ARIA-Comboboxen und contenteditable ab — über Shadow DOM, same-origin iFrames und Tabellen-Layouts hinweg.
+- Harte Grenzen bleiben dokumentiert (closed Shadow Roots, Cross-Origin-iFrames, nativer PDF-Viewer).

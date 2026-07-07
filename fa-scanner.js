@@ -124,9 +124,13 @@ function extractField(el) {
   }
   if (!label) return null;
 
+  // Custom-Widgets ohne native Elemente (React-Select/MUI-Dropdowns, Rich-Text)
+  const customCombobox = !kendoRole && el.tagName !== 'INPUT' && isAriaCombobox(el);
+  const richText = isRichTextField(el);
+
   const info = {
     label,
-    type:         fileWidget ? 'file' : kendoRole ? kendoRole : el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' : (el.type || 'text'),
+    type:         fileWidget ? 'file' : kendoRole ? kendoRole : customCombobox ? 'combobox' : richText ? 'richtext' : el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' : (el.type || 'text'),
     required:     el.required || el.getAttribute('aria-required') === 'true' || !!el.closest('.required') || !!el.closest('.formline')?.querySelector('.required-mark'),
     autocomplete: (el.getAttribute('autocomplete') || '').replace(/^(on|off)$/, ''),
     hint:         getHint(el),
@@ -194,6 +198,10 @@ function groupIntoSections(formEl) {
         if (seenRadio.has(node.name)) return;
         seenRadio.add(node.name);
       }
+      const info = extractField(node); if (info) current.fields.push(info); return;
+    }
+    // Custom-Widgets (div[role=combobox], contenteditable) sind selbst das Feld
+    if (isAriaCombobox(node) || isRichTextField(node)) {
       const info = extractField(node); if (info) current.fields.push(info); return;
     }
     Array.from(node.children).forEach(walk);
@@ -293,7 +301,7 @@ function extractRichContext() {
   };
   let formEls = Array.from(document.querySelectorAll('form'));
   if (formEls.length === 0) {
-    const loose = Array.from(document.querySelectorAll('input:not([type=hidden]),select,textarea'))
+    const loose = Array.from(document.querySelectorAll('input:not([type=hidden]),select,textarea,[role="combobox"],[contenteditable="true"]'))
       .filter(el => !el.closest('nav,header,footer,[role=search],[role=navigation]'));
     if (loose.length > 0) formEls = [document.body];
   }
@@ -311,7 +319,7 @@ function extractRichContext() {
       if (!doc || doc === document) return;
       let iframeFormEls = Array.from(doc.querySelectorAll('form'));
       if (iframeFormEls.length === 0) {
-        const loose = doc.querySelectorAll('input:not([type=hidden]),select,textarea');
+        const loose = doc.querySelectorAll('input:not([type=hidden]),select,textarea,[role="combobox"],[contenteditable="true"]');
         if (loose.length > 0) iframeFormEls = [doc.body];
       }
       iframeFormEls.forEach(formEl => {
@@ -342,7 +350,7 @@ function extractRichContext() {
       try {
         let srForms = Array.from(shadowRoot.querySelectorAll('form'));
         if (!srForms.length) {
-          const loose = shadowRoot.querySelectorAll('input:not([type=hidden]),select,textarea');
+          const loose = shadowRoot.querySelectorAll('input:not([type=hidden]),select,textarea,[role="combobox"],[contenteditable="true"]');
           if (loose.length > 0) srForms = [shadowRoot];
         }
         srForms.forEach(formEl => {
@@ -373,6 +381,10 @@ function getFieldValueBrief(el) {
     return opt && el.value ? clean(opt.text) : '';
   }
   if (type === 'password' || type === 'file') return '';
+  // Custom-Widgets tragen ihren Wert im Textinhalt, nicht in .value
+  if (isRichTextField(el) || (isAriaCombobox(el) && el.tagName !== 'INPUT')) {
+    return clean(el.textContent || '').slice(0, 60);
+  }
   return clean(String(el.value || '')).slice(0, 60);
 }
 

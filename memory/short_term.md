@@ -39,7 +39,7 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 - Agent-Resume-Status in `chrome.storage.session` (`faAgentResume`)
 - **15** Standard-Profilfelder (`PROFILE_FIELDS`) + freie `faExtras`
 - Automatischer Fallback: Groq 429/5xx → OpenRouter (Toast im Sidebar)
-- Unit-Tests: Vitest in `tests/unit/` (118 Tests, ~79 % Branch-Coverage der Logik-Module), CI via GitHub Actions; Icons in `icons/`
+- Unit-Tests: Vitest in `tests/unit/` (133 Tests, ~77 % Branch-Coverage der Logik-Module), CI via GitHub Actions; Icons in `icons/`
 
 ## Implementierte Features
 
@@ -47,6 +47,7 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 
 - **Zwei Modi:** Automatisch (`context`, Standard) und Mit Vorschau (`classic`)
 - **Automatisch:** `extras` + `sessionAnswers` zuerst direkt per Label-Match (kein API-Call); unbekannte Felder werden gebatcht (Chunks à 12, 1 JSON-Call, Einzelfeld-Fallback bei Parse-Fehler — Stand 2026-06-11); `ask` nur bei wirklich unbekanntem Wert
+- **Rückfragen-Drosselung (2026-07-05):** `ask` nur noch für Pflichtfelder oder ungültige Felder; unbekannte optionale Felder → `agentState.skippedOptional`, leer gelassen, Sammelhinweis in `agentDoneMessage()`; gleiche Regel im Vorschau-Modus-Prompt (`action="ask"` nur Pflichtfelder)
 - **Mit Vorschau:** Batch-Prompt → Streaming → editierbare Vorschau → User bestätigt
 - `applyDeterministicProfileFill()` — starke Profil-Matches werden immer direkt gefüllt (kein API-Call)
 - `AGENT_AUTO_SELECT_CONFIDENCE = 0.82` — unter diesem Wert kein Auto-Select in Vorschau
@@ -72,6 +73,8 @@ Das Content-Script ist modular (Manifest-Ladereihenfolge: `fa-utils` → `fa-pro
 - Datepicker-Support: Flatpickr, Pikaday, jQuery UI, Bootstrap DateTimePicker
 - Radio-Button-Fix: `click()` statt `checked = true` (React/Vue-Kompatibilität)
 - Robustes Füllen (2026-07-05, `fa-fill.js`): priorisiertes Select-Matching (`findSelectOption`: exakt → Wortanfang → enthält ab 3 Zeichen), `<select multiple>` per Kommaliste, deutsches Dezimalkomma für `type=number` (`normalizeDecimalString`), `maxlength`-Kappung
+- **Custom-Widgets (2026-07-07):** ARIA-Comboboxen (`isAriaCombobox` in `fa-utils`) — Wert tippen bzw. Widget öffnen, Optionen via `aria-controls`/`aria-owns`/Portale finden (`findAriaOptions`), besten Treffer per pointerdown→mousedown→mouseup→click wählen (`fillAriaCombobox`, async → `await fillField(...)` an Verifikations-Stellen); bewusst KEIN synthetisches Enter (Submit-Guardrail). contenteditable-Rich-Text via `fillRichText` (execCommand + textContent-Fallback, Typ `richtext`). Scanner erfasst beide (`groupIntoSections`, loose-Selektoren, Wert via `textContent`)
+- Framework-treues Füllen (2026-07-07): focus vor / blur nach dem Setzen (on-blur-Validierung), Agent scrollt Felder vor dem Füllen in den Viewport, Event-`view` aus `ownerDocument` (iFrame-korrekt); während Agent-Läufen keine Fokus-Tipps/Einzelfeld-KI-Hilfe (`agentState.active`-Guards)
 
 ### Profil & Daten
 

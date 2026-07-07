@@ -409,3 +409,50 @@ Ziel "funktioniert auf allen Webseiten, keine Fehl-Befüllungen". Analyse fand f
 - 20 neue Unit-Tests (Fehl-Match-Schutz, Shadow-Labels, Tabellen-Labels, Select-Priorität, Dezimalkomma, maxlength, Multi-Select, verschachtelte Shadow Roots) — Suite: 118 grün
 - `extractRichContext` ist jetzt exportiert und testbar
 - Verhalten leicht strenger: Felder, die vorher nur per Substring-Zufall matchten, gehen jetzt an die KI statt ans Profil (gewollt: lieber fragen als falsch füllen)
+
+---
+
+## [2026-07-05] Entscheidung: Rückfragen nur bei Pflichtfeldern ("lieber leer lassen als fragen")
+
+**Kontext:**
+Der Field-by-Field-Agent stellte für JEDES Feld ohne ableitbaren Wert eine Chip-Frage ("Was soll ich bei "Middle Name" eintragen?"). Bei langen Formularen mit vielen optionalen Feldern wurde das als nervig empfunden (Nutzer-Feedback 05.07.).
+
+**Entscheidung:**
+`ask` wird nur noch erzeugt, wenn das Feld **Pflichtfeld** ist oder die Seite es als **ungültig** markiert (Korrektur-Runde/Manual-Assist unverändert — ungültige Felder blockieren den Submit). Unbekannte optionale Felder werden still leer gelassen (`agentState.skippedOptional`), im Agent-Log mit "·" markiert und in `agentDoneMessage()` als EIN Sammelhinweis genannt ("… leer gelassen: „Middle Name", … — sag mir einfach, was ich dort eintragen soll"). Dieselbe Regel steht jetzt im Vorschau-Modus-Prompt (action="ask" NUR Pflichtfelder).
+
+**Alternativen:**
+
+- Alle Fragen am Ende bündeln, aber trotzdem stellen: weiterhin N Interaktionen, löst das Problem nicht
+- Einstellbare Option ("Auch Optionales erfragen"): mehr UI-Komplexität ohne erkennbaren Bedarf; der Sammelhinweis hält den Weg offen (Chat-Antwort füllt das Feld direkt)
+
+**Konsequenzen:**
+
+- Formulare ohne `required`-Markierung: Agent fragt zunächst nichts; blockierende Felder fallen bei der Navigation auf (checkValidity/Seitenfehler → Korrektur-Runde → gezielte Frage). Bewusster Trade-off.
+- `getUnresolvedFieldCandidates()` (Manual-Assist) fragte schon immer nur Pflicht/ungültig — Verhalten ist jetzt konsistent.
+
+---
+
+## [2026-07-07] Entscheidung: Custom-Widget-Support — ARIA-Comboboxen & contenteditable, Option-Klick statt Enter
+
+**Kontext:**
+Ziel "Agent funktioniert auf jeder Seite / jedem Formular". Größte verbleibende Lücke: moderne Framework-Widgets ohne native Elemente — React-Select/MUI/Headless-UI-Dropdowns (`role="combobox"`) und Rich-Text-Editoren (`contenteditable`) wurden weder erkannt noch befüllt.
+
+**Entscheidung:**
+
+1. **Erkennung in `fa-utils`** (`isAriaCombobox`, `isRichTextField`), damit Scanner UND Fill dieselbe Definition nutzen (Layering: utils → scanner → fill). Scanner erfasst beide Typen (`combobox`/`richtext`) inkl. Wert-Lesen über `textContent`.
+2. **Combobox-Füllen** (`fillAriaCombobox`, async): Wert tippen (INPUT) bzw. Widget per Klick öffnen (div), bis 350 ms auf die Options-Liste warten (`aria-controls`/`aria-owns`, sonst Portale unter `document.body`), besten Treffer mit derselben Prioritätslogik wie `findSelectOption` wählen und per realistischer Event-Sequenz (pointerdown→mousedown→mouseup→click) anklicken.
+3. **Bewusst KEIN synthetisches Enter** als Fallback: Site-JS könnte Enter als Submit interpretieren — verletzt die "niemals automatisch absenden"-Guardrail. Ohne Treffer: Escape (Liste schließen), getippter Text bleibt stehen, Korrektur-Runde/Rückfrage fängt den Rest.
+4. **`fillField` bleibt synchron für native Felder, liefert für Comboboxen ein Promise** — alle Stellen mit Sofort-Verifikation (`isActionApplied`) await'en jetzt (`applyAgentValue`, `fillFieldVerified`, Chat-/Guided-/Agent-Executor, Korrektur-Runde).
+5. **Framework-treues Füllen**: focus vor dem Setzen, blur danach (löst on-blur-Validierung aus → Korrektur-Runde sieht Fehler sofort); Agent scrollt jedes Feld vor dem Füllen in den Viewport (lazy/virtualisierte Formulare); Event-`view` aus `el.ownerDocument.defaultView` statt `window` (Bug wäre in iFrames aufgetreten — im jsdom-Test entdeckt). Während Agent-Läufen sind Fokus-Tipp und Einzelfeld-KI-Fehlerhilfe deaktiviert (`agentState.active`-Guards) — die Korrektur-Runde übernimmt.
+
+**Alternativen:**
+
+- Keyboard-Simulation (ArrowDown+Enter) statt Option-Klick: verbreitet, aber Enter-Risiko (Submit) und fragiler bei virtualisierten Listen
+- `dispatchEvent(new Event('click'))` statt Maus-Sequenz: React-Select reagiert auf mousedown — einfacher Click reicht nachweislich nicht
+- contenteditable nur per `textContent`: zerstört den internen State von ProseMirror/Slate — `execCommand('insertText')` zuerst, `textContent` als Fallback
+
+**Konsequenzen:**
+
+- +15 Unit-Tests (Detektoren, `pickOptionByText`, Combobox-Fill mit/ohne Treffer, MUI-div-Muster, Rich-Text, Scanner-Erfassung) — Suite: 133 grün, Branch-Coverage ~77 %
+- `fillField`-Aufrufer ohne Verifikation (z. B. Autofill-Tipp) funktionieren unverändert (Promise wird ignoriert, Wert ist synchron gesetzt)
+- Grenzen unverändert dokumentiert: closed Shadow Roots, Cross-Origin-iFrames, nativer PDF-Viewer

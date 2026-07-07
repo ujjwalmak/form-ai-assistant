@@ -18,11 +18,12 @@ npm test           # alle Tests
 npm run coverage   # Tests + Abdeckungsbericht
 ```
 
-- **118 Tests** in `tests/unit/` für `fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`,
-  `background` — Branch-Coverage 78,93 % (~79 %) der Logik-Module.
+- **133 Tests** in `tests/unit/` für `fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`,
+  `background` — Branch-Coverage ~77 % der Logik-Module.
 - Abgedeckt sind u. a. Live-Validatoren (IBAN/BIC/E-Mail/PLZ/Telefon/Geburtsdatum),
   Fehl-Match-Schutz, Shadow-DOM-Labels, Tabellen-Labels, Select-Priorität,
-  Mehrfachauswahl, Dezimalkomma, `maxlength` und Provider-/Fallback-Helfer.
+  Mehrfachauswahl, Dezimalkomma, `maxlength`, ARIA-Comboboxen (React-Select-/MUI-Muster),
+  contenteditable-Rich-Text und Provider-/Fallback-Helfer.
 - **CI:** `.github/workflows/test.yml` führt die Suite bei jedem Push/PR aus (Regression).
 - Bewusst nicht unit-getestet: Netzwerk-I/O, DOM-Orchestrierung in `content.js`, CSS —
   Kandidaten für E2E (siehe [Testing Plan](reference/testing-plan.md)).

@@ -13,7 +13,7 @@ Diese Seite fasst den Kursstand zusammen. Die ausführliche, laufend gepflegte Q
 | E5 | Deployment & CI/CD | ➖ erlassen |
 | E6 | LLM-APIs (Groq + OpenRouter) | ✅ |
 | E7 | Zwischenpräsentation | ✅ |
-| E8 | Testen & Debuggen (118 Tests, CI) | ✅ |
+| E8 | Testen & Debuggen (133 Tests, CI) | ✅ |
 | E9 | Orchestrierung (Doku-Agent) | ✅ |
 | E10 | Stakeholder-Interaktion (diese Webseite) | ✅ |
 | E11 | Model Context Protocol (MCP) | ✅ Konzept (kein neuer Pflichtpunkt) |
@@ -47,7 +47,10 @@ Zwei Aspekte tragen diese Entscheidung:
 - Erweiterter Submit-Review mit Logik-Check auf Widersprüche zwischen Feldern.
 - Robustere Formularerkennung: verschachtelte Shadow Roots, same-origin iFrames,
   Tabellen-Labels, Fehl-Match-Schutz und priorisiertes Select-Matching.
-- Tests verifiziert am 05.07.2026: **118/118 grün**, Branch-Coverage 78,93 % (~79 %).
+- Custom-Widget-Support (07.07.): ARIA-Comboboxen (React-Select, MUI …) und
+  contenteditable-Rich-Text-Felder werden erkannt und ausgefüllt; Rückfragen nur noch
+  bei Pflichtfeldern (optionale Felder werden leer gelassen und gesammelt gemeldet).
+- Tests verifiziert am 07.07.2026: **133/133 grün**, Branch-Coverage ~77 %.
 
 ## Ausblick
 
