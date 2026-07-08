@@ -1,21 +1,21 @@
 'use strict';
 
 const PROFILE_FIELDS = [
-  { key: 'firstName',   label: 'Vorname',          ac: ['given-name'],                     kw: ['vorname','first name','given name','firstname'] },
-  { key: 'lastName',    label: 'Nachname',          ac: ['family-name'],                    kw: ['nachname','familienname','last name','surname','lastname'] },
-  { key: 'email',       label: 'E-Mail',            ac: ['email'],                          kw: ['email','e-mail','mail'] },
-  { key: 'phone',       label: 'Telefon',           ac: ['tel'],                            kw: ['telefon','handy','mobil','rufnummer','phone','tel'] },
-  { key: 'birthdate',   label: 'Geburtsdatum',      ac: ['bday'],                           kw: ['geburtstag','geburtsdatum','geboren','birthdate','birthday','birth date'] },
-  { key: 'birthplace',  label: 'Geburtsort',        ac: [],                                 kw: ['geburtsort','birthplace','birth city','birth place'] },
-  { key: 'nationality', label: 'Nationalität',      ac: [],                                 kw: ['nationalität','staatsangehörigkeit','nationality','citizenship'] },
-  { key: 'street',      label: 'Straße + Nr.',      ac: ['street-address','address-line1'], kw: ['straße','adresse','street','address'] },
-  { key: 'zip',         label: 'Postleitzahl',      ac: ['postal-code'],                    kw: ['plz','postleitzahl','zip','postal'] },
-  { key: 'city',        label: 'Stadt',             ac: ['address-level2'],                 kw: ['stadt','wohnort','ort','city','town'] },
-  { key: 'country',     label: 'Land',              ac: ['country','country-name'],         kw: ['land','country'] },
-  { key: 'iban',        label: 'IBAN',              ac: [],                                 kw: ['iban'] },
-  { key: 'bic',         label: 'BIC',               ac: [],                                 kw: ['bic','swift'] },
-  { key: 'company',     label: 'Unternehmen',       ac: ['organization'],                   kw: ['firma','unternehmen','company','organization','organisation'] },
-  { key: 'jobTitle',    label: 'Berufsbezeichnung', ac: ['organization-title'],             kw: ['beruf','position','job title','berufsbezeichnung'] },
+  { key: 'firstName',   label: 'Vorname',          group: 'person',  ac: ['given-name'],                     kw: ['vorname','first name','given name','firstname'] },
+  { key: 'lastName',    label: 'Nachname',          group: 'person',  ac: ['family-name'],                    kw: ['nachname','familienname','last name','surname','lastname'] },
+  { key: 'email',       label: 'E-Mail',            group: 'contact', ac: ['email'],                          kw: ['email','e-mail','mail'] },
+  { key: 'phone',       label: 'Telefon',           group: 'contact', ac: ['tel'],                            kw: ['telefon','handy','mobil','rufnummer','phone','tel'] },
+  { key: 'birthdate',   label: 'Geburtsdatum',      group: 'person',  ac: ['bday'],                           kw: ['geburtstag','geburtsdatum','geboren','birthdate','birthday','birth date'] },
+  { key: 'birthplace',  label: 'Geburtsort',        group: 'person',  ac: [],                                 kw: ['geburtsort','birthplace','birth city','birth place'] },
+  { key: 'nationality', label: 'Nationalität',      group: 'person',  ac: [],                                 kw: ['nationalität','staatsangehörigkeit','nationality','citizenship'] },
+  { key: 'street',      label: 'Straße + Nr.',      group: 'address', ac: ['street-address','address-line1'], kw: ['straße','adresse','street','address'] },
+  { key: 'zip',         label: 'Postleitzahl',      group: 'address', ac: ['postal-code'],                    kw: ['plz','postleitzahl','zip','postal'] },
+  { key: 'city',        label: 'Stadt',             group: 'address', ac: ['address-level2'],                 kw: ['stadt','wohnort','ort','city','town'] },
+  { key: 'country',     label: 'Land',              group: 'address', ac: ['country','country-name'],         kw: ['land','country'] },
+  { key: 'iban',        label: 'IBAN',              group: 'bank',    ac: [],                                 kw: ['iban'] },
+  { key: 'bic',         label: 'BIC',               group: 'bank',    ac: [],                                 kw: ['bic','swift'] },
+  { key: 'company',     label: 'Unternehmen',       group: 'job',     ac: ['organization'],                   kw: ['firma','unternehmen','company','organization','organisation'] },
+  { key: 'jobTitle',    label: 'Berufsbezeichnung', group: 'job',     ac: ['organization-title'],             kw: ['beruf','position','job title','berufsbezeichnung'] },
 ];
 
 const FAKE_DATA = {

@@ -351,6 +351,25 @@ const FA_CSS = `
       .ap-field-list.open { max-height: 230px; padding-top: 10px; }
       .ap-field-list .field-list { max-height: 220px; margin-top: 0; }
 
+      /* ── Optionen: eingeklappte Einstellungen (Modus + Auto-Nav) ── */
+      .ap-options-toggle {
+        display: flex; align-items: center; gap: 7px;
+        width: 100%; margin-top: 10px; padding: 8px 11px;
+        border: 1px solid var(--border); border-radius: 11px;
+        background: var(--surface); color: var(--text2);
+        font: 600 11.5px/1 var(--font); cursor: pointer;
+        box-shadow: var(--shadow-sm);
+        transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.12s var(--spring);
+      }
+      .ap-options-toggle:hover { border-color: var(--accent-b); background: var(--accent-l); color: var(--accent); }
+      .ap-options-toggle:active { transform: scale(0.99); }
+      .ap-options-toggle:focus-visible { outline: none; box-shadow: var(--focus); }
+      .ap-options-gear { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; flex-shrink: 0; }
+      .ap-options-caret { width: 14px; height: 14px; margin-left: auto; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; fill: none; flex-shrink: 0; transition: transform 0.25s var(--spring); }
+      .ap-options-toggle.open .ap-options-caret { transform: rotate(180deg); }
+      .ap-options { overflow: hidden; max-height: 0; transition: max-height 0.32s var(--spring); }
+      .ap-options.open { max-height: 170px; }
+
       .ap-mode-select-row { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
       .ap-select {
         width: 100%; height: 35px;
@@ -378,12 +397,9 @@ const FA_CSS = `
       .ap-toggle input:checked ~ .ap-toggle-thumb { transform: translateX(18px); }
 
       .trust-row {
-        display: flex; align-items: center; gap: 8px;
-        margin-top: 10px; padding: 8px 11px;
-        border-radius: 11px; background: var(--surface);
-        border: 1px solid var(--border);
-        color: var(--text3); font: 500 11px/1.35 var(--font);
-        box-shadow: var(--shadow-sm);
+        display: flex; align-items: center; gap: 7px;
+        margin-top: 11px; padding: 0 3px;
+        color: var(--text3); font: 500 10.5px/1.35 var(--font);
       }
       .trust-dot {
         width: 7px; height: 7px; border-radius: 50%;
@@ -626,6 +642,13 @@ const FA_CSS = `
       .profile-grid::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 999px; }
       .pf { display: flex; flex-direction: column; gap: 4px; }
       .pf.full { grid-column: 1 / -1; }
+      .pf-group-hdr {
+        grid-column: 1 / -1;
+        font-size: 10px; font-weight: 800; color: var(--text3);
+        text-transform: uppercase; letter-spacing: 0.8px;
+        padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--border);
+      }
+      .pf-group-hdr:first-child { padding-top: 2px; margin-top: 0; border-top: none; }
       .pf label { font-size: 10.5px; color: var(--text3); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .pf input {
         width: 100%; min-width: 0; font-family: var(--font); font-size: 12.5px;
@@ -636,7 +659,7 @@ const FA_CSS = `
       .pf input:focus { border-color: var(--accent); box-shadow: var(--focus); }
       .profile-actions {
         padding: 10px 18px; border-top: 1px solid var(--border);
-        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; flex-shrink: 0;
+        display: flex; flex-direction: column; gap: 7px; flex-shrink: 0;
       }
       .profile-actions button {
         min-width: 0; padding: 8px; border-radius: 10px; font-size: 11.5px; font-weight: 600;
@@ -646,10 +669,11 @@ const FA_CSS = `
       }
       .profile-actions button:hover { color: var(--text); border-color: var(--text3); transform: translateY(-1px); }
       .profile-actions button:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--accent-b); }
-      .profile-actions .btn-primary { background: var(--grad); color: #fff; border-color: transparent; box-shadow: 0 5px 14px -4px rgba(168,85,247,0.55); }
-      .profile-actions .btn-danger { color: var(--danger); border-color: var(--danger); }
-      .profile-actions .btn-danger:hover { background: var(--danger-l); color: var(--danger); }
+      .profile-actions .btn-primary { width: 100%; padding: 11px; font-size: 12.5px; background: var(--grad); color: #fff; border-color: transparent; box-shadow: 0 5px 14px -4px rgba(168,85,247,0.55); }
+      .profile-actions .btn-primary:hover { color: #fff; border-color: transparent; transform: translateY(-1px); box-shadow: 0 7px 18px -4px rgba(168,85,247,0.65); }
       .profile-actions .btn-io { color: var(--accent); border-color: var(--accent-b); background: var(--accent-l); }
+      /* Utility-Zeile (Fake · Export · Import) */
+      .pf-actions-util { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
 
       /* ── Profile switcher ── */
       .pf-switcher { display: flex; align-items: center; gap: 6px; padding: 10px 18px 0; flex-shrink: 0; }
@@ -920,7 +944,6 @@ const FA_CSS = `
         .messages, .profile-grid { padding-left: 14px; padding-right: 14px; }
         .input-area, .profile-actions { padding-left: 14px; padding-right: 14px; }
         .profile-hdr { padding-left: 14px; padding-right: 14px; }
-        .profile-actions { grid-template-columns: 1fr; }
       }
 
       /* ── Accessibility: respect reduced-motion ── */

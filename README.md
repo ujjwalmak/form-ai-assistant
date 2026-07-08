@@ -32,8 +32,8 @@ Alle UI-Elemente laufen isoliert in `attachShadow({ mode: 'open' })` (kein CSS-K
 - **Chat-Gedächtnis**: Konversationen werden pro Domain gespeichert (`faChatMem`, max. 24 Nachrichten, 12 Domains LRU) und beim nächsten Seitenaufruf wiederhergestellt — der Agent erinnert sich über Seitenwechsel und Sessions hinweg
 - **Live-Kontext**: Vor jeder Chat-Anfrage wird die Seite neu gescannt — die KI sieht aktuelle Feldwerte, Selektoren und Validierungszustand
 - **Selbstkorrektur**: Nach dem automatischen Ausfüllen prüft der Agent Validierungsfehler und korrigiert ungültige Felder eigenständig (eine Runde, inkl. Fehlermeldung der Seite im Prompt); erst danach fragt er den Nutzer
-- **Automatisch** (Standard): Feld-für-Feld — Profile + gelernte Extras direkt, KI nur für wirklich unbekannte Felder, fragt gezielt nach wenn nötig
-- **Mit Vorschau**: editierbare Vorschau vor jeder Ausfuehrung
+- **Mit Vorschau** (Standard): editierbare Vorschau vor jeder Ausfuehrung
+- **Automatisch**: Feld-für-Feld — Profile + gelernte Extras direkt, KI nur für wirklich unbekannte Felder, fragt gezielt nach wenn nötig
 
 #### Automatischer Modus (Field-by-Field)
 
@@ -136,7 +136,8 @@ Alle Requests laufen via `background.js` (Service Worker) als CSP-sicheres Routi
 | `faGroqApiKey` | sync | Groq API-Key |
 | `faOpenRouterApiKey` | sync | OpenRouter API-Key |
 | `faModel` | sync | Gewaehltes Modell |
-| `faAssistantMode` | sync | `'context'` (Standard) oder `'classic'` |
+| `faAssistantMode` | sync | `'classic'` (Standard, „Mit Vorschau") oder `'context'` |
+| `faAutoNavigate` | sync | Boolean — „Automatisch weiterklicken" (Standard `true`) |
 | `faSupabaseUrl` | sync | Supabase Project-URL (optionaler Sync) |
 | `faSupabaseKey` | sync | Supabase Anon-Key (optionaler Sync) |
 | `faProfiles` | local | Array aller Profile `[{id, name, profile, extras}]` |

@@ -4,7 +4,8 @@
   let _model    = 'llama-3.3-70b-versatile';
   let _apiKey   = '';
   let _provider = 'groq';
-  let _assistantMode = 'context';
+  let _assistantMode = 'classic';
+  let _autoNavigate = true;
   let _keyPromise = null;
   let _onProviderFallback = null;
   function normalizeProvider(value) {
@@ -18,8 +19,8 @@
   }
   function normalizeAssistantMode(value) {
     const v = String(value || '').toLowerCase();
-    if (v === 'classic') return 'classic';
-    return 'context';
+    if (v === 'context') return 'context';
+    return 'classic'; // Default: „Mit Vorschau"
   }
   function loadKey() {
     if (_apiKey) return Promise.resolve(_apiKey);
@@ -97,10 +98,11 @@
   // INIT — load storage before building UI
   // ═══════════════════════════════════════════════════════════════════════
 
-  chrome.storage.sync.get(['faModel', 'faAssistantMode', 'faProvider'], syncStored => {
+  chrome.storage.sync.get(['faModel', 'faAssistantMode', 'faProvider', 'faAutoNavigate'], syncStored => {
     _provider = normalizeProvider(syncStored.faProvider);
     _model = syncStored.faModel || getDefaultModel(_provider);
     _assistantMode = normalizeAssistantMode(syncStored.faAssistantMode);
+    _autoNavigate = syncStored.faAutoNavigate !== false; // Default an, sonst gespeicherter Wert
 
   chrome.storage.local.get(['faProfile', 'faPosition', 'faDarkMode', 'faExtras', 'faProfiles', 'faActiveProfileId', 'faHistory'], stored => {
     // ── Profile state ────────────────────────────────────────────────────
@@ -199,20 +201,27 @@
           <div class="ap-field-list" id="fa-ap-field-list">
             <div class="field-list" id="fa-ap-field-inner"></div>
           </div>
-          <div class="ap-mode-select-row">
-            <label class="ap-mode-label" for="fa-assistant-mode">Assistent-Modus</label>
-            <select class="ap-select" id="fa-assistant-mode">
-              <option value="context">Automatisch (empfohlen)</option>
-              <option value="classic">Mit Vorschau</option>
-            </select>
-          </div>
-          <div class="ap-mode-row">
-            <span class="ap-mode-label">Automatisch weiterklicken</span>
-            <label class="ap-toggle">
-              <input type="checkbox" id="fa-auto-nav" checked>
-              <span class="ap-toggle-track"></span>
-              <span class="ap-toggle-thumb"></span>
-            </label>
+          <button class="ap-options-toggle" id="fa-ap-options-toggle" type="button" aria-expanded="false" aria-controls="fa-ap-options">
+            <svg class="ap-options-gear" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+            <span>Optionen</span>
+            <svg class="ap-options-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="ap-options" id="fa-ap-options">
+            <div class="ap-mode-select-row">
+              <label class="ap-mode-label" for="fa-assistant-mode">Assistent-Modus</label>
+              <select class="ap-select" id="fa-assistant-mode">
+                <option value="classic">Mit Vorschau (empfohlen)</option>
+                <option value="context">Automatisch</option>
+              </select>
+            </div>
+            <div class="ap-mode-row">
+              <span class="ap-mode-label">Automatisch weiterklicken</span>
+              <label class="ap-toggle">
+                <input type="checkbox" id="fa-auto-nav" checked>
+                <span class="ap-toggle-track"></span>
+                <span class="ap-toggle-thumb"></span>
+              </label>
+            </div>
           </div>
           <div class="guided-progress" id="fa-guided-progress" style="display:none">
             <div class="gp-bar-wrap"><div class="gp-bar" id="fa-gp-bar"></div></div>
@@ -257,11 +266,11 @@
           <div class="profile-grid" id="fa-profile-grid"></div>
           <div class="profile-actions">
             <button class="btn-primary" id="fa-pf-save">Speichern</button>
-            <button id="fa-pf-fake">Fake-Daten</button>
-            <button id="fa-pf-fill">Formular ausfüllen</button>
-            <button class="btn-danger" id="fa-pf-clear">Löschen</button>
-            <button class="btn-io" id="fa-pf-export">↓ Export</button>
-            <button class="btn-io" id="fa-pf-import">↑ Import</button>
+            <div class="pf-actions-util">
+              <button id="fa-pf-fake">Fake-Daten</button>
+              <button class="btn-io" id="fa-pf-export">↓ Export</button>
+              <button class="btn-io" id="fa-pf-import">↑ Import</button>
+            </div>
           </div>
         </div>
         <div class="input-area">
@@ -344,19 +353,36 @@
     // PROFILE PANEL
     // ═══════════════════════════════════════════════════════════════════════
 
-    PROFILE_FIELDS.forEach(pf => {
-      const div = document.createElement('div');
-      div.className = 'pf' + (FULL_WIDTH_KEYS.has(pf.key) ? ' full' : '');
-      const lbl = document.createElement('label');
-      lbl.textContent = pf.label;
-      const inp = document.createElement('input');
-      inp.type = 'text';
-      inp.id = `fa-pf-${pf.key}`;
-      inp.value = profile[pf.key] || '';
-      inp.placeholder = pf.label;
-      div.appendChild(lbl);
-      div.appendChild(inp);
-      profileGrid.appendChild(div);
+    // Felder in scannbare Abschnitte gruppieren (Reihenfolge = PF_GROUPS).
+    // group-Zuordnung steht in fa-profile.js; unbekannte Gruppen landen unter „Person".
+    const PF_GROUPS = [
+      ['person',  'Person'],
+      ['address', 'Adresse'],
+      ['contact', 'Kontakt'],
+      ['bank',    'Bank'],
+      ['job',     'Beruf'],
+    ];
+    PF_GROUPS.forEach(([groupKey, groupLabel]) => {
+      const groupFields = PROFILE_FIELDS.filter(pf => (pf.group || 'person') === groupKey);
+      if (!groupFields.length) return;
+      const hdr = document.createElement('div');
+      hdr.className = 'pf-group-hdr';
+      hdr.textContent = groupLabel;
+      profileGrid.appendChild(hdr);
+      groupFields.forEach(pf => {
+        const div = document.createElement('div');
+        div.className = 'pf' + (FULL_WIDTH_KEYS.has(pf.key) ? ' full' : '');
+        const lbl = document.createElement('label');
+        lbl.textContent = pf.label;
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.id = `fa-pf-${pf.key}`;
+        inp.value = profile[pf.key] || '';
+        inp.placeholder = pf.label;
+        div.appendChild(lbl);
+        div.appendChild(inp);
+        profileGrid.appendChild(div);
+      });
     });
 
     function getProfileFromInputs() {
@@ -615,16 +641,6 @@
       updateProfileProgress();
     });
 
-    $('fa-pf-fill').addEventListener('click', () => { hideProfile(); startAgent(); });
-
-    $('fa-pf-clear').addEventListener('click', () => {
-      PROFILE_FIELDS.forEach(pf => delete profile[pf.key]);
-      loadProfileIntoInputs({});
-      SYSTEM = buildSystemPrompt(ctx, profile, extras);
-      saveActiveProfileToStore(() => showToast('Profil gelöscht'));
-      updateProfileProgress();
-    });
-
     $('fa-pf-export').addEventListener('click', () => {
       const data = { profile: { ...profile }, extras: { ...extras } };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -680,11 +696,17 @@
     let scanDataUrl = null;
 
     function buildScanPrompt() {
-      const keys = PROFILE_FIELDS.map(pf => `"${pf.key}" (${pf.label})`).join(', ');
+      const fieldList = PROFILE_FIELDS.map(pf => {
+        const syn = (pf.kw || []).slice(0, 5).join(', ');
+        return `- "${pf.key}" = ${pf.label}${syn ? ` (auch: ${syn})` : ''}`;
+      }).join('\n');
       return [
-        'Du bist ein präziser Dokument-Extraktor. Lies das Bild (z. B. Ausweis, Visitenkarte, Rechnung, Vertrag) und extrahiere Personendaten.',
-        `Antworte NUR mit einem JSON-Objekt ohne weiteren Text. Erlaubte Schlüssel: ${keys}.`,
-        'Nimm nur Schlüssel auf, deren Wert du sicher im Dokument liest — nichts raten, nichts erfinden.',
+        'Du bist ein präziser Dokument-Extraktor. Lies das Bild (z. B. Ausweis, Führerschein, Visitenkarte, Rechnung, Vertrag, Bank-/Girocard) und extrahiere ALLE sichtbaren Personen- und Bankdaten.',
+        'Gehe JEDEN dieser Schlüssel einzeln durch und trage ihn ein, wenn der Wert irgendwo im Bild steht — Vorder- ODER Rückseite, jede Sprache, auch klein gedruckt:',
+        fieldList,
+        'Antworte NUR mit einem JSON-Objekt ohne weiteren Text und nutze exakt diese Schlüssel.',
+        'Nimm nur Schlüssel auf, deren Wert du sicher im Dokument liest — nichts raten, nichts erfinden. Nicht vorhandene Felder einfach weglassen.',
+        'Auf Bank-/Girocards ist die IBAN die lange Nummer mit Ländercode am Anfang (z. B. „DE" + 20 Ziffern) → "iban" ohne Leerzeichen; der aufgedruckte Name ist der Karteninhaber. Eine 16-stellige Kreditkartennummer, das Ablaufdatum und die Prüfziffer (CVV/CVC) NICHT übernehmen.',
         'Datumsangaben im Format TT.MM.JJJJ. IBAN ohne Leerzeichen. Namen ohne Titel.',
       ].join('\n');
     }
@@ -2089,8 +2111,11 @@
       manualAssistState.pending = null;
       await sleep(200);
 
+      // Auto-Weiter nur wenn der Toggle „Automatisch weiterklicken" an ist.
+      // Sonst fällt es auf runAgentStep() zurück, das den Nav-Schritt über
+      // handleGuidedNavigation routet und dort den manuellen „Weiter"-Button zeigt.
       const formEl = el.form || stepInfo?.form || document.querySelector('form');
-      if (clickNextButtonIfReady(formEl)) {
+      if (agentState.autoNavigate && clickNextButtonIfReady(formEl)) {
         try {
           chrome.storage.session?.set?.({
             faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 },
@@ -2982,29 +3007,35 @@
         await sleep(350);
         el.click();
       } else {
-        // Show manual confirm button
-        const div = document.createElement('div');
-        div.className = 'msg ai';
-        const bubble = document.createElement('div');
-        bubble.className = 'bubble';
-        bubble.innerHTML = `<div style="margin-bottom:8px;font-size:13px;">Seite ausgefüllt — bereit für den nächsten Schritt.</div>`;
-        const btn = document.createElement('button');
-        btn.className = 'ap-primary';
-        btn.style.cssText = 'height:38px;font-size:12.5px;margin-top:4px;';
-        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${escapeHtml(navAction.label || 'Weiter')}`;
-        btn.addEventListener('click', async () => {
-          btn.disabled = true;
-          const el = resolveActionElement(navAction);
-          if (el) {
-            try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
-            el.click();
-          }
-        });
-        bubble.appendChild(btn);
-        div.appendChild(bubble);
-        messagesEl.appendChild(div);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        // Toggle „Automatisch weiterklicken" ist aus → manuellen Weiter-Button zeigen
+        showManualContinueButton(navAction, resumeData);
       }
+    }
+
+    // Manueller „Weiter"-Button (statt Auto-Klick), wenn der Toggle
+    // „Automatisch weiterklicken" aus ist. Von beiden Agent-Pfaden genutzt.
+    function showManualContinueButton(navAction, resumeData) {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = `<div style="margin-bottom:8px;font-size:13px;">Seite ausgefüllt — bereit für den nächsten Schritt.</div>`;
+      const btn = document.createElement('button');
+      btn.className = 'ap-primary';
+      btn.style.cssText = 'height:38px;font-size:12.5px;margin-top:4px;';
+      btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${escapeHtml(navAction.label || 'Weiter')}`;
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const el = resolveActionElement(navAction);
+        if (el) {
+          try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+          el.click();
+        }
+      });
+      bubble.appendChild(btn);
+      div.appendChild(bubble);
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     async function executeAgentActions(actions) {
@@ -3067,13 +3098,17 @@
         } else if (act.action === 'click' && el) {
           appendAgentRow('→', act.label || act.selector, '');
           if (act.isNavigation) {
-            try {
-              chrome.storage.session?.set?.({
-                faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 },
-              });
-            } catch {}
-            await sleep(200);
-            el.click();
+            const resumeData = { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 };
+            try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+            // „Automatisch weiterklicken" respektieren: nur bei aktivem Toggle
+            // selbst klicken, sonst manuellen „Weiter"-Button anbieten.
+            if (agentState.autoNavigate) {
+              await sleep(200);
+              el.click();
+            } else {
+              finalizeAgentBubble(filled);
+              showManualContinueButton(act, resumeData);
+            }
             return;
           } else {
             el.click();
@@ -3675,6 +3710,14 @@
       btn.classList.toggle('open', isOpen);
       if (isOpen) renderActionFieldList();
     });
+    $('fa-ap-options-toggle')?.addEventListener('click', () => {
+      const box = $('fa-ap-options');
+      const btn = $('fa-ap-options-toggle');
+      if (!box) return;
+      const open = box.classList.toggle('open');
+      btn.classList.toggle('open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
     $('fa-assistant-mode').addEventListener('change', e => {
       _assistantMode = normalizeAssistantMode(e.target.value);
       updateAssistantModeUi();
@@ -3682,6 +3725,15 @@
       const modeLabel = _assistantMode === 'classic' ? 'Mit Vorschau' : 'Automatisch';
       showToast(`Modus: ${modeLabel}`);
     });
+    // Auto-Nav-Toggle: gespeicherten Zustand anwenden + Änderungen persistieren
+    const autoNavCb = $('fa-auto-nav');
+    if (autoNavCb) {
+      autoNavCb.checked = _autoNavigate;
+      autoNavCb.addEventListener('change', e => {
+        _autoNavigate = e.target.checked;
+        chrome.storage.sync.set({ faAutoNavigate: _autoNavigate });
+      });
+    }
 
     // ── Keyboard shortcut relay from background ───────────────────────
     chrome.runtime.onMessage.addListener(msg => {
@@ -3712,6 +3764,11 @@
       if (changes.faAssistantMode) {
         _assistantMode = normalizeAssistantMode(changes.faAssistantMode.newValue);
         updateAssistantModeUi();
+      }
+      if (changes.faAutoNavigate) {
+        _autoNavigate = changes.faAutoNavigate.newValue !== false;
+        const cb = $('fa-auto-nav');
+        if (cb) cb.checked = _autoNavigate;
       }
     });
 
