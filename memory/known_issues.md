@@ -26,6 +26,19 @@ Agent/Chat sehen nur Hauptdokument und same-origin-iFrames.
 
 ---
 
+## Issue: Closed Shadow Roots sind nicht zugänglich
+
+**Problem:**
+Formularfelder in geschlossenen Web Components (`mode: "closed"`) können nicht gescannt werden.
+
+**Ursache:**
+Der Browser stellt keinen Zugriff auf den internen DOM-Baum bereit. Offene und verschachtelte Shadow Roots werden seit v2.1 rekursiv unterstützt.
+
+**Auswirkung:**
+Felder in closed Shadow Roots bleiben unsichtbar; der Agent kann sie nicht automatisch befüllen.
+
+---
+
 ## Issue: Datenschutz-/Consent-Lücke für Produktivbetrieb
 
 **Problem:**

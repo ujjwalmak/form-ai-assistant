@@ -464,6 +464,85 @@ Neue Vorlesung (MCP) gegen die Pflicht abgleichen und den Projektstatus aktualis
 
 ---
 
+## [2026-07-05] Demo-Feature-Paket v2.1: Live-Validierung, Logik-Check, Dokument-Scan
+
+**Ziel:**
+Extension für die Prototyp-Demo (09.07.) mit drei Backlog-Features schärfen — ohne Risiko für die Live-Demo.
+
+**Aktionen:**
+
+1. **Live-Validierung beim Tippen** (`fa-utils.js` + Wiring in `content.js`): deterministische Prüfungen (IBAN ISO-7064-mod-97 inkl. Länder-Sollängen, BIC, E-Mail, PLZ, Telefon, Geburtsdatum-Plausibilität), ✓/⚠-Badge in der Sidebar + Outline-Flash am Feld; tolerant beim Tippen, streng bei blur.
+2. **Pre-Submit-Logikprüfung**: Submit-Review-Prompt prüft jetzt Widersprüche zwischen Feldern (Logik-Check) und bekommt die deterministischen Ergebnisse als "Lokale Prüfung"-Fakten.
+3. **Dokument-Scan (Vision-OCR)** im Profil-Panel: Bild → Downscale 1400 px → Privacy-Bestätigung → Llama 4 Scout (Groq, verifizierte Modell-ID) → JSON → Profilfelder vorbefüllt mit Review-Pflicht. `background.js` unterstützt dafür ein request-eigenes `fallbackModel`.
+4. **Tests**: +29 Unit-Tests (Validatoren, Feld-Klassifizierung, Fallback-Model-Resolver) — Suite 98/98 grün, Branch-Coverage ~80 %.
+5. Doku nachgezogen: `README.md`, `Projektstand.md` (Backlog → umgesetzt), `memory/short_term.md`, `memory/decisions.md`; `manifest.json` auf v2.1.
+
+**Ergebnis:**
+
+- Drei sichtbare Demo-Features, alle offline-robust bzw. mit Fallback; keine Storage-Key- oder Architektur-Brüche.
+- Guardrails intakt: kein Auto-Submit, UI im Shadow Root, Netzwerk nur via `background.js`.
+
+---
+
+## [2026-07-05] Robustheits-Paket: Feld-Erkennung/-Befüllung auf breiter Webseiten-Basis gehärtet
+
+**Ziel:**
+Zuverlässigkeit auf möglichst allen Webseiten: alle Felder korrekt erkennen und befüllen, Fehl-Befüllungen ausschließen.
+
+**Aktionen:**
+
+1. **Shadow DOM/iFrames korrekt**: Label-/Hint-/Error-/Radio-Lookups über `getRootNode()` statt `document` (`byIdInRoot`); rekursiver Scan verschachtelter Shadow Roots; `isVisible` über `ownerDocument.defaultView`.
+2. **Fehl-Match-Schutz**: Profil-Keyword-Matching am Wortanfang statt Substring — behebt "Hotelname"→Telefon und "Sportart"/"Passwort"→Stadt, auch in `learnAgentFields` (dort drohte dauerhafte Profil-Korruption); Passwortfelder grundsätzlich ausgeschlossen; Compound-Keywords (`mobil`, `rufnummer`, `wohnort`, `geboren`) ergänzt.
+3. **Befüllung gehärtet** (`fa-fill.js`): priorisiertes Select-Matching (exakt vor Teilstring — "DE" greift nicht in "Niederlande"), `<select multiple>`, deutsches Dezimalkomma für Zahlenfelder, `maxlength`-Kappung.
+4. **Tabellen-Layouts**: linke Zelle als Label-Fallback (Behörden-/Legacy-Formulare).
+5. **Tests**: +20 Unit-Tests für alle Fixes — Suite 118/118 grün, Branch-Coverage ~79 %; `extractRichContext` exportiert.
+6. Doku nachgezogen: `README.md`, `Projektstand.md`, `memory/short_term.md`, `memory/decisions.md`.
+
+**Ergebnis:**
+
+- Erkennungs- und Befüllungspfad funktionieren jetzt auch in Web-Component-/iFrame-/Tabellen-Layouts; Fehl-Befüllungs-Klassen sind per Test abgesichert.
+- Bekannte, technisch bedingte Grenzen bleiben dokumentiert (Cross-Origin-iFrames, closed Shadow Roots, nativer PDF-Viewer — `memory/known_issues.md`).
+
+---
+
+## [2026-07-07] Projektwebseite: Startseite als Startup-Landing-Page ausgebaut
+
+**Ziel:**
+Die GitHub-Pages-Startseite soll wie die Landing-Page eines echten Startups wirken — innerhalb der bestehenden „Aurora Glass"-Designphilosophie (Violett→Fuchsia→Pink auf dunklem Glas).
+
+**Aktionen:**
+
+1. **Hero erweitert** (`docs/index.md`): Tagline-Headline statt reinem Produktnamen, plus reines CSS-Produkt-Mockup (Browserfenster mit Beispiel-Formular + FormAssist-Sidebar inkl. animiertem Tipp-Cursor und Fortschrittsbalken, `aria-hidden`).
+2. **Neue Sektionen**: Feature-Ticker (Marquee mit echten Fähigkeiten), „So funktioniert's" (3 nummerierte Schritte), Trust-Band „Sicherheit ist Architektur" (Kein Auto-Submit / Profil lokal / Datenminimierung), FAQ (5 Glas-Accordions), Abschluss-CTA-Panel; Sektions-Kicker + zentrierte Section-Heads.
+3. **CSS** (`docs/stylesheets/extra.css`): ~330 Zeilen neue Komponenten im bestehenden Token-System (`--fa-grad` etc.); alle neuen Animationen unter `prefers-reduced-motion` deaktiviert; Icons als SVG (Material-Shortcodes), keine Emojis.
+4. **Inhaltstreue**: keine erfundenen Zahlen/Testimonials — nur belegbare Aussagen (118 Tests, ~79 % Coverage, Submit-Guardrail, optionaler Supabase-Sync).
+
+**Ergebnis:**
+
+- `mkdocs build --strict` grün; Rendering per Headless-Chrome-Screenshots (Hero, Features, Trust, FAQ, CTA) visuell verifiziert; ein Markdown-Einrückungs-Bug im Mockup und ein harter Gradient-Rand im CTA wurden dabei gefunden und behoben.
+
+---
+
+## [2026-07-07] Custom-Widget-Support: ARIA-Comboboxen, Rich-Text, framework-treues Füllen
+
+**Ziel:**
+"Agent funktioniert auf jeder Seite": moderne Framework-Widgets (React-Select, MUI, contenteditable) erkennen und zuverlässig befüllen.
+
+**Aktionen:**
+
+1. Detektoren `isAriaCombobox`/`isRichTextField` in `fa-utils.js`; Scanner erfasst beide Typen (`combobox`/`richtext`) in Formularen und als lose Felder, Wert-Lesen via `textContent`.
+2. `fillAriaCombobox` (async) in `fa-fill.js`: tippen/öffnen → Options-Liste via `aria-controls`/`aria-owns`/Portale → bester Treffer per pointerdown→mousedown→mouseup→click. Kein synthetisches Enter (Submit-Guardrail). `fillRichText` mit execCommand + Fallback.
+3. `fillField` liefert für Comboboxen ein Promise; alle Verifikations-Stellen in `content.js` await'en jetzt. Fokus vor/Blur nach dem Setzen (on-blur-Validierung), Agent scrollt Felder in den Viewport, Guards gegen Tipp-/Fehlerhilfe-Spam während Agent-Läufen.
+4. Bugfix aus dem Test heraus: `MouseEvent`-`view` muss `el.ownerDocument.defaultView` sein, nicht `window` — wäre in same-origin iFrames fehlgeschlagen.
+5. +15 Unit-Tests → Suite **133/133 grün**, Branch-Coverage ~77 %. Doku nachgezogen (README, docs/-Webseite inkl. Stat-Kacheln, projektstand-vollstaendig, memory/, Persona QA).
+
+**Ergebnis:**
+
+- Erkennungs-/Füll-Pfad deckt jetzt native Felder, Kendo, Datepicker-Libs, ARIA-Comboboxen und contenteditable ab — über Shadow DOM, same-origin iFrames und Tabellen-Layouts hinweg.
+- Harte Grenzen bleiben dokumentiert (closed Shadow Roots, Cross-Origin-iFrames, nativer PDF-Viewer).
+
+---
+
 ## [2026-07-07] Abschlusspräsentation (Prototyp-Demo 09.07.) erstellt
 
 **Ziel:**

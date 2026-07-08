@@ -1,4 +1,4 @@
-const { fillField, normalizeTemporalValue } = require('../../fa-fill.js');
+const { fillField, normalizeTemporalValue, findSelectOption, normalizeDecimalString } = require('../../fa-fill.js');
 
 afterEach(() => { document.body.innerHTML = ''; });
 
@@ -72,5 +72,157 @@ describe('fillField', () => {
 
     expect(document.querySelector('input[value="w"]').checked).toBe(true);
     expect(document.querySelector('input[value="m"]').checked).toBe(false);
+  });
+});
+
+// ── Robustheit: Select-Priorität, Multi-Select, Zahlen, maxlength ────────────
+
+describe('findSelectOption — priorisierte Suche', () => {
+  function makeSelect(pairs, attrs = '') {
+    document.body.innerHTML = `<select ${attrs}>` +
+      pairs.map(([text, value]) => `<option value="${value}">${text}</option>`).join('') +
+      `</select>`;
+    return document.querySelector('select');
+  }
+
+  it('exakter Wert schlägt Teilstring — "DE" greift nicht in "Niederlande"', () => {
+    const sel = makeSelect([['Niederlande', 'NL'], ['Deutschland', 'DE']]);
+    expect(findSelectOption(sel.options, 'DE').value).toBe('DE');
+  });
+
+  it('exaktes Label schlägt Wortanfang', () => {
+    const sel = makeSelect([['Deutschland (alt)', 'x'], ['Deutschland', 'de']]);
+    expect(findSelectOption(sel.options, 'Deutschland').value).toBe('de');
+  });
+
+  it('Kürzel unter 3 Zeichen matchen nur exakt (kein Zufallstreffer)', () => {
+    const sel = makeSelect([['Niederlande', 'NL'], ['Belgien', 'BE']]);
+    expect(findSelectOption(sel.options, 'de')).toBeNull();
+  });
+
+  it('umgekehrtes Enthalten: "Herr Dr." findet Option "Herr"', () => {
+    const sel = makeSelect([['Frau', 'f'], ['Herr', 'm']]);
+    expect(findSelectOption(sel.options, 'Herr Dr.').value).toBe('m');
+  });
+
+  it('gibt null für leere Eingaben zurück', () => {
+    const sel = makeSelect([['Frau', 'f']]);
+    expect(findSelectOption(sel.options, '')).toBeNull();
+    expect(findSelectOption(sel.options, null)).toBeNull();
+  });
+});
+
+describe('normalizeDecimalString', () => {
+  it('wandelt deutsche Schreibweisen um', () => {
+    expect(normalizeDecimalString('1.234,56')).toBe('1234.56');
+    expect(normalizeDecimalString('3,5')).toBe('3.5');
+    expect(normalizeDecimalString('10.000')).toBe('10000');
+    expect(normalizeDecimalString('-1.234,5')).toBe('-1234.5');
+  });
+
+  it('lässt US-/ISO-Schreibweise und Nicht-Zahlen unangetastet (null)', () => {
+    expect(normalizeDecimalString('1234.56')).toBe(null);
+    expect(normalizeDecimalString('42')).toBe(null);
+    expect(normalizeDecimalString('abc')).toBe(null);
+  });
+});
+
+describe('fillField — Multi-Select, Zahlen, maxlength', () => {
+  it('wählt bei <select multiple> alle genannten Optionen', () => {
+    document.body.innerHTML =
+      `<select multiple>` +
+      `<option value="de">Deutsch</option><option value="en">Englisch</option><option value="fr">Französisch</option>` +
+      `</select>`;
+    const sel = document.querySelector('select');
+    fillField(sel, 'Deutsch, Englisch');
+    const selected = Array.from(sel.selectedOptions).map(o => o.value);
+    expect(selected).toEqual(['de', 'en']);
+  });
+
+  it('füllt type=number mit deutschem Dezimalkomma korrekt', () => {
+    document.body.innerHTML = `<input type="number" step="0.01" id="x">`;
+    const el = document.getElementById('x');
+    fillField(el, '1.234,56');
+    expect(el.value).toBe('1234.56');
+  });
+
+  it('kappt Text auf maxlength (programmatisches Setzen umgeht die Browser-Grenze)', () => {
+    document.body.innerHTML = `<input id="x" maxlength="5">`;
+    const el = document.getElementById('x');
+    fillField(el, 'München');
+    expect(el.value).toBe('Münch');
+  });
+});
+
+// ── ARIA-Combobox & Rich-Text ────────────────────────────────────────────────
+
+describe('pickOptionByText', () => {
+  function makeOptions(texts) {
+    document.body.innerHTML = `<ul role="listbox">` +
+      texts.map(t => `<li role="option">${t}</li>`).join('') + `</ul>`;
+    return Array.from(document.querySelectorAll('[role="option"]'));
+  }
+
+  it('exakter Text schlägt Teilstring', () => {
+    const opts = makeOptions(['Deutschland (veraltet)', 'Deutschland']);
+    expect(pickOptionByText(opts, 'Deutschland').textContent).toBe('Deutschland');
+  });
+
+  it('Kürzel unter 3 Zeichen matchen nur exakt', () => {
+    const opts = makeOptions(['Niederlande', 'Belgien']);
+    expect(pickOptionByText(opts, 'de')).toBeNull();
+    expect(pickOptionByText(makeOptions(['DE', 'AT']), 'de').textContent).toBe('DE');
+  });
+});
+
+describe('fillField — ARIA-Combobox (React-Select-Muster)', () => {
+  it('tippt den Wert und klickt die passende Option aus der aria-controls-Liste', async () => {
+    document.body.innerHTML =
+      `<input role="combobox" aria-controls="lb" id="c">` +
+      `<ul id="lb" role="listbox">` +
+      `<li role="option">Niederlande</li><li role="option">Deutschland</li>` +
+      `</ul>`;
+    const input = document.getElementById('c');
+    const chosen = [];
+    document.querySelectorAll('[role="option"]').forEach(o =>
+      o.addEventListener('click', () => { chosen.push(o.textContent); input.value = o.textContent; })
+    );
+    await fillField(input, 'Deutschland');
+    expect(chosen).toEqual(['Deutschland']);
+    expect(input.value).toBe('Deutschland');
+  });
+
+  it('lässt ohne passende Option den getippten Text stehen (kein Enter, kein Submit)', async () => {
+    document.body.innerHTML =
+      `<input role="combobox" aria-controls="lb" id="c">` +
+      `<ul id="lb" role="listbox"><li role="option">Frankreich</li></ul>`;
+    const input = document.getElementById('c');
+    await fillField(input, 'Xyz Fantasieland');
+    expect(input.value).toBe('Xyz Fantasieland');
+  });
+
+  it('div[role=combobox] (MUI-Muster): öffnen per Klick, Option wählen', async () => {
+    document.body.innerHTML =
+      `<div role="combobox" aria-controls="lb" id="c" tabindex="0"></div>` +
+      `<ul id="lb" role="listbox"><li role="option">Herr</li><li role="option">Frau</li></ul>`;
+    const combo = document.getElementById('c');
+    document.querySelectorAll('[role="option"]').forEach(o =>
+      o.addEventListener('click', () => { combo.textContent = o.textContent; })
+    );
+    await fillField(combo, 'Frau');
+    expect(combo.textContent).toBe('Frau');
+  });
+});
+
+describe('fillField — contenteditable (Rich-Text)', () => {
+  it('setzt den Text und feuert input/change', () => {
+    document.body.innerHTML = `<div contenteditable="true" id="rt"></div>`;
+    const el = document.getElementById('rt');
+    const events = [];
+    el.addEventListener('input', () => events.push('input'));
+    el.addEventListener('change', () => events.push('change'));
+    fillField(el, 'Sehr geehrte Damen und Herren,');
+    expect(el.textContent).toBe('Sehr geehrte Damen und Herren,');
+    expect(events).toEqual(['input', 'change']);
   });
 });

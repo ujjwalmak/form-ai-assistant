@@ -22,6 +22,13 @@ const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 // Fallback model used when Groq is rate-limited and we switch to OpenRouter
 const OPENROUTER_FALLBACK_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
+// Requests can carry their own fallback model (e.g. vision requests must not
+// fall back to the text-only default model)
+function resolveFallbackModel(requested) {
+  const m = String(requested || '').trim();
+  return m || OPENROUTER_FALLBACK_MODEL;
+}
+
 // Map legacy/invalid OpenRouter model IDs to real ones
 const OPENROUTER_MODEL_REMAP = {
   'openrouter/free': 'openrouter/auto',
@@ -145,7 +152,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const stored = await getStoredSync(['faOpenRouterApiKey']);
       const fbKey = String(stored.faOpenRouterApiKey || '').trim();
       if (fbKey) {
-        const fbBody = { ...body, model: OPENROUTER_FALLBACK_MODEL };
+        const fbBody = { ...body, model: resolveFallbackModel(msg.fallbackModel) };
         res = await fetchProviderWithRetry('openrouter', fbKey, fbBody);
         usedFallback = true;
       }
@@ -211,7 +218,7 @@ chrome.runtime.onConnect.addListener(port => {
 // ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    normalizeProvider, normalizeModelForProvider, backoffDelay,
+    normalizeProvider, normalizeModelForProvider, backoffDelay, resolveFallbackModel,
     OPENROUTER_MODEL_REMAP, OPENROUTER_FALLBACK_MODEL, RETRYABLE_STATUS,
   };
 }

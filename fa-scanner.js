@@ -3,16 +3,25 @@
 
 const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
 
+// ID-Lookup im richtigen Baum: Felder in ShadowRoots/iFrames finden ihre
+// Label-/Hint-/Error-Elemente über getRootNode(), nicht über `document`
+function byIdInRoot(el, id) {
+  const root = el.getRootNode?.() || document;
+  if (typeof root.getElementById === 'function') return root.getElementById(id);
+  return root.querySelector?.(`#${CSS.escape(id)}`) || null;
+}
+
 function getLabel(el) {
   let v = clean(el.getAttribute('aria-label'));
   if (v) return v;
   const lblBy = el.getAttribute('aria-labelledby');
   if (lblBy) {
-    v = clean(lblBy.split(' ').map(id => textFromEl(document.getElementById(id))).filter(Boolean).join(' '));
+    v = clean(lblBy.split(' ').map(id => textFromEl(byIdInRoot(el, id))).filter(Boolean).join(' '));
     if (v) return v;
   }
   if (el.id) {
-    const lbl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+    const root = el.getRootNode?.() || document;
+    const lbl = root.querySelector?.(`label[for="${CSS.escape(el.id)}"]`);
     if (lbl) return textFromEl(lbl);
   }
   const wl = el.closest('label');
@@ -22,6 +31,13 @@ function getLabel(el) {
   }
   if (el.title)       return clean(el.title);
   if (el.placeholder) return clean(el.placeholder);
+  // Tabellen-Layouts (Behörden-/Legacy-Formulare): Label steht in der Zelle davor
+  const cell = el.closest('td,th');
+  const prevCell = cell?.previousElementSibling;
+  if (prevCell && !prevCell.querySelector('input,select,textarea')) {
+    v = textFromEl(prevCell);
+    if (v && v.length < 120) return v;
+  }
   const raw = el.name || el.id || '';
   if (raw) return raw.replace(/[-_[\]]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
   return '';
@@ -31,7 +47,7 @@ function getGroupLabel(el) {
   const group = el?.closest?.('[role="group"]');
   const lblBy = group?.getAttribute('aria-labelledby');
   if (lblBy) {
-    const v = clean(lblBy.split(' ').map(id => textFromEl(document.getElementById(id))).filter(Boolean).join(' '));
+    const v = clean(lblBy.split(' ').map(id => textFromEl(byIdInRoot(el, id))).filter(Boolean).join(' '));
     if (v) return v;
   }
   const formline = el?.closest?.('.formline');
@@ -53,7 +69,7 @@ function isFileWidget(el) {
 function getHint(el) {
   const descBy = el.getAttribute('aria-describedby');
   if (descBy) {
-    const v = clean(descBy.split(' ').map(id => document.getElementById(id)?.textContent).filter(Boolean).join(' '));
+    const v = clean(descBy.split(' ').map(id => byIdInRoot(el, id)?.textContent).filter(Boolean).join(' '));
     if (v) return v;
   }
   const block = el.closest('.block');
@@ -84,7 +100,7 @@ function getHint(el) {
 
 function getError(el) {
   const errId = el.getAttribute('aria-errormessage');
-  if (errId) { const v = clean(document.getElementById(errId)?.textContent); if (v) return v; }
+  if (errId) { const v = clean(byIdInRoot(el, errId)?.textContent); if (v) return v; }
   const container = el.closest('.field,.form-group,.form-field,.form-item,[class*="field"]') || el.parentElement;
   if (container) {
     for (const sel of ['[class*="error"]','[class*="invalid"]','[class*="validation"]','[role="alert"]','.help-block','.field-error']) {
@@ -108,9 +124,13 @@ function extractField(el) {
   }
   if (!label) return null;
 
+  // Custom-Widgets ohne native Elemente (React-Select/MUI-Dropdowns, Rich-Text)
+  const customCombobox = !kendoRole && el.tagName !== 'INPUT' && isAriaCombobox(el);
+  const richText = isRichTextField(el);
+
   const info = {
     label,
-    type:         fileWidget ? 'file' : kendoRole ? kendoRole : el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' : (el.type || 'text'),
+    type:         fileWidget ? 'file' : kendoRole ? kendoRole : customCombobox ? 'combobox' : richText ? 'richtext' : el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' : (el.type || 'text'),
     required:     el.required || el.getAttribute('aria-required') === 'true' || !!el.closest('.required') || !!el.closest('.formline')?.querySelector('.required-mark'),
     autocomplete: (el.getAttribute('autocomplete') || '').replace(/^(on|off)$/, ''),
     hint:         getHint(el),
@@ -120,7 +140,7 @@ function extractField(el) {
   };
 
   if (!kendoRole && info.type === 'radio' && el.name) {
-    const root = el.form || document;
+    const root = el.form || el.getRootNode?.() || document;
     info.options = Array.from(root.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`))
       .map(opt => getLabel(opt)).filter(Boolean);
   }
@@ -178,6 +198,10 @@ function groupIntoSections(formEl) {
         if (seenRadio.has(node.name)) return;
         seenRadio.add(node.name);
       }
+      const info = extractField(node); if (info) current.fields.push(info); return;
+    }
+    // Custom-Widgets (div[role=combobox], contenteditable) sind selbst das Feld
+    if (isAriaCombobox(node) || isRichTextField(node)) {
       const info = extractField(node); if (info) current.fields.push(info); return;
     }
     Array.from(node.children).forEach(walk);
@@ -277,7 +301,7 @@ function extractRichContext() {
   };
   let formEls = Array.from(document.querySelectorAll('form'));
   if (formEls.length === 0) {
-    const loose = Array.from(document.querySelectorAll('input:not([type=hidden]),select,textarea'))
+    const loose = Array.from(document.querySelectorAll('input:not([type=hidden]),select,textarea,[role="combobox"],[contenteditable="true"]'))
       .filter(el => !el.closest('nav,header,footer,[role=search],[role=navigation]'));
     if (loose.length > 0) formEls = [document.body];
   }
@@ -295,7 +319,7 @@ function extractRichContext() {
       if (!doc || doc === document) return;
       let iframeFormEls = Array.from(doc.querySelectorAll('form'));
       if (iframeFormEls.length === 0) {
-        const loose = doc.querySelectorAll('input:not([type=hidden]),select,textarea');
+        const loose = doc.querySelectorAll('input:not([type=hidden]),select,textarea,[role="combobox"],[contenteditable="true"]');
         if (loose.length > 0) iframeFormEls = [doc.body];
       }
       iframeFormEls.forEach(formEl => {
@@ -307,15 +331,27 @@ function extractRichContext() {
     } catch { /* cross-origin, skip */ }
   });
 
-  // Scan open shadow roots in host page (Web Components, custom elements)
+  // Scan open shadow roots in host page (Web Components, custom elements) —
+  // rekursiv, weil Design-Systeme Komponenten oft verschachteln (Form-Komponente
+  // enthält Input-Komponenten mit eigenem Shadow Root)
+  function collectShadowRoots(rootNode, acc, depth = 0) {
+    if (depth > 6) return acc;
+    try {
+      rootNode.querySelectorAll('*').forEach(el => {
+        if (!el.shadowRoot || el.id === 'formassist-host') return;
+        acc.push(el.shadowRoot);
+        collectShadowRoots(el.shadowRoot, acc, depth + 1);
+      });
+    } catch {}
+    return acc;
+  }
   try {
-    document.querySelectorAll('*').forEach(el => {
-      if (!el.shadowRoot || el.id === 'formassist-host') return;
+    collectShadowRoots(document, []).forEach(shadowRoot => {
       try {
-        let srForms = Array.from(el.shadowRoot.querySelectorAll('form'));
+        let srForms = Array.from(shadowRoot.querySelectorAll('form'));
         if (!srForms.length) {
-          const loose = el.shadowRoot.querySelectorAll('input:not([type=hidden]),select,textarea');
-          if (loose.length > 0) srForms = [el.shadowRoot];
+          const loose = shadowRoot.querySelectorAll('input:not([type=hidden]),select,textarea,[role="combobox"],[contenteditable="true"]');
+          if (loose.length > 0) srForms = [shadowRoot];
         }
         srForms.forEach(formEl => {
           const sections = groupIntoSections(formEl);
@@ -336,7 +372,7 @@ function getFieldValueBrief(el) {
   const type = (el.type || '').toLowerCase();
   if (type === 'checkbox') return el.checked ? 'angekreuzt' : '';
   if (type === 'radio' && el.name) {
-    const root = el.form || document;
+    const root = el.form || el.getRootNode?.() || document;
     const checked = root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`);
     return checked ? clean(getLabel(checked) || checked.value) : '';
   }
@@ -345,6 +381,10 @@ function getFieldValueBrief(el) {
     return opt && el.value ? clean(opt.text) : '';
   }
   if (type === 'password' || type === 'file') return '';
+  // Custom-Widgets tragen ihren Wert im Textinhalt, nicht in .value
+  if (isRichTextField(el) || (isAriaCombobox(el) && el.tagName !== 'INPUT')) {
+    return clean(el.textContent || '').slice(0, 60);
+  }
   return clean(String(el.value || '')).slice(0, 60);
 }
 
@@ -439,12 +479,16 @@ function getActiveFieldContext(el) {
 
 function matchProfile(el, profile) {
   if (!el) return null;
+  // Niemals Profildaten in Passwortfelder vorschlagen/füllen
+  if ((el.type || '').toLowerCase() === 'password') return null;
   const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
   const label = getLabel(el).toLowerCase();
   for (const pf of PROFILE_FIELDS) {
     if (!profile[pf.key]) continue;
     if (ac && ac !== 'on' && ac !== 'off' && pf.ac.some(a => ac.includes(a))) return pf;
-    if (pf.kw.some(k => label.includes(k))) return pf;
+    // Wortanfang-Matching statt Substring — verhindert Fehl-Befüllungen wie
+    // "Hotelname" → Telefon ("tel") oder "Passwort"/"Sportart" → Stadt ("ort")
+    if (pf.kw.some(k => labelHasKeyword(label, k))) return pf;
   }
   return null;
 }
@@ -454,6 +498,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     getLabel, getGroupLabel, isFileWidget, getHint, getError, extractField,
     groupIntoSections, getFormIntro, getSubmitText, getFieldValueBrief,
-    buildSystemPrompt, getActiveFieldContext, matchProfile,
+    buildSystemPrompt, getActiveFieldContext, matchProfile, extractRichContext,
   };
 }

@@ -4,7 +4,8 @@
   let _model    = 'llama-3.3-70b-versatile';
   let _apiKey   = '';
   let _provider = 'groq';
-  let _assistantMode = 'context';
+  let _assistantMode = 'classic';
+  let _autoNavigate = true;
   let _keyPromise = null;
   let _onProviderFallback = null;
   function normalizeProvider(value) {
@@ -18,8 +19,8 @@
   }
   function normalizeAssistantMode(value) {
     const v = String(value || '').toLowerCase();
-    if (v === 'classic') return 'classic';
-    return 'context';
+    if (v === 'context') return 'context';
+    return 'classic'; // Default: „Mit Vorschau"
   }
   function loadKey() {
     if (_apiKey) return Promise.resolve(_apiKey);
@@ -38,9 +39,11 @@
   }
 
   // ── CSP-safe API helpers (routed via background service worker) ──────
-  function groqRequest(key, body) {
+  // fallbackModel: optionales Modell für den OpenRouter-Fallback (z. B. Vision-
+  // Requests, die nicht auf das textbasierte Standard-Fallback-Modell dürfen)
+  function groqRequest(key, body, fallbackModel) {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: 'llm-fetch', provider: _provider, key, body }, resp => {
+      chrome.runtime.sendMessage({ type: 'llm-fetch', provider: _provider, key, body, fallbackModel }, resp => {
         if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
         if (!resp?.ok) reject(new Error(resp?.error || 'Unbekannter Fehler'));
         else {
@@ -72,7 +75,8 @@
   // fa-utils.js   → clean, formatBytes, isVisible, textFromEl, parseDateToISO,
   //                 isKendoWidget, getKendoWidget, getElementTextValue,
   //                 findButtonByText, getAgentSelector, AGENT_SELECTOR_ATTR,
-  //                 AGENT_AUTO_SELECT_CONFIDENCE
+  //                 AGENT_AUTO_SELECT_CONFIDENCE,
+  //                 detectLiveCheckKind, getLiveCheckResult (+ Validatoren)
   // fa-profile.js → PROFILE_FIELDS, FAKE_DATA
   // fa-scanner.js → SKIP_TYPES, getLabel, extractField, extractRichContext,
   //                 buildSystemPrompt, getActiveFieldContext, matchProfile, …
@@ -94,10 +98,11 @@
   // INIT — load storage before building UI
   // ═══════════════════════════════════════════════════════════════════════
 
-  chrome.storage.sync.get(['faModel', 'faAssistantMode', 'faProvider'], syncStored => {
+  chrome.storage.sync.get(['faModel', 'faAssistantMode', 'faProvider', 'faAutoNavigate'], syncStored => {
     _provider = normalizeProvider(syncStored.faProvider);
     _model = syncStored.faModel || getDefaultModel(_provider);
     _assistantMode = normalizeAssistantMode(syncStored.faAssistantMode);
+    _autoNavigate = syncStored.faAutoNavigate !== false; // Default an, sonst gespeicherter Wert
 
   chrome.storage.local.get(['faProfile', 'faPosition', 'faDarkMode', 'faExtras', 'faProfiles', 'faActiveProfileId', 'faHistory'], stored => {
     // ── Profile state ────────────────────────────────────────────────────
@@ -153,6 +158,10 @@
       </button>
       <div class="sidebar" id="fa-sidebar">
         <div class="toast" id="fa-toast"></div>
+        <div class="undo-toast" id="fa-undo-toast">
+          <span class="undo-toast-msg" id="fa-undo-toast-msg"></span>
+          <button class="undo-toast-btn" id="fa-undo-toast-btn" type="button">Rückgängig</button>
+        </div>
         <div class="resize-handle resize-n"  data-resize="n"></div>
         <div class="resize-handle resize-e"  data-resize="e"></div>
         <div class="resize-handle resize-s"  data-resize="s"></div>
@@ -192,20 +201,27 @@
           <div class="ap-field-list" id="fa-ap-field-list">
             <div class="field-list" id="fa-ap-field-inner"></div>
           </div>
-          <div class="ap-mode-select-row">
-            <label class="ap-mode-label" for="fa-assistant-mode">Assistent-Modus</label>
-            <select class="ap-select" id="fa-assistant-mode">
-              <option value="context">Automatisch (empfohlen)</option>
-              <option value="classic">Mit Vorschau</option>
-            </select>
-          </div>
-          <div class="ap-mode-row">
-            <span class="ap-mode-label">Automatisch weiterklicken</span>
-            <label class="ap-toggle">
-              <input type="checkbox" id="fa-auto-nav" checked>
-              <span class="ap-toggle-track"></span>
-              <span class="ap-toggle-thumb"></span>
-            </label>
+          <button class="ap-options-toggle" id="fa-ap-options-toggle" type="button" aria-expanded="false" aria-controls="fa-ap-options">
+            <svg class="ap-options-gear" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+            <span>Optionen</span>
+            <svg class="ap-options-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="ap-options" id="fa-ap-options">
+            <div class="ap-mode-select-row">
+              <label class="ap-mode-label" for="fa-assistant-mode">Assistent-Modus</label>
+              <select class="ap-select" id="fa-assistant-mode">
+                <option value="classic">Mit Vorschau (empfohlen)</option>
+                <option value="context">Automatisch</option>
+              </select>
+            </div>
+            <div class="ap-mode-row">
+              <span class="ap-mode-label">Automatisch weiterklicken</span>
+              <label class="ap-toggle">
+                <input type="checkbox" id="fa-auto-nav" checked>
+                <span class="ap-toggle-track"></span>
+                <span class="ap-toggle-thumb"></span>
+              </label>
+            </div>
           </div>
           <div class="guided-progress" id="fa-guided-progress" style="display:none">
             <div class="gp-bar-wrap"><div class="gp-bar" id="fa-gp-bar"></div></div>
@@ -233,20 +249,38 @@
             <button class="pf-sw-btn" id="fa-pf-new" title="Neues Profil">+</button>
             <button class="pf-sw-btn danger" id="fa-pf-del-profile" title="Profil löschen">×</button>
           </div>
+          <div class="pf-scan">
+            <button class="pf-scan-btn" id="fa-pf-scan" type="button">
+              <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+              Dokument scannen (KI liest Ausweis, Vertrag …)
+            </button>
+            <div class="pf-scan-confirm" id="fa-pf-scan-confirm">
+              <img id="fa-pf-scan-preview" alt="Dokument-Vorschau">
+              <div class="pf-scan-note" id="fa-pf-scan-note"></div>
+              <div class="pf-scan-actions">
+                <button class="pf-scan-go" id="fa-pf-scan-go" type="button">Analysieren</button>
+                <button class="pf-scan-cancel" id="fa-pf-scan-cancel" type="button">Abbrechen</button>
+              </div>
+            </div>
+          </div>
           <div class="profile-grid" id="fa-profile-grid"></div>
           <div class="profile-actions">
             <button class="btn-primary" id="fa-pf-save">Speichern</button>
-            <button id="fa-pf-fake">Fake-Daten</button>
-            <button id="fa-pf-fill">Formular ausfüllen</button>
-            <button class="btn-danger" id="fa-pf-clear">Löschen</button>
-            <button class="btn-io" id="fa-pf-export">↓ Export</button>
-            <button class="btn-io" id="fa-pf-import">↑ Import</button>
+            <div class="pf-actions-util">
+              <button id="fa-pf-fake">Fake-Daten</button>
+              <button class="btn-io" id="fa-pf-export">↓ Export</button>
+              <button class="btn-io" id="fa-pf-import">↑ Import</button>
+            </div>
           </div>
         </div>
         <div class="input-area">
           <div class="autofill-tip" id="fa-autofill-tip">
             <strong id="fa-autofill-value"></strong>
             <button class="autofill-btn" id="fa-autofill-btn">Ausfüllen</button>
+          </div>
+          <div class="live-check" id="fa-live-check">
+            <i class="lc-icon" id="fa-live-check-icon"></i>
+            <span class="lc-text" id="fa-live-check-text"></span>
           </div>
           <div class="field-tag" id="fa-field-tag">
             <div class="dot-ind"></div>Aktives Feld: <span id="fa-field-name"></span>
@@ -295,23 +329,60 @@
     }
     _onProviderFallback = () => showToast('Groq nicht erreichbar – OpenRouter als Backup');
 
+    // ── Undo-Toast: Sicherheitsnetz nach einem Agent-Lauf ──────────────
+    const undoToastEl = $('fa-undo-toast');
+    let undoToastTimer;
+    function showUndoToast(n) {
+      const msgEl = $('fa-undo-toast-msg');
+      if (msgEl) msgEl.textContent = `${n} Feld${n !== 1 ? 'er' : ''} ausgefüllt`;
+      undoToastEl.classList.add('show');
+      clearTimeout(undoToastTimer);
+      undoToastTimer = setTimeout(() => undoToastEl.classList.remove('show'), 6000);
+    }
+    function hideUndoToast() {
+      undoToastEl?.classList.remove('show');
+      clearTimeout(undoToastTimer);
+    }
+    function maybeShowUndoToast() {
+      const n = agentState?.undo?.length || 0;
+      if (n > 0) showUndoToast(n);
+    }
+    $('fa-undo-toast-btn')?.addEventListener('click', () => undoAgentFill());
+
     // ═══════════════════════════════════════════════════════════════════════
     // PROFILE PANEL
     // ═══════════════════════════════════════════════════════════════════════
 
-    PROFILE_FIELDS.forEach(pf => {
-      const div = document.createElement('div');
-      div.className = 'pf' + (FULL_WIDTH_KEYS.has(pf.key) ? ' full' : '');
-      const lbl = document.createElement('label');
-      lbl.textContent = pf.label;
-      const inp = document.createElement('input');
-      inp.type = 'text';
-      inp.id = `fa-pf-${pf.key}`;
-      inp.value = profile[pf.key] || '';
-      inp.placeholder = pf.label;
-      div.appendChild(lbl);
-      div.appendChild(inp);
-      profileGrid.appendChild(div);
+    // Felder in scannbare Abschnitte gruppieren (Reihenfolge = PF_GROUPS).
+    // group-Zuordnung steht in fa-profile.js; unbekannte Gruppen landen unter „Person".
+    const PF_GROUPS = [
+      ['person',  'Person'],
+      ['address', 'Adresse'],
+      ['contact', 'Kontakt'],
+      ['bank',    'Bank'],
+      ['job',     'Beruf'],
+    ];
+    PF_GROUPS.forEach(([groupKey, groupLabel]) => {
+      const groupFields = PROFILE_FIELDS.filter(pf => (pf.group || 'person') === groupKey);
+      if (!groupFields.length) return;
+      const hdr = document.createElement('div');
+      hdr.className = 'pf-group-hdr';
+      hdr.textContent = groupLabel;
+      profileGrid.appendChild(hdr);
+      groupFields.forEach(pf => {
+        const div = document.createElement('div');
+        div.className = 'pf' + (FULL_WIDTH_KEYS.has(pf.key) ? ' full' : '');
+        const lbl = document.createElement('label');
+        lbl.textContent = pf.label;
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.id = `fa-pf-${pf.key}`;
+        inp.value = profile[pf.key] || '';
+        inp.placeholder = pf.label;
+        div.appendChild(lbl);
+        div.appendChild(inp);
+        profileGrid.appendChild(div);
+      });
     });
 
     function getProfileFromInputs() {
@@ -555,6 +626,7 @@
       });
       saveActiveProfileToStore(() => {
         SYSTEM = buildSystemPrompt(ctx, profile, extras);
+        profileGrid.querySelectorAll('.pf-scanned').forEach(inp => inp.classList.remove('pf-scanned'));
         showToast('Profil gespeichert');
         updateProfileProgress();
       });
@@ -566,16 +638,6 @@
       loadProfileIntoInputs(profile);
       SYSTEM = buildSystemPrompt(ctx, profile, extras);
       showToast('Fake-Daten geladen');
-      updateProfileProgress();
-    });
-
-    $('fa-pf-fill').addEventListener('click', () => { hideProfile(); startAgent(); });
-
-    $('fa-pf-clear').addEventListener('click', () => {
-      PROFILE_FIELDS.forEach(pf => delete profile[pf.key]);
-      loadProfileIntoInputs({});
-      SYSTEM = buildSystemPrompt(ctx, profile, extras);
-      saveActiveProfileToStore(() => showToast('Profil gelöscht'));
       updateProfileProgress();
     });
 
@@ -620,6 +682,156 @@
       });
       input.click();
     });
+
+    // ── Dokument-Scan (Vision-OCR): Bild → Vision-LLM → Profilfelder ──
+    // Ablauf: Bild wählen → verkleinern (Datenminimierung) → expliziter
+    // Bestätigungsschritt (Privacy) → Analyse → Felder nur VORbefüllen,
+    // gespeichert wird erst durch den Nutzer über "Speichern".
+    const VISION_MODELS = {
+      groq:       'meta-llama/llama-4-scout-17b-16e-instruct',
+      openrouter: 'meta-llama/llama-4-scout',
+    };
+    const VISION_FALLBACK_MODEL = 'meta-llama/llama-4-scout:free';
+    const SCAN_MAX_DIM = 1400;
+    let scanDataUrl = null;
+
+    function buildScanPrompt() {
+      const fieldList = PROFILE_FIELDS.map(pf => {
+        const syn = (pf.kw || []).slice(0, 5).join(', ');
+        return `- "${pf.key}" = ${pf.label}${syn ? ` (auch: ${syn})` : ''}`;
+      }).join('\n');
+      return [
+        'Du bist ein präziser Dokument-Extraktor. Lies das Bild (z. B. Ausweis, Führerschein, Visitenkarte, Rechnung, Vertrag, Bank-/Girocard) und extrahiere ALLE sichtbaren Personen- und Bankdaten.',
+        'Gehe JEDEN dieser Schlüssel einzeln durch und trage ihn ein, wenn der Wert irgendwo im Bild steht — Vorder- ODER Rückseite, jede Sprache, auch klein gedruckt:',
+        fieldList,
+        'Antworte NUR mit einem JSON-Objekt ohne weiteren Text und nutze exakt diese Schlüssel.',
+        'Nimm nur Schlüssel auf, deren Wert du sicher im Dokument liest — nichts raten, nichts erfinden. Nicht vorhandene Felder einfach weglassen.',
+        'Auf Bank-/Girocards ist die IBAN die lange Nummer mit Ländercode am Anfang (z. B. „DE" + 20 Ziffern) → "iban" ohne Leerzeichen; der aufgedruckte Name ist der Karteninhaber. Eine 16-stellige Kreditkartennummer, das Ablaufdatum und die Prüfziffer (CVV/CVC) NICHT übernehmen.',
+        'Datumsangaben im Format TT.MM.JJJJ. IBAN ohne Leerzeichen. Namen ohne Titel.',
+      ].join('\n');
+    }
+
+    function parseScanReply(text) {
+      let t = String(text || '').trim();
+      const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence) t = fence[1].trim();
+      const start = t.indexOf('{');
+      const end   = t.lastIndexOf('}');
+      if (start === -1 || end <= start) return null;
+      let obj;
+      try { obj = JSON.parse(t.slice(start, end + 1)); } catch { return null; }
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+      const values = {};
+      PROFILE_FIELDS.forEach(pf => {
+        const v = obj[pf.key];
+        if (v == null) return;
+        const s = clean(String(v));
+        if (s && s.length <= 120 && !/^(null|undefined|n\/a|unbekannt|-)$/i.test(s)) values[pf.key] = s;
+      });
+      return values;
+    }
+
+    function downscaleImage(file, maxDim = SCAN_MAX_DIM) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Bild konnte nicht geladen werden.'));
+          img.onload = () => {
+            const scale  = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width  = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    const scanBtn     = $('fa-pf-scan');
+    const scanConfirm = $('fa-pf-scan-confirm');
+    const scanPreview = $('fa-pf-scan-preview');
+
+    function resetScanBox() {
+      scanDataUrl = null;
+      scanConfirm.classList.remove('visible');
+      scanPreview.removeAttribute('src');
+    }
+
+    scanBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          scanDataUrl = await downscaleImage(file);
+          scanPreview.src = scanDataUrl;
+          $('fa-pf-scan-note').textContent =
+            `Das Bild wird verkleinert und einmalig zur Analyse an ${providerLabel()} gesendet, nicht gespeichert. ` +
+            'Erkannte Daten landen nur in den Profilfeldern unten — gespeichert wird erst mit "Speichern".';
+          scanConfirm.classList.add('visible');
+        } catch (err) {
+          showToast(err.message || 'Bild konnte nicht verarbeitet werden');
+        }
+      });
+      input.click();
+    });
+
+    $('fa-pf-scan-cancel').addEventListener('click', resetScanBox);
+
+    $('fa-pf-scan-go').addEventListener('click', async () => {
+      if (!scanDataUrl) return;
+      const goBtn = $('fa-pf-scan-go');
+      goBtn.disabled = true;
+      scanBtn.disabled = true;
+      goBtn.textContent = 'Analysiere…';
+      try {
+        const key = await loadKey();
+        if (!key) throw new Error(`Kein ${providerLabel()}-API-Key hinterlegt — siehe Einstellungen.`);
+        const body = {
+          model: VISION_MODELS[_provider] || VISION_MODELS.groq,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: buildScanPrompt() },
+              { type: 'image_url', image_url: { url: scanDataUrl } },
+            ],
+          }],
+          temperature: 0.1,
+          max_tokens: 600,
+        };
+        const data   = await groqRequest(key, body, VISION_FALLBACK_MODEL);
+        const reply  = data?.choices?.[0]?.message?.content || '';
+        const values = parseScanReply(reply);
+        if (!values || !Object.keys(values).length) throw new Error('Keine Profildaten im Dokument erkannt.');
+        let applied = 0;
+        Object.entries(values).forEach(([k, v]) => {
+          const inp = shadow.getElementById(`fa-pf-${k}`);
+          if (!inp) return;
+          inp.value = v;
+          inp.classList.add('pf-scanned');
+          applied++;
+        });
+        updateProfileProgress();
+        resetScanBox();
+        showToast(`${applied} Feld${applied === 1 ? '' : 'er'} aus dem Dokument übernommen — bitte prüfen & speichern`);
+      } catch (err) {
+        showToast(err.message || 'Dokument-Analyse fehlgeschlagen');
+      } finally {
+        goBtn.disabled = false;
+        goBtn.textContent = 'Analysieren';
+        scanBtn.disabled = false;
+      }
+    });
+
+    // Scan-Markierung verschwindet, sobald der Nutzer das Feld selbst anfasst
+    profileGrid.addEventListener('input', e => e.target?.classList?.remove('pf-scanned'));
 
     // ── Autofill tip ──────────────────────────────────────────────────
     $('fa-autofill-btn').addEventListener('click', () => {
@@ -1163,7 +1375,7 @@
         if (act.action === 'check') {
           const wantOff = /^(nein|no|false|0|aus|off|uncheck(?:ed)?)$/i.test(String(act.value || '').trim());
           if (type === 'radio') {
-            fillField(el, act.value || act.label || '');
+            await fillField(el, act.value || act.label || '');
             ok = isActionApplied(el, 'check');
           } else {
             if (el.checked === wantOff) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -1171,7 +1383,7 @@
             note = wantOff ? 'abgewählt' : 'angekreuzt';
           }
         } else {
-          fillField(el, act.value || '');
+          await fillField(el, act.value || '');
           ok = isActionApplied(el, act.action, act.value || '');
         }
 
@@ -1409,6 +1621,96 @@
       }, 1800);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // FILL-CHOREOGRAFIE + UNDO — sichtbares Ausfüllen, ein Klick zurück
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Grüner Puls am Feld.
+    // `delay` staffelt rein visuell (z. B. für die synchrone Deterministik-Runde).
+    function flashFilled(el, delay = 0) {
+      if (!el || typeof el.getBoundingClientRect !== 'function') return;
+      const run = () => {
+        let rect;
+        try { rect = el.getBoundingClientRect(); } catch { return; }
+        if (!rect || (rect.width === 0 && rect.height === 0)) return;
+        // Transienter grüner Outline-Puls (gleiche Technik wie highlightField)
+        const prevOutline = el.style.outline;
+        const prevOffset  = el.style.outlineOffset;
+        el.style.outline = '2px solid #22c55e';
+        el.style.outlineOffset = '2px';
+        setTimeout(() => { el.style.outline = prevOutline; el.style.outlineOffset = prevOffset; }, 1100);
+      };
+      if (delay > 0) setTimeout(run, delay); else run();
+    }
+
+    function setNativeValue(el, val) {
+      try {
+        const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (setter) setter.call(el, val); else el.value = val;
+      } catch { el.value = val; }
+    }
+
+    // Restaurierbaren Zustand eines Feldes erfassen (vor dem Füllen).
+    function fieldUndoState(el) {
+      if (!el) return null;
+      const t = (el.type || '').toLowerCase();
+      if (t === 'radio') {
+        const root = el.form || el.getRootNode?.() || document;
+        const els = el.name
+          ? Array.from(root.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`))
+          : [el];
+        return { kind: 'radio', els, checked: els.map(r => r.checked) };
+      }
+      if (t === 'checkbox') return { kind: 'checkbox', el, checked: el.checked };
+      if (el.tagName === 'SELECT') return { kind: 'select', el, selected: Array.from(el.options).map(o => o.selected) };
+      if (el.isContentEditable) return { kind: 'html', el, html: el.innerHTML };
+      return { kind: 'value', el, value: el.value };
+    }
+
+    // Snapshot in den Undo-Stack des laufenden Agent-Runs (nur der erste je Feld).
+    function pushUndo(el) {
+      if (!el || !agentState) return;
+      agentState.undo = agentState.undo || [];
+      const already = agentState.undo.some(s => s.el === el || (s.els && s.els.includes(el)));
+      if (already) return;
+      const snap = fieldUndoState(el);
+      if (snap) agentState.undo.push(snap);
+    }
+
+    function restoreUndoState(s) {
+      try {
+        if (s.kind === 'radio') {
+          s.els.forEach((r, i) => { r.checked = s.checked[i]; });
+          (s.els.find((r, i) => s.checked[i]) || s.els[0])?.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (s.kind === 'checkbox') {
+          s.el.checked = s.checked;
+          s.el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (s.kind === 'select') {
+          Array.from(s.el.options).forEach((o, i) => { o.selected = !!s.selected[i]; });
+          s.el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (s.kind === 'html') {
+          s.el.innerHTML = s.html;
+          s.el.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          setNativeValue(s.el, s.value);
+          s.el.dispatchEvent(new Event('input',  { bubbles: true }));
+          s.el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      } catch {}
+    }
+
+    function undoAgentFill() {
+      const stack = agentState?.undo || [];
+      if (!stack.length) return;
+      for (let i = stack.length - 1; i >= 0; i--) restoreUndoState(stack[i]);
+      const n = stack.length;
+      agentState.undo = [];
+      agentState.filledFields = [];
+      hideUndoToast();
+      showToast(`Ausfüllen rückgängig gemacht (${n} Feld${n !== 1 ? 'er' : ''})`);
+    }
+
     function askFormSummary() {
       if (profileVisible) hideProfile();
       open();
@@ -1499,11 +1801,11 @@
     // Fill + verify; if the raw value is rejected by the field, normalize it
     // via AI and retry once. Returns the value that stuck, or null.
     async function fillFieldVerified(el, label, raw) {
-      fillField(el, raw);
+      await fillField(el, raw);
       if (isActionApplied(el, 'fill', raw)) return raw;
       const norm = await aiNormalizeFieldValue(el, label, raw);
       if (norm && normalizeForCompare(norm) !== normalizeForCompare(raw)) {
-        fillField(el, norm);
+        await fillField(el, norm);
         if (isActionApplied(el, 'fill', norm)) return norm;
       }
       return null;
@@ -1513,7 +1815,14 @@
       const total = agentState.filledFields.length;
       const pages = (agentState.pages || 0) + 1;
       const pageNote = pages > 1 ? ` über ${pages} Seiten` : '';
-      return `✅ Fertig — ${total} Feld${total === 1 ? '' : 'er'} ausgefüllt${pageNote}.`;
+      let msg = `✅ Fertig — ${total} Feld${total === 1 ? '' : 'er'} ausgefüllt${pageNote}.`;
+      const skipped = agentState.skippedOptional || [];
+      if (skipped.length) {
+        const shown = skipped.slice(0, 4).map(l => `„${l}"`).join(', ');
+        const more  = skipped.length > 4 ? ` und ${skipped.length - 4} weitere` : '';
+        msg += `\n${skipped.length} optionale${skipped.length === 1 ? 's' : ''} Feld${skipped.length === 1 ? '' : 'er'} ohne passende Daten leer gelassen: ${shown}${more}. Sag mir einfach, was ich dort eintragen soll.`;
+      }
+      return msg;
     }
 
     function getActionConfidence(action) {
@@ -1529,10 +1838,14 @@
       const type = (el.type || '').toLowerCase();
       if (type === 'checkbox') return el.checked ? 'true' : 'false';
       if (type === 'radio') {
-        const root = el.form || document;
+        const root = el.form || el.getRootNode?.() || document;
         const checked = el.name ? root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`) : (el.checked ? el : null);
         if (!checked) return '';
         return clean(getLabel(checked) || checked.value || 'true');
+      }
+      // Custom-Widgets (div-Combobox, contenteditable) tragen den Wert im Text
+      if (isRichTextField(el) || (isAriaCombobox(el) && el.tagName !== 'INPUT')) {
+        return clean(el.textContent || '');
       }
       if (el.tagName === 'SELECT') {
         const selected = Array.from(el.selectedOptions || []);
@@ -1617,8 +1930,10 @@
         if (current && !hasError) continue;
 
         const value = profile[pf.key];
+        pushUndo(el);
         fillField(el, value);
         if (isActionApplied(el, 'fill', value)) {
+          flashFilled(el, filled * 90);
           filled++;
           agentState.filledFields.push({ label: f.label || pf.label, value, url: location.href });
         }
@@ -1649,7 +1964,7 @@
             let missing = false;
 
             if (type === 'radio' && el.name) {
-              const root = el.form || document;
+              const root = el.form || el.getRootNode?.() || document;
               const checked = root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`);
               missing = !!f.required && !checked;
             } else if (type === 'checkbox') {
@@ -1796,8 +2111,11 @@
       manualAssistState.pending = null;
       await sleep(200);
 
+      // Auto-Weiter nur wenn der Toggle „Automatisch weiterklicken" an ist.
+      // Sonst fällt es auf runAgentStep() zurück, das den Nav-Schritt über
+      // handleGuidedNavigation routet und dort den manuellen „Weiter"-Button zeigt.
       const formEl = el.form || stepInfo?.form || document.querySelector('form');
-      if (clickNextButtonIfReady(formEl)) {
+      if (agentState.autoNavigate && clickNextButtonIfReady(formEl)) {
         try {
           chrome.storage.session?.set?.({
             faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 },
@@ -1879,7 +2197,7 @@
         'FORMAT (ein Objekt pro Feld):',
         '[{"action":"fill"|"select"|"check"|"click"|"submit"|"ask"|"done","selector":"[name=\\"x\\"]","value":"...","label":"...","source":"profile"|"inferred"|"suggestion","confidence":0.0-1.0,"isNavigation":true,"question":"...","options":["A","B"]}]',
         '',
-        'action="ask": Wert nicht ableitbar → Frage an Nutzer. Felder: "label" (Feldname), "question" (verständliche Frage auf Deutsch), "options" (max. 4 wahrscheinliche Antworten als String-Array, leer wenn Freitext). Nur verwenden wenn wirklich kein Wert aus Profil/Kontext ableitbar ist.',
+        'action="ask": Wert nicht ableitbar → Frage an Nutzer. Felder: "label" (Feldname), "question" (verständliche Frage auf Deutsch), "options" (max. 4 wahrscheinliche Antworten als String-Array, leer wenn Freitext). NUR für Pflichtfelder verwenden, wenn wirklich kein Wert aus Profil/Kontext ableitbar ist — OPTIONALE Felder ohne ableitbaren Wert bekommen KEINE Aktion (einfach leer lassen, nicht nachfragen).',
         '',
         'AUSFÜLL-STRATEGIE — versuche JEDES Feld zu befüllen:',
         '',
@@ -2031,10 +2349,14 @@
         if (hdr) hdr.textContent = status;
       };
 
-      const applyAgentValue = (f, value) => {
-        fillField(f.el, value);
+      const applyAgentValue = async (f, value) => {
+        // Sichtbar machen: lazy/virtualisierte Formulare rendern erst beim Scrollen
+        try { f.el.scrollIntoView({ block: 'center' }); } catch {}
+        pushUndo(f.el);
+        await fillField(f.el, value);
         if (isActionApplied(f.el, 'fill', value)) {
           appendAgentRow('✓', f.label, value);
+          flashFilled(f.el);
           agentState.filledFields.push({ label: f.label, value, url: location.href });
           filled++;
         } else {
@@ -2055,7 +2377,7 @@
         if (!agentState.active) break;
         const directValue = findStoredAnswer(f.label);
         if (directValue !== null) {
-          applyAgentValue(f, directValue);
+          await applyAgentValue(f, directValue);
           done++;
           setAgentProgress(`Agent läuft… ${done}/${fields.length}`);
           await sleep(40);
@@ -2136,8 +2458,19 @@
               continue;
             }
           }
-          if (isUnknown(rawVal)) queueAsk(f);
-          else applyAgentValue(f, sanitizeValue(rawVal));
+          if (isUnknown(rawVal)) {
+            if (f.required) {
+              queueAsk(f);
+            } else {
+              // Optionale Felder ohne Datenbasis NICHT erfragen — leer lassen
+              // und am Ende gesammelt erwähnen (verhindert Rückfragen-Spam
+              // bei Feldern wie "Middle Name")
+              (agentState.skippedOptional = agentState.skippedOptional || []).push(f.label);
+              appendAgentRow('·', f.label, 'leer gelassen (optional)');
+            }
+          } else {
+            await applyAgentValue(f, sanitizeValue(rawVal));
+          }
           done++;
           setAgentProgress(`Agent läuft… ${done}/${fields.length}`);
           await sleep(50);
@@ -2176,10 +2509,12 @@
               });
               const v = sanitizeValue(raw);
               if (!isUnknown(v) && normalizeForCompare(v) !== normalizeForCompare(curVal)) {
-                fillField(f.el, v);
+                pushUndo(f.el);
+                await fillField(f.el, v);
                 if (isActionApplied(f.el, 'fill', v)) {
                   corrected++;
                   appendAgentRow('✓', f.label, v);
+                  flashFilled(f.el);
                   agentState.filledFields.push({ label: f.label, value: v, url: location.href });
                   continue;
                 }
@@ -2218,7 +2553,8 @@
       const autoNav = $('fa-auto-nav')?.checked !== false;
       const mode = getAssistantMode();
       const guided = mode !== 'classic';
-      agentState = { active: true, guided, autoNavigate: autoNav, sessionAnswers: {}, filledFields: [], startUrl: location.href, correctionRound: 0, lastFailures: [], pages: 0 };
+      hideUndoToast();
+      agentState = { active: true, guided, autoNavigate: autoNav, sessionAnswers: {}, filledFields: [], skippedOptional: [], startUrl: location.href, correctionRound: 0, lastFailures: [], pages: 0, undo: [] };
       guidedAskState = { active: false, queue: [], navAction: null };
       manualAssistState.pending = null;
       if (guided) {
@@ -2502,9 +2838,11 @@
         if (!agentState.active) break;
         const el = resolveActionElement(act);
         if ((act.action === 'fill' || act.action === 'select') && el) {
-          fillField(el, act.value || '');
+          pushUndo(el);
+          await fillField(el, act.value || '');
           if (isActionApplied(el, act.action, act.value || '')) {
             appendAgentRow('✓', act.label || act.selector, act.value);
+            flashFilled(el);
             agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
             filled++;
           } else {
@@ -2513,8 +2851,10 @@
           }
           await sleep(80);
         } else if (act.action === 'check' && el) {
+          pushUndo(el);
           if (!el.checked) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
           appendAgentRow('✓', act.label || act.selector, '');
+          flashFilled(el);
           agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
           filled++;
           await sleep(80);
@@ -2667,29 +3007,35 @@
         await sleep(350);
         el.click();
       } else {
-        // Show manual confirm button
-        const div = document.createElement('div');
-        div.className = 'msg ai';
-        const bubble = document.createElement('div');
-        bubble.className = 'bubble';
-        bubble.innerHTML = `<div style="margin-bottom:8px;font-size:13px;">Seite ausgefüllt — bereit für den nächsten Schritt.</div>`;
-        const btn = document.createElement('button');
-        btn.className = 'ap-primary';
-        btn.style.cssText = 'height:38px;font-size:12.5px;margin-top:4px;';
-        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${escapeHtml(navAction.label || 'Weiter')}`;
-        btn.addEventListener('click', async () => {
-          btn.disabled = true;
-          const el = resolveActionElement(navAction);
-          if (el) {
-            try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
-            el.click();
-          }
-        });
-        bubble.appendChild(btn);
-        div.appendChild(bubble);
-        messagesEl.appendChild(div);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        // Toggle „Automatisch weiterklicken" ist aus → manuellen Weiter-Button zeigen
+        showManualContinueButton(navAction, resumeData);
       }
+    }
+
+    // Manueller „Weiter"-Button (statt Auto-Klick), wenn der Toggle
+    // „Automatisch weiterklicken" aus ist. Von beiden Agent-Pfaden genutzt.
+    function showManualContinueButton(navAction, resumeData) {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = `<div style="margin-bottom:8px;font-size:13px;">Seite ausgefüllt — bereit für den nächsten Schritt.</div>`;
+      const btn = document.createElement('button');
+      btn.className = 'ap-primary';
+      btn.style.cssText = 'height:38px;font-size:12.5px;margin-top:4px;';
+      btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${escapeHtml(navAction.label || 'Weiter')}`;
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const el = resolveActionElement(navAction);
+        if (el) {
+          try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+          el.click();
+        }
+      });
+      bubble.appendChild(btn);
+      div.appendChild(bubble);
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     async function executeAgentActions(actions) {
@@ -2728,9 +3074,11 @@
         const el = resolveActionElement(act);
 
         if ((act.action === 'fill' || act.action === 'select') && el) {
-          fillField(el, act.value || '');
+          pushUndo(el);
+          await fillField(el, act.value || '');
           if (isActionApplied(el, act.action, act.value || '')) {
             appendAgentRow('✓', act.label || act.selector, act.value);
+            flashFilled(el);
             agentState.filledFields.push({ label: act.label, value: act.value, url: location.href });
             filled++;
           } else {
@@ -2739,8 +3087,9 @@
           }
           await sleep(100);
         } else if (act.action === 'check' && el) {
+          pushUndo(el);
           if (!el.checked) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); }
-          if (isActionApplied(el, act.action)) appendAgentRow('✓', act.label || act.selector, '');
+          if (isActionApplied(el, act.action)) { appendAgentRow('✓', act.label || act.selector, ''); flashFilled(el); }
           else {
             appendAgentRow('✗', act.label || act.selector, 'nicht gesetzt');
             failedActions.push({ selector: act.selector, label: act.label, reason: 'Checkbox/Option nicht gesetzt' });
@@ -2749,13 +3098,17 @@
         } else if (act.action === 'click' && el) {
           appendAgentRow('→', act.label || act.selector, '');
           if (act.isNavigation) {
-            try {
-              chrome.storage.session?.set?.({
-                faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 },
-              });
-            } catch {}
-            await sleep(200);
-            el.click();
+            const resumeData = { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 };
+            try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+            // „Automatisch weiterklicken" respektieren: nur bei aktivem Toggle
+            // selbst klicken, sonst manuellen „Weiter"-Button anbieten.
+            if (agentState.autoNavigate) {
+              await sleep(200);
+              el.click();
+            } else {
+              finalizeAgentBubble(filled);
+              showManualContinueButton(act, resumeData);
+            }
             return;
           } else {
             el.click();
@@ -2844,6 +3197,7 @@
       const hdr = agentStatusBubble?.querySelector('.fa-agent-hdr');
       if (hdr) hdr.textContent = `Agent: ${filled} Feld${filled !== 1 ? 'er' : ''} ausgefüllt`;
       agentStatusBubble?.querySelector('.fa-agent-stop')?.remove();
+      maybeShowUndoToast();
     }
 
     function agentAskSubmit(label) {
@@ -2876,7 +3230,9 @@
       let changed = false;
       agentState.filledFields.forEach(({ label, value }) => {
         if (!label || !value) return;
-        const pf = PROFILE_FIELDS.find(p => p.kw.some(k => label.toLowerCase().includes(k)));
+        // Wortanfang-Matching wie matchProfile — sonst lernt z. B. "Hotelname"
+        // ("tel") einen falschen Wert dauerhaft ins Telefon-Profilfeld
+        const pf = PROFILE_FIELDS.find(p => p.kw.some(k => labelHasKeyword(label.toLowerCase(), k)));
         if (pf && !profile[pf.key]) { profile[pf.key] = value; changed = true; }
         else if (!pf && !extras[label]) { extras[label] = value; changed = true; }
       });
@@ -2962,13 +3318,16 @@
       if (type === 'file') return el.files?.length ? `${el.files.length} Datei(en) ausgewählt` : '';
       if (type === 'checkbox') return el.checked ? (el.value && el.value !== 'on' ? el.value : 'ausgewählt') : '';
       if (type === 'radio') {
-        const root = el.form || document;
+        const root = el.form || el.getRootNode?.() || document;
         const checked = el.name ? root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`) : (el.checked ? el : null);
         return checked ? (checked.value || getLabel(checked) || 'ausgewählt') : '';
       }
       if (el.tagName === 'SELECT') {
         const selected = Array.from(el.selectedOptions || []).map(o => clean(o.text || o.value)).filter(Boolean);
         return selected.join(', ');
+      }
+      if (isRichTextField(el) || (isAriaCombobox(el) && el.tagName !== 'INPUT')) {
+        return clean(el.textContent || '').slice(0, 240);
       }
       return clean(el.value || '').slice(0, 240);
     }
@@ -2979,8 +3338,12 @@
       const seenRadioGroups = new Set();
       const lines = [
         'Prüfe dieses Formular direkt vor dem Absenden auf fehlende Angaben, Browser-Validierungsfehler und logische Auffälligkeiten.',
+        'Prüfe AUSSERDEM auf logische Widersprüche ZWISCHEN Feldern, z. B.: Enddatum vor Startdatum,',
+        'Geburtsdatum passt nicht zu Alter/Anrede, PLZ passt nicht zu Stadt oder Land, E-Mail-Wiederholung weicht ab,',
+        'Kontodaten (IBAN/BIC) passen nicht zum angegebenen Land.',
+        'Zeilen mit "Lokale Prüfung" sind deterministische Prüfergebnisse (z. B. IBAN-Prüfsumme mod-97) — übernimm sie als Fakten.',
         'Antworte strukturiert und knapp auf Deutsch mit diesen Überschriften:',
-        'Status, Fehlende Pflichtfelder, Auffälligkeiten, Nächste Schritte.',
+        'Status, Fehlende Pflichtfelder, Logik-Check, Auffälligkeiten, Nächste Schritte.',
         'Beginne die Antwort exakt mit "Status: OK", "Status: Warnung" oder "Status: Fehlt".',
         'Wenn alles plausibel wirkt, sage klar: "Ich sehe keine offensichtlichen Probleme."',
         '',
@@ -3006,6 +3369,12 @@
         if (err) line += ` | Seitenfehler: "${err}"`;
         if (el.willValidate && !el.checkValidity()) line += ` | Browserfehler: "${el.validationMessage}"`;
         if (f.hint) line += ` | Hinweis: "${f.hint}"`;
+        // Deterministische Validierung (fa-utils) als harten Fakt mitgeben
+        if (value && ['INPUT', 'TEXTAREA'].includes(el.tagName) && !['radio', 'checkbox', 'password', 'file'].includes(type)) {
+          const kind = detectLiveCheckKind(f.label, el.type, f.autocomplete);
+          const check = kind ? getLiveCheckResult(kind, el.value, { final: true }) : null;
+          if (check) line += ` | Lokale Prüfung: "${check.msg}"`;
+        }
         lines.push(line);
       });
 
@@ -3118,6 +3487,7 @@
     // ═══════════════════════════════════════════════════════════════════════
 
     document.addEventListener('focusin', e => {
+      if (agentState.active) return; // Agent füllt gerade selbst — kein Tipp-Flackern
       const el = e.target;
       if (!['INPUT','SELECT','TEXTAREA'].includes(el.tagName) || el.type === 'hidden' || !isVisible(el)) return;
       activeFieldEl = el;
@@ -3136,6 +3506,7 @@
       const next = e.relatedTarget;
       if (next && ['INPUT','SELECT','TEXTAREA'].includes(next.tagName)) return;
       autofillTip.classList.remove('visible');
+      hideLiveCheck();
     }, true);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3155,6 +3526,9 @@
 
     function scheduleFieldErrorHelp(el, delay = 700) {
       if (!el) return;
+      // Während der Agent läuft, übernimmt seine Korrektur-Runde die Fehler —
+      // keine parallele Einzelfeld-KI-Hilfe starten
+      if (agentState.active) return;
       const problem = getFieldProblem(el);
       if (!problem) return;
       if (reviewingSubmits.has(el.form)) return;
@@ -3189,6 +3563,77 @@
       const el = e.target;
       if (!el?.value || !el.willValidate || el.checkValidity()) return;
       scheduleFieldErrorHelp(el, 900);
+    }, true);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LIVE VALIDATION — deterministische Prüfung beim Tippen (kein API-Call)
+    // IBAN-Prüfsumme (mod-97), BIC-, E-Mail-, PLZ-Format, Telefon,
+    // Geburtsdatum-Plausibilität — Logik in fa-utils.js
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const liveCheckEl     = $('fa-live-check');
+    const liveCheckIcon   = $('fa-live-check-icon');
+    const liveCheckText   = $('fa-live-check-text');
+    const LIVE_CHECK_DEBOUNCE_MS = 550;
+    let liveCheckTimer;
+
+    function hideLiveCheck() {
+      liveCheckEl.classList.remove('visible', 'ok', 'warn');
+    }
+
+    // Dezentes Outline-Feedback direkt am Feld (Inline-Style wie highlightField,
+    // kein CSS-Leck in die Host-Seite). Originalzustand wird nur beim ersten
+    // Flash gemerkt, damit schnelle Folge-Checks ihn nicht überschreiben.
+    const outlineFlashState = new WeakMap();
+    function flashValidationOutline(el, ok) {
+      let state = outlineFlashState.get(el);
+      if (!state) {
+        state = { prevOutline: el.style.outline, prevOffset: el.style.outlineOffset, timer: null };
+        outlineFlashState.set(el, state);
+      }
+      clearTimeout(state.timer);
+      el.style.outline = `2px solid ${ok ? '#059669' : '#d97706'}`;
+      el.style.outlineOffset = '2px';
+      state.timer = setTimeout(() => {
+        el.style.outline = state.prevOutline;
+        el.style.outlineOffset = state.prevOffset;
+        outlineFlashState.delete(el);
+      }, ok ? 1200 : 1800);
+    }
+
+    // Nur textartige Felder prüfen — Checkbox/Radio & Co. feuern zwar auch
+    // input-Events, tragen aber keine prüfbaren Textwerte ("on")
+    const LIVE_CHECK_SKIP_TYPES = new Set([
+      'checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'image', 'range', 'color', 'hidden', 'password',
+    ]);
+
+    function runLiveCheck(el, { final = false } = {}) {
+      if (!el || !['INPUT', 'TEXTAREA'].includes(el.tagName)) return;
+      if (LIVE_CHECK_SKIP_TYPES.has((el.type || '').toLowerCase()) || !isVisible(el)) return;
+      const kind = detectLiveCheckKind(getLabel(el), el.type, el.getAttribute('autocomplete'));
+      if (!kind) { hideLiveCheck(); return; }
+      const result = getLiveCheckResult(kind, el.value, { final });
+      if (!result) { hideLiveCheck(); return; }
+      liveCheckIcon.textContent = result.ok ? '✓' : '⚠';
+      liveCheckText.textContent = result.msg;
+      liveCheckEl.classList.toggle('ok', result.ok);
+      liveCheckEl.classList.toggle('warn', !result.ok);
+      liveCheckEl.classList.add('visible');
+      flashValidationOutline(el, result.ok);
+    }
+
+    document.addEventListener('input', e => {
+      const el = e.target;
+      if (!el || !['INPUT', 'TEXTAREA'].includes(el.tagName)) return;
+      clearTimeout(liveCheckTimer);
+      liveCheckTimer = setTimeout(() => runLiveCheck(el), LIVE_CHECK_DEBOUNCE_MS);
+    }, true);
+
+    document.addEventListener('blur', e => {
+      const el = e.target;
+      if (!el || !['INPUT', 'TEXTAREA'].includes(el.tagName)) return;
+      clearTimeout(liveCheckTimer);
+      runLiveCheck(el, { final: true });
     }, true);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3265,6 +3710,14 @@
       btn.classList.toggle('open', isOpen);
       if (isOpen) renderActionFieldList();
     });
+    $('fa-ap-options-toggle')?.addEventListener('click', () => {
+      const box = $('fa-ap-options');
+      const btn = $('fa-ap-options-toggle');
+      if (!box) return;
+      const open = box.classList.toggle('open');
+      btn.classList.toggle('open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
     $('fa-assistant-mode').addEventListener('change', e => {
       _assistantMode = normalizeAssistantMode(e.target.value);
       updateAssistantModeUi();
@@ -3272,6 +3725,15 @@
       const modeLabel = _assistantMode === 'classic' ? 'Mit Vorschau' : 'Automatisch';
       showToast(`Modus: ${modeLabel}`);
     });
+    // Auto-Nav-Toggle: gespeicherten Zustand anwenden + Änderungen persistieren
+    const autoNavCb = $('fa-auto-nav');
+    if (autoNavCb) {
+      autoNavCb.checked = _autoNavigate;
+      autoNavCb.addEventListener('change', e => {
+        _autoNavigate = e.target.checked;
+        chrome.storage.sync.set({ faAutoNavigate: _autoNavigate });
+      });
+    }
 
     // ── Keyboard shortcut relay from background ───────────────────────
     chrome.runtime.onMessage.addListener(msg => {
@@ -3302,6 +3764,11 @@
       if (changes.faAssistantMode) {
         _assistantMode = normalizeAssistantMode(changes.faAssistantMode.newValue);
         updateAssistantModeUi();
+      }
+      if (changes.faAutoNavigate) {
+        _autoNavigate = changes.faAutoNavigate.newValue !== false;
+        const cb = $('fa-auto-nav');
+        if (cb) cb.checked = _autoNavigate;
       }
     });
 

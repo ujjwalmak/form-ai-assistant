@@ -2,6 +2,8 @@ const {
   normalizeProvider,
   normalizeModelForProvider,
   backoffDelay,
+  resolveFallbackModel,
+  OPENROUTER_FALLBACK_MODEL,
 } = require('../../background.js');
 
 describe('normalizeProvider', () => {
@@ -35,6 +37,19 @@ describe('normalizeModelForProvider', () => {
 
   it('remappt NICHT, wenn der Provider groq ist', () => {
     expect(normalizeModelForProvider('openrouter/free', 'groq')).toBe('openrouter/free');
+  });
+});
+
+describe('resolveFallbackModel', () => {
+  it('nutzt das mitgeschickte Fallback-Modell (z. B. Vision-Requests)', () => {
+    expect(resolveFallbackModel('meta-llama/llama-4-scout:free')).toBe('meta-llama/llama-4-scout:free');
+    expect(resolveFallbackModel('  x  ')).toBe('x');
+  });
+
+  it('fällt ohne Angabe auf das Standard-Fallback-Modell zurück', () => {
+    expect(resolveFallbackModel('')).toBe(OPENROUTER_FALLBACK_MODEL);
+    expect(resolveFallbackModel(null)).toBe(OPENROUTER_FALLBACK_MODEL);
+    expect(resolveFallbackModel(undefined)).toBe(OPENROUTER_FALLBACK_MODEL);
   });
 });
 

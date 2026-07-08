@@ -24,7 +24,7 @@ Rückfragen auszufüllen.
 ## Arbeitsweise
 - Deterministik vor KI: erst Profil/Extras/SessionAnswers, dann erst ein API-Call.
 - Prompts klein und fokussiert halten (kleiner Kontext schlägt große Feldlisten — Lehre vom 2026-05-15).
-- Bei Prompt-Struktur-Änderungen den Snapshot-Test aus `TESTING_PLAN.md` mitdenken.
+- Bei Prompt-Struktur-Änderungen den Snapshot-Test aus `docs/reference/testing-plan.md` mitdenken.
 
 ## Vermeiden
 - Wieder eine globale Konfidenz-Schwelle statt Field-by-Field (bewusst verworfen, `decisions.md`).
