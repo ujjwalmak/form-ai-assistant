@@ -1,39 +1,58 @@
-# Präsentation — Reflexion (02.07.2026)
+# Präsentationen — Aurora-Glass-Decks
 
-Reflexions-Folien im **Aurora-Glass-Design** der FormAssist-Webseite — in zwei Formaten:
+Folien im **Aurora-Glass-Design** der FormAssist-Webseite. Zwei Foliensätze:
 
-| Datei | Format | Zweck |
+| Deck | Datei | Anlass |
 | --- | --- | --- |
-| [`FormAssist_Reflexion.pptx`](FormAssist_Reflexion.pptx) | PowerPoint (12 Folien, 16:9) | **Hauptformat für die Abgabe/Präsentation** — inkl. Sprechertext in den Notizen |
-| [`reflexion.html`](reflexion.html) | HTML (eine Datei, offline) | Browser-Fallback |
+| **Abschluss: reine Tool-Demo** | [`FormAssist_Abschluss.pptx`](FormAssist_Abschluss.pptx) · [PDF-Fallback](FormAssist_Abschluss.pdf) | **09.07.2026, 14:00** — 10 Min Live-Demo des Prototyps in 7 Kapiteln |
+| Reflexion | `FormAssist_Reflexion.pptx` (bei Bedarf aus `deck-src/` neu bauen) · [`reflexion.html`](reflexion.html) | 02.07.2026 — die 8 Reflexionsfragen |
 
-## PowerPoint (empfohlen)
+## Abschluss-Deck (09.07.) — reine Tool-Demo
 
-- **Referentenansicht nutzen:** Jede Folie hat vollständigen **Sprechertext in den Notizen**
-  (mit Zeitbudget und Sprecher-Zuordnung Maximilian/Ujjwal, ~15 Min gesamt).
-- **Fonts:** Das Deck nutzt *Inter* und *Space Grotesk*. Auf diesem Rechner sind sie installiert
-  (`~/Library/Fonts`). Für einen anderen Rechner: die TTFs aus [`fonts/`](fonts/) per Doppelklick
-  installieren — oder das Deck vorab als PDF exportieren.
-- Design-Elemente (Aurora-Hintergrund mit echtem Glas-Effekt, Logo) sind als Bilder gebacken —
-  das Deck sieht überall gleich aus.
+**Aufbau:** Titel → Fahrplan → **7 Demo-Kapitel mit echten Prototyp-Screenshots** → Danke + Links.
+Die Kapitel: Erkennen · Erklären · Profil · ⚡ Agent · Multi-Page · Chat · Submit-Review.
 
-### Deck neu bauen (optional)
+- **Die Folien sind Drehbuch UND Plan B:** Ab Folie 3 läuft alles live im Browser; die
+  Screenshot-Folien tragen die Demo notfalls komplett alleine (falls live etwas klemmt).
+- **Referentenansicht nutzen:** Jede Folie hat Sprechertext in den Notizen — inkl.
+  **Klick-Route pro Kapitel** (was live gezeigt wird), Sprecher-Zuordnung (Ujjwal fährt,
+  Maximilian moderiert) und Zeitbudget (~10 Min gesamt).
+- **Vorbereitung vor 14:00** (steht auch in den Notizen von Folie 2/3): Extension geladen,
+  Groq-Key gültig + OpenRouter-Backup, `test-site` läuft (`npm run dev`), Profil gefüllt,
+  Screenshare auf Chrome, PDF-Fallback offen.
+- **Links sind eingebaut** (Anforderung aus der Kurs-Mail): Repo + Projektwebseite als
+  klickbare Pills auf der Schlussfolie.
+  - Repo: <https://github.com/ujjwalmak/form-ai-assistant>
+  - Webseite: <https://ujjwalmak.github.io/form-ai-assistant/>
+- **Orga (aus der Kurs-Mail):** Präsentation bis **So 12.07.** auf Moodle hochladen ·
+  Prototyp-Link im Zoom-Chat teilen · falls Repo privat: `duenne` auf GitHub einladen.
+- **Fonts:** *Inter* und *Space Grotesk* (auf diesem Rechner installiert). Fremder Rechner:
+  TTFs aus [`fonts/`](fonts/) installieren **oder** den PDF-Fallback verwenden.
+
+### Zu den Screenshots (Transparenz)
+
+Die Demo-Folien zeigen die **echte Extension** auf der eigenen `test-site`, automatisiert
+aufgenommen (Playwright + geladene Extension, Skripte in [`deck-src/capture/`](deck-src/capture/)).
+Die **KI-Antworten wurden für die Aufnahme deterministisch gemockt** (Netzwerk-Interception,
+gleiche Antwortformate wie Groq) — damit die Screenshots reproduzierbar sind. Live in der
+Demo antwortet die echte Groq-API. Hinweis steht auch in den Notizen von Kapitel 1.
+
+## Decks neu bauen (optional)
 
 Quellskripte in [`deck-src/`](deck-src/) (Python, benötigt `python-pptx`, `Pillow`, `numpy`):
 
 ```bash
-python3 deck-src/generate_assets.py   # rendert Hintergründe + Logo nach deck-src/assets/
-python3 deck-src/build_deck.py        # baut ../FormAssist_Reflexion.pptx
+python3 deck-src/generate_assets.py    # rendert Hintergründe + Logo nach deck-src/assets/
+python3 deck-src/build_final_deck.py   # baut ../FormAssist_Abschluss.pptx  (09.07., Tool-Demo)
+python3 deck-src/build_deck.py         # baut ../FormAssist_Reflexion.pptx  (02.07.)
 ```
 
-## HTML-Fallback
+Screenshots neu aufnehmen (optional): `test-site` starten, dann die Skripte in
+`deck-src/capture/` mit Node + Playwright ausführen und die PNGs mit abgerundeten
+Ecken/Glow nach `deck-src/assets/demo/` rahmen (siehe Kommentarkopf der Skripte).
+
+## HTML-Fallback (Reflexion)
 
 1. [`reflexion.html`](reflexion.html) im Browser öffnen (Doppelklick), **`F`** für Vollbild.
 2. Blättern: **→ / ← · Leertaste · PageUp/PageDown · Home/End** oder die Punkte rechts.
 3. Direkt zu einer Folie springen: `reflexion.html#4`.
-
-## Inhalt
-
-Titel · Eckdaten · die **8 Reflexionsfragen** · Ehrliche Bilanz (Stolz / Grenzen / Ausblick) · Danke.
-Inhalt gespiegelt aus [`../Reflexion.md`](../Reflexion.md); Hervorhebungen (Gradient-Rahmen)
-markieren Kernaussagen und die War Stories (Provider-Odyssee, Push-Protection).

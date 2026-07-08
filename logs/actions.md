@@ -461,3 +461,40 @@ Neue Vorlesung (MCP) gegen die Pflicht abgleichen und den Projektstatus aktualis
 
 - Alle behandelten Pflicht-Einheiten (E2–E11) erfüllt bzw. erlassen (E5); E11 ohne neuen Pflichtpunkt.
 - Offen: Webseite live-schalten (Repo-Admin), zwei Abschlusspräsentationen (02./09.07.), optional Screenshots/MCP-Feature.
+
+---
+
+## [2026-07-07] Abschlusspräsentation (Prototyp-Demo 09.07.) erstellt
+
+**Ziel:**
+Foliensatz für die 10-minütige Prototyp-Vorstellung am 09.07.2026 (Anforderungen aus der Kurs-Mail: Demo, Repo- + Webseiten-Link, Moodle-Upload bis 12.07.).
+
+**Aktionen:**
+
+1. Neues Deck `praesentation/FormAssist_Abschluss.pptx` (10 Folien, Aurora-Glass) via `deck-src/build_final_deck.py` — gleiche Design-Helfer wie das Reflexions-Deck.
+2. Inhalt aus Repo-Quellen destilliert (README, Projektstand, decisions.md, PRODUCT_VISION, Webseite): Problem → Lösung → **Live-Demo-Platzhalter (Folie 4)** → Architektur → Agent-Details → Guardrails → Qualität → Ausblick → Links.
+3. Sprechertext in allen Notizen (Zeitbudget, Zuordnung Maximilian/Ujjwal, ~10 Min); Demo-Notizen mit Vorbereitungs-Checkliste + Fallback-Plan.
+4. Repo- und Webseiten-Link als klickbare Pills auf der Schlussfolie; PDF-Fallback (`FormAssist_Abschluss.pdf`, aus PowerPoint exportiert) für fremde Rechner.
+5. Rendering via PowerPoint-Export verifiziert; `praesentation/README.md` auf beide Decks umgestellt.
+
+**Ergebnis:**
+
+- Deck präsentationsfertig; offen: einmal Probelauf + Demo-Checkliste am 09.07. vor 14:00 abhaken.
+
+---
+
+## [2026-07-08] Abschluss-Deck zur reinen Tool-Demo umgebaut (mit echten Screenshots)
+
+**Ziel:**
+Neue Vorgabe: Die Abschlusspräsentation am 09.07. ist eine **reine Tool-Demo** (10 Min). Das Deck vom 07.07. entsprechend transformieren.
+
+**Aktionen:**
+
+1. Prototyp-Screenshots automatisiert aufgenommen: Playwright-Chromium mit geladener Extension gegen die `test-site` (Registration-Wizard + Checkout); LLM-Antworten per Netzwerk-Interception deterministisch gemockt (gleiche Formate wie Groq) — Capture-Skripte in `praesentation/deck-src/capture/`, gerahmte PNGs in `deck-src/assets/demo/`.
+2. `build_final_deck.py` umgebaut: Titel → Fahrplan → **7 Demo-Kapitel** (Erkennen · Erklären · Profil · ⚡ Agent · Multi-Page · Chat · Submit-Review) mit Screenshot + „Live zeigen“-Chips → Danke/Links. Folien = Drehbuch + Plan B der Live-Demo.
+3. Notizen mit Klick-Route pro Kapitel, Sprecher-Zuordnung (Ujjwal fährt, Maximilian moderiert), Zeitbudget, Vorbereitungs-Checkliste und Transparenz-Hinweis zu den gemockten Screenshot-Antworten.
+4. Rendering via PowerPoint-Export verifiziert; PDF-Fallback aktualisiert; `praesentation/README.md` nachgezogen.
+
+**Ergebnis:**
+
+- `FormAssist_Abschluss.pptx` (10 Folien, ~17 MB) demo-fertig; offen: Probelauf + Demo-Setup-Checkliste am 09.07. vor 14:00.
