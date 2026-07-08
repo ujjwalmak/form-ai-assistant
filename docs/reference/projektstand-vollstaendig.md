@@ -1,3 +1,8 @@
+---
+hide:
+  - navigation
+---
+
 <div class="fa-page-hero" markdown>
 <span class="fa-kicker">Referenz · Quelle der Wahrheit</span>
 
@@ -27,6 +32,8 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 ---
 
 ## Status nach Kurseinheiten
+
+<div class="fa-einheiten" markdown>
 
 **Legende:** ✅ Erfüllt · 🟡 Teilweise · ⬜ Offen · ➖ Entfällt · ⏳ Noch nicht behandelt
 *Diese Übersicht listet nur Pflichtanforderungen (Folien-Checkliste „Wo Sie stehen sollten"). Optionale Kür steht in „Nächste Maßnahmen" / „Roadmap".*
@@ -98,6 +105,8 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
 | — | ✅ | Behandelt (25.06.). MCP als **Konzept** gelehrt (Host/Client/Server, stdio/SSE, Tools/Resources/Prompts) — die „Meilensteiner der Prototypen" auf der Folie sind unverändert, **kein neuer Pflichtpunkt** für den Prototyp. Optional in Roadmap: MCP-Server für `doc-agent`. |
+
+</div>
 
 ---
 

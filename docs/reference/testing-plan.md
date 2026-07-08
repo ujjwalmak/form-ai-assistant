@@ -1,3 +1,8 @@
+---
+hide:
+  - navigation
+---
+
 <div class="fa-page-hero" markdown>
 <span class="fa-kicker">Reference · Quality</span>
 

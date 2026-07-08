@@ -275,6 +275,25 @@ body::after {
   font-weight: 600;
 }
 
+/* Kurseinheiten-Tabellen (Referenz) — alle identisch breit, Spalten fix ausgerichtet */
+.md-typeset .fa-einheiten table:not([class]) {
+  display: table;          /* Material setzt sonst inline-block → fixed-Layout griffe nicht */
+  width: 100%;
+  table-layout: fixed;
+}
+.md-typeset .fa-einheiten table:not([class]) th:nth-child(1),
+.md-typeset .fa-einheiten table:not([class]) td:nth-child(1) { width: 34%; }
+.md-typeset .fa-einheiten table:not([class]) th:nth-child(2),
+.md-typeset .fa-einheiten table:not([class]) td:nth-child(2) {
+  width: 11%;
+  text-align: center;
+  white-space: nowrap;
+}
+.md-typeset .fa-einheiten table:not([class]) th:nth-child(3),
+.md-typeset .fa-einheiten table:not([class]) td:nth-child(3) { width: 55%; }
+/* lange Belege/Wörter sauber umbrechen statt die feste Breite zu sprengen */
+.md-typeset .fa-einheiten table:not([class]) td { overflow-wrap: anywhere; }
+
 .md-typeset code {
   border-radius: 6px;
 }
