@@ -18,6 +18,7 @@ export default function RootLayout({ children }) {
             <a href="/checkout" className="hover:text-indigo-200 transition">Checkout</a>
             <a href="/insurance" className="hover:text-indigo-200 transition">Insurance</a>
             <a href="/survey" className="hover:text-indigo-200 transition">Survey</a>
+            <a href="/bestellung" className="hover:text-indigo-200 transition">Bestellung</a>
           </div>
         </nav>
         <main className="max-w-4xl mx-auto py-10 px-4">{children}</main>
