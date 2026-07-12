@@ -23,3 +23,6 @@ site/
 
 # Kursfolien & lokaler Präsentations-PDF – gehören nicht ins Repo
 vorlesung/
+
+# Präsentations-Material (nur lokal, nicht Teil der Abgabe)
+praesentation/
