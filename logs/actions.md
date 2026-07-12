@@ -577,3 +577,58 @@ Neue Vorgabe: Die Abschlusspräsentation am 09.07. ist eine **reine Tool-Demo** 
 **Ergebnis:**
 
 - `FormAssist_Abschluss.pptx` (10 Folien, ~17 MB) demo-fertig; offen: Probelauf + Demo-Setup-Checkliste am 09.07. vor 14:00.
+
+---
+
+## [2026-07-09] Demo-Drehbuch für Ujjwals 5-Minuten-Part + Finale-Formular
+
+**Ziel:**
+Neue Aufteilung für die Demo heute 14:00: Maxi zeigt App/Settings/Profil, Ujjwal zeigt in 5 Min den Bot auf Webseiten + KI-Kontextverständnis — exaktes Drehbuch dafür erstellen.
+
+**Aktionen:**
+
+1. `praesentation/DEMO_DREHBUCH.md`: 4 getaktete Stationen (Registration-Wizard → Medical/DE-Kontext → Insurance/Kendo-Widgets → Bestellformular-Finale) mit exakten Klicks, wörtlichen Chat-Sätzen, Sprechtext, Reserve-Stationen für alle übrigen Test-Site-Seiten, Pannen- und Kürzungsplan.
+2. Befund: Die Test-Site-Wizards haben **kein echtes `<form>`** → Submit-Review kann dort live nicht feuern. Lösung: lokales Bestellformular `praesentation/demo-fallback/bestellung.html` (echtes `<form>`, Deutsch, 15 Felder) als Finale — deckt zugleich Radio-per-Optionstext/Checkbox-Chat-Aktionen und Live-Validierung ab.
+3. Finale end-to-end verifiziert (Playwright + geladene Extension, gemockte LLM-Antworten): Agent füllt aus Profil, „Formular absenden?"-Nachfrage des Agenten, Submit-Review mit Status erscheint.
+4. v2.1-Features (Stand 05.07: Live-Validierung, Logik-Check, Rückfragen-Drosselung, ARIA/Kendo-Füllung) in die Demo-Route eingebaut; `praesentation/README.md` verweist auf das Drehbuch.
+
+**Ergebnis:**
+
+- Drehbuch demo-fertig; vor 14:00: Checkliste in `DEMO_DREHBUCH.md` §0 abarbeiten + ein kompletter Probelauf mit echter Groq-KI (v. a. der Pizza-Chat-Satz in Station 4).
+
+---
+
+## [2026-07-09] Demo: kurzer Spickzettel + /bestellung-Seite in die Test-Site (Vercel)
+
+**Ziel:**
+Zwei Rückmeldungen umsetzen: (1) das Demo-Drehbuch war zu lang — kurze glanzbare Anleitung nötig; (2) die Demo soll komplett auf der deployten Test-Site (`test-site-gray-zeta.vercel.app`) laufen, nicht auf lokalen Ad-hoc-Seiten.
+
+**Aktionen:**
+
+1. `praesentation/DEMO_SPICKZETTEL.md` (neu): kompakte 4-Stationen-Anleitung zum Öffnen während der Demo — nur Klicks, die wörtlichen Chat-Sätze, je eine Punchline, Pannen-Kurzliste. Alle URLs auf Vercel.
+2. Befund bestätigt: Die Test-Site-Wizards nutzen `<div>`+Button (kein natives `submit`-Event) → Submit-Review feuert dort nicht. Lösung: neue Route **`test-site/app/bestellung/page.js`** — echtes `<form onSubmit>` (Radio-Gruppe, Checkboxen, Select, deutsche Labels + autocomplete), im Stil der Test-Site (Field/Input/Select/Textarea aus StepWizard). Nav-Link „Bestellung" in `app/layout.js` ergänzt.
+3. Verifiziert: `next build` grün, `/bestellung` als statische Route; end-to-end mit geladener Extension (Playwright) — Agent füllt aus Profil, „Formular absenden?"-Guard + Submit-Review feuern auf der Next.js-Seite. (AGENTS.md-Hinweis beachtet: Next 16 v16-Breaking-Changes betreffen diese Client-Form-Seite nicht.)
+4. `DEMO_DREHBUCH.md` auf Vercel-URLs + `/bestellung` umgestellt, Verweis auf den Spickzettel + lokales Offline-Backup ergänzt; `praesentation/README.md` nachgezogen.
+
+**Offen für den Nutzer:**
+
+- **`git push`** (Test-Site) → Vercel deployt `/bestellung` (~1 Min), dann `…vercel.app/bestellung` prüfen.
+- Ein Probelauf mit echter Groq-KI, v. a. der Pizza-Satz in Station 4.
+
+**Websites-Klärung:** Stationen 1–3 (registration/medical/insurance) sind identischer Code wie die Vercel-Seite; das frühere lokale `demo-fallback/bestellung.html` bleibt nur noch als Offline-Backup.
+
+---
+
+## [2026-07-09] Abschlusspräsentation: öffentlicher Test-Link für Teilnehmer (ohne Web Store)
+
+**Ziel:**
+Prof. bittet um Test-Link im Zoom-Chat; Extension ist nicht im Chrome Web Store (5 $ + Zeit). Lösung ohne Store: Extension als ZIP zum „Entpackte Erweiterung laden" + Anleitungsseite.
+
+**Aktionen:**
+
+1. Extension-Runtime-Dateien (manifest, 7 Content-/Background-Skripte, options, icons) als `docs/download/formassist-v2.1.zip` gepackt (~90 KB) — wird von GitHub Pages mit ausgeliefert.
+2. Neue Doku-Seite **`docs/testen.md`** („Selbst testen", in Nav): Download-Button, Install-Schritte (Entwicklermodus → entpackte Erweiterung), kostenloser Groq-Key, Shortcuts, Troubleshooting-Tabelle. Verweist auf die Vercel-Test-Site.
+3. `mkdocs build --strict` grün; Push → Pages-Workflow grün; beide URLs (Seite + ZIP) liefern 200, ZIP von der Live-Site heruntergeladen und Integrität + manifest geprüft. `/bestellung` auf Vercel ebenfalls live (200).
+4. GitHub-Release als Alternative wurde vom Permission-System blockiert — nicht nötig, ZIP via Pages reicht.
+
+**Link für den Zoom-Chat:** `https://ujjwalmak.github.io/form-ai-assistant/testen/`
