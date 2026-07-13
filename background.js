@@ -1,47 +1,21 @@
 'use strict';
 
-const PROVIDERS = Object.freeze({
-  groq: {
-    chatCompletionsUrl: 'https://api.groq.com/openai/v1/chat/completions',
-    extraHeaders: {},
-  },
-  openrouter: {
-    chatCompletionsUrl: 'https://openrouter.ai/api/v1/chat/completions',
-    extraHeaders: {
-      'HTTP-Referer': 'https://github.com/ujjwalmak/form-ai-assistant',
-      'X-Title': 'FormAssist',
-    },
-  },
-});
+// Provider-/Modell-Konfiguration (PROVIDERS, normalizeProvider, providerLabel,
+// normalizeModelForProvider, OPENROUTER_FALLBACK_MODEL) kommt aus
+// fa-providers.js — im Service Worker via importScripts, in Node/Vitest
+// stellen die Test-Setups dieselben Symbole als Globals bereit.
+if (typeof importScripts === 'function') importScripts('fa-providers.js');
 
 const REQUEST_TIMEOUT_MS = 25000;
 const STREAM_TIMEOUT_MS = 40000;
 const MAX_RETRIES = 2;
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
-// Fallback model used when Groq is rate-limited and we switch to OpenRouter
-const OPENROUTER_FALLBACK_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
-
-// Requests can carry their own fallback model (e.g. vision requests must not
-// fall back to the text-only default model)
+// Requests können ein eigenes Fallback-Modell mitschicken (z. B. Vision-
+// Requests, die nicht auf das text-only Standardmodell wechseln dürfen)
 function resolveFallbackModel(requested) {
   const m = String(requested || '').trim();
   return m || OPENROUTER_FALLBACK_MODEL;
-}
-
-// Map legacy/invalid OpenRouter model IDs to real ones
-const OPENROUTER_MODEL_REMAP = {
-  'openrouter/free': 'openrouter/auto',
-  'openrouter/owl-alpha': 'meta-llama/llama-3.3-70b-instruct:free',
-};
-
-function normalizeModelForProvider(model, provider) {
-  if (normalizeProvider(provider) !== 'openrouter') return model;
-  return OPENROUTER_MODEL_REMAP[model] || model;
-}
-
-function normalizeProvider(value) {
-  return String(value || '').toLowerCase() === 'openrouter' ? 'openrouter' : 'groq';
 }
 
 function getStoredSync(keys) {
@@ -87,7 +61,7 @@ async function fetchProviderWithRetry(provider, key, body, { stream = false } = 
   const cfg = PROVIDERS[activeProvider];
   const resolvedKey = String(key || '').trim();
   if (!resolvedKey) {
-    throw new Error(`API-Schlüssel für ${activeProvider === 'openrouter' ? 'OpenRouter' : 'Groq'} fehlt.`);
+    throw new Error(`API-Schlüssel für ${providerLabel(activeProvider)} fehlt.`);
   }
   let lastError = null;
 
@@ -217,8 +191,5 @@ chrome.runtime.onConnect.addListener(port => {
 
 // ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    normalizeProvider, normalizeModelForProvider, backoffDelay, resolveFallbackModel,
-    OPENROUTER_MODEL_REMAP, OPENROUTER_FALLBACK_MODEL, RETRYABLE_STATUS,
-  };
+  module.exports = { backoffDelay, resolveFallbackModel, RETRYABLE_STATUS };
 }

@@ -1,44 +1,10 @@
+// normalizeProvider/normalizeModelForProvider liegen seit dem Modul-Split in
+// fa-providers.js (siehe fa-providers.test.js) — hier nur noch der Transport
 const {
-  normalizeProvider,
-  normalizeModelForProvider,
   backoffDelay,
   resolveFallbackModel,
-  OPENROUTER_FALLBACK_MODEL,
 } = require('../../background.js');
-
-describe('normalizeProvider', () => {
-  it('liefert "openrouter" nur für den exakten (case-insensitiven) String', () => {
-    expect(normalizeProvider('openrouter')).toBe('openrouter');
-    expect(normalizeProvider('OPENROUTER')).toBe('openrouter');
-  });
-
-  it('fällt für alles andere auf "groq" zurück', () => {
-    expect(normalizeProvider('groq')).toBe('groq');
-    expect(normalizeProvider('')).toBe('groq');
-    expect(normalizeProvider(null)).toBe('groq');
-    expect(normalizeProvider(undefined)).toBe('groq');
-    expect(normalizeProvider('irgendwas')).toBe('groq');
-  });
-});
-
-describe('normalizeModelForProvider', () => {
-  it('remappt veraltete OpenRouter-Modell-IDs', () => {
-    expect(normalizeModelForProvider('openrouter/free', 'openrouter')).toBe('openrouter/auto');
-    expect(normalizeModelForProvider('openrouter/owl-alpha', 'openrouter')).toBe(
-      'meta-llama/llama-3.3-70b-instruct:free'
-    );
-  });
-
-  it('reicht unbekannte Modelle für OpenRouter unverändert durch', () => {
-    expect(
-      normalizeModelForProvider('meta-llama/llama-3.3-70b-instruct:free', 'openrouter')
-    ).toBe('meta-llama/llama-3.3-70b-instruct:free');
-  });
-
-  it('remappt NICHT, wenn der Provider groq ist', () => {
-    expect(normalizeModelForProvider('openrouter/free', 'groq')).toBe('openrouter/free');
-  });
-});
+const { OPENROUTER_FALLBACK_MODEL } = require('../../fa-providers.js');
 
 describe('resolveFallbackModel', () => {
   it('nutzt das mitgeschickte Fallback-Modell (z. B. Vision-Requests)', () => {

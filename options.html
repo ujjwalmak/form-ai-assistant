@@ -129,6 +129,15 @@
       color: var(--text);
     }
 
+    .card-title-badge {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text3);
+      margin-left: 6px;
+    }
+
+    .field-label-spaced { margin-top: 10px; }
+
     .desc {
       margin: 8px 0 16px;
       font-size: 13px;
@@ -319,14 +328,14 @@
 
     <!-- Supabase Sync -->
     <section class="settings-card">
-      <h2 class="card-title">Supabase Sync <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px;">optional</span></h2>
+      <h2 class="card-title">Supabase Sync <span class="card-title-badge">optional</span></h2>
       <p class="desc">
         Profildaten und Verlauf geräteübergreifend synchronisieren.
         URL und Anon-Key aus dem Supabase-Dashboard eintragen.
       </p>
       <label class="field-label" for="supabaseUrl">Supabase Project URL</label>
       <input type="text" id="supabaseUrl" placeholder="https://xxxx.supabase.co" autocomplete="off" spellcheck="false">
-      <label class="field-label" for="supabaseKey" style="margin-top:10px;">Supabase Anon Key</label>
+      <label class="field-label field-label-spaced" for="supabaseKey">Supabase Anon Key</label>
       <div class="input-row">
         <input type="password" id="supabaseKey" placeholder="sb_..." autocomplete="off" spellcheck="false">
         <button id="toggleSbKey" type="button">Anzeigen</button>
@@ -357,6 +366,7 @@
     </div>
 
   </div>
+  <script src="fa-providers.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

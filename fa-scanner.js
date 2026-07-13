@@ -260,31 +260,6 @@ function getFormStepInfo() {
   };
 }
 
-function advanceToNextStep(formEl) {
-  if (!formEl) return false;
-  if (typeof formEl.checkValidity === 'function' && !formEl.checkValidity()) return false;
-
-  const nextBtn = findButtonByText(formEl, 'button[type="submit"], input[type="submit"]', ['Weiter', 'Next', 'Fortschritt']);
-
-  const hidden = formEl?.querySelector('input[name*="submit"][type="hidden"]');
-  if (hidden) {
-    const submitValue = nextBtn?.getAttribute?.('data-submit-value') || nextBtn?.value || hidden.getAttribute('value') || 'next';
-    hidden.value = submitValue;
-  }
-  if (nextBtn) {
-    if (typeof formEl.requestSubmit === 'function') formEl.requestSubmit(nextBtn.form === formEl ? nextBtn : undefined);
-    else nextBtn.click();
-    return true;
-  }
-  const submitBtn = formEl?.querySelector('button[type="submit"]');
-  if (submitBtn) {
-    if (typeof formEl.requestSubmit === 'function') formEl.requestSubmit(submitBtn);
-    else submitBtn.click();
-    return true;
-  }
-  return false;
-}
-
 function getSubmitText(formEl) {
   return Array.from(formEl.querySelectorAll('button[type="submit"],input[type="submit"],button:not([type="button"]):not([type="reset"])'))
     .map(b => clean(b.textContent || b.value)).filter(Boolean).slice(0, 3).join(' / ');
@@ -388,80 +363,6 @@ function getFieldValueBrief(el) {
   return clean(String(el.value || '')).slice(0, 60);
 }
 
-function buildSystemPrompt(ctx, profile, extras = {}) {
-  const { page, forms } = ctx;
-  const lines = [
-    'Du bist ein intelligenter KI-Formularassistent. Du hilfst Nutzern dabei, Online-Formulare korrekt, vollständig und fehlerfrei auszufüllen.',
-    'Antworte immer auf Deutsch. Sei präzise, freundlich und konkret hilfreich.',
-    'Antworte in max. 3 Sätzen, außer wenn eine ausführlichere Erklärung wirklich nötig ist.',
-    '',
-    '=== SEITE ===',
-    `Titel: "${page.title}"`,
-    `URL: ${page.hostname}${page.pathname}`,
-  ];
-  if (page.h1 && page.h1 !== page.title) lines.push(`Hauptüberschrift: "${page.h1}"`);
-  if (page.metaDesc) lines.push(`Seitenbeschreibung: ${page.metaDesc}`);
-  const filledFields = PROFILE_FIELDS.filter(pf => profile?.[pf.key]);
-  if (filledFields.length) {
-    lines.push('', '=== NUTZERPROFIL ===');
-    filledFields.forEach(pf => lines.push(`${pf.label}: ${profile[pf.key]}`));
-  }
-  const extraEntries = Object.entries(extras).filter(([, v]) => v);
-  if (extraEntries.length) {
-    lines.push('', '=== WEITERE GESPEICHERTE DATEN ===');
-    extraEntries.forEach(([k, v]) => lines.push(`${k}: ${v}`));
-  }
-  lines.push('');
-  forms.forEach(form => {
-    lines.push(forms.length > 1 ? `=== FORMULAR ${form.index} ===` : '=== FORMULAR ===');
-    if (form.submitText) lines.push(`Aktion/Submit: "${form.submitText}"`);
-    if (form.intro)      lines.push(`Anweisungen: "${form.intro}"`);
-    lines.push('');
-    form.sections.forEach(sec => {
-      if (sec.title) lines.push(`[${sec.title}]`);
-      sec.fields.forEach(f => {
-        let line = `• ${f.label}`;
-        if (f.required)     line += ' ✱';
-        line += ` (${f.type})`;
-        if (f.selector)     line += ` [sel: ${f.selector}]`;
-        const cur = getFieldValueBrief(f.el);
-        if (cur)            line += ` [aktuell: "${cur}"]`;
-        if (f.autocomplete) line += ` [autocomplete: ${f.autocomplete}]`;
-        if (f.min || f.max) line += ` [range: ${f.min ?? ''}–${f.max ?? ''}]`;
-        if (f.maxLength)    line += ` [max ${f.maxLength} Zeichen]`;
-        if (f.hint)         line += ` → "${f.hint}"`;
-        if (f.options.length) line += `\n  Optionen: ${f.options.slice(0, 8).join(', ')}${f.options.length > 8 ? ', …' : ''}`;
-        lines.push(line);
-      });
-      lines.push('');
-    });
-  });
-  lines.push('✱ = Pflichtfeld');
-  lines.push(
-    '',
-    '=== AKTIONEN (du kannst Felder direkt ausfüllen) — WICHTIGSTE REGEL ===',
-    'Sobald der Nutzer in IRGENDEINER Form will, dass etwas eingetragen, geändert, ausgewählt, an- oder abgehakt wird',
-    '(z. B. "trag ein", "fülle", "schreib", "setz", "ändere", "wähle", "mach ein Häkchen", "entferne", oder er nennt einfach einen Wert für ein Feld),',
-    'MUSST du ans ENDE deiner Antwort einen Aktionsblock in EXAKT diesem Format anhängen:',
-    '<<<ACTIONS',
-    '[{"action":"fill","selector":"[name=\\"email\\"]","value":"max@web.de","label":"E-Mail"}]',
-    'ACTIONS>>>',
-    '',
-    'Erlaubte actions:',
-    '- "fill"   → Text-, Zahlen- und Datumsfelder. Datum IMMER als ISO: date→YYYY-MM-DD, month→YYYY-MM, time→HH:MM. Relative Angaben ("nächster Monat") selbst in konkrete Daten umrechnen.',
-    '- "select" → Dropdowns. value muss EXAKT einer der angegebenen Optionen entsprechen.',
-    '- "check"  → Checkboxen/Radios. value "ja" zum Ankreuzen, "nein" zum Abwählen, bei Radios der Optionstext.',
-    '',
-    'Nutze NUR [sel: …]-Selektoren, die oben bei den FELDERN stehen (exakt kopieren). Schreibe davor 1 kurzen Satz, was du tust.',
-    'Ohne Aktionsblock passiert NICHTS auf der Seite — reiner Text füllt keine Felder aus.',
-    'KEINE Aktionen, wenn der Nutzer nur eine Frage stellt. Niemals action für Submit/Absenden verwenden.',
-    '',
-    '=== GEDÄCHTNIS ===',
-    'Der bisherige Gesprächsverlauf (auch von früheren Seiten dieser Website) ist Teil des Kontexts. Nutze frühere Antworten des Nutzers aktiv und frage nichts doppelt.'
-  );
-  return lines.join('\n');
-}
-
 function getActiveFieldContext(el) {
   if (!el) return '';
   const parts = [];
@@ -498,6 +399,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     getLabel, getGroupLabel, isFileWidget, getHint, getError, extractField,
     groupIntoSections, getFormIntro, getSubmitText, getFieldValueBrief,
-    buildSystemPrompt, getActiveFieldContext, matchProfile, extractRichContext,
+    getActiveFieldContext, matchProfile, extractRichContext,
   };
 }

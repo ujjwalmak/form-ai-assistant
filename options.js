@@ -1,44 +1,9 @@
 'use strict';
 
+// PROVIDERS, normalizeProvider und normalizeAssistantMode kommen aus
+// fa-providers.js (per <script> vor dieser Datei in options.html geladen)
+
 const $ = id => document.getElementById(id);
-
-const PROVIDERS = Object.freeze({
-  groq: {
-    label: 'Groq',
-    keyField: 'faGroqApiKey',
-    keyPlaceholder: 'gsk_...',
-    helpHtml: 'Groq API-Key unter <a href="https://console.groq.com" target="_blank">console.groq.com</a> erstellen.',
-    modelsUrl: 'https://api.groq.com/openai/v1/models',
-    defaultModel: 'llama-3.3-70b-versatile',
-    models: [
-      ['llama-3.3-70b-versatile', 'Llama 3.3 70B - Standard (empfohlen)'],
-      ['llama-3.1-8b-instant', 'Llama 3.1 8B - Schnell & guenstig'],
-      ['mixtral-8x7b-32768', 'Mixtral 8x7B - Langer Kontext'],
-    ],
-  },
-  openrouter: {
-    label: 'OpenRouter',
-    keyField: 'faOpenRouterApiKey',
-    keyPlaceholder: 'sk-or-v1-...',
-    helpHtml: 'OpenRouter API-Key unter <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a> erstellen.',
-    modelsUrl: 'https://openrouter.ai/api/v1/models',
-    defaultModel: 'openrouter/auto',
-    models: [
-      ['openrouter/auto', 'Auto-Routing – bestes freies Modell (empfohlen)'],
-      ['meta-llama/llama-3.3-70b-instruct:free', 'Llama 3.3 70B – kostenlos'],
-      ['inclusionai/ring-2.6-1t:free', 'Ring 2.6 1T – kostenlos'],
-      ['nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', 'Nemotron 3 Nano Omni – kostenlos'],
-      ['poolside/laguna-m.1:free', 'Laguna M.1 – kostenlos'],
-    ],
-  },
-});
-
-const normalizeProvider = value => String(value || '').toLowerCase() === 'openrouter' ? 'openrouter' : 'groq';
-const normalizeAssistantMode = value => {
-  const v = String(value || '').toLowerCase();
-  if (v === 'context') return 'context';
-  return 'classic'; // Default: „Mit Vorschau"
-};
 
 let savedKeys = {
   faApiKey: '',
@@ -98,7 +63,7 @@ async function validateKey() {
   const key = $('apiKey').value.trim();
   if (!key) return;
 
-  $('keyStatus').textContent = 'Teste...';
+  $('keyStatus').textContent = 'Teste…';
   $('keyStatus').className = 'status';
 
   try {
@@ -106,10 +71,10 @@ async function validateKey() {
       headers: { Authorization: `Bearer ${key}` },
     });
     if (res.ok) {
-      $('keyStatus').textContent = 'API-Schluessel gueltig';
+      $('keyStatus').textContent = 'API-Schlüssel gültig';
       $('keyStatus').className = 'status ok';
     } else {
-      $('keyStatus').textContent = 'Ungueltiger API-Schluessel';
+      $('keyStatus').textContent = 'Ungültiger API-Schlüssel';
       $('keyStatus').className = 'status error';
     }
   } catch {

@@ -1,7 +1,7 @@
 'use strict';
-// Supabase sync — device-UUID-based, no auth
-// TODO: Replace device-UUID approach with OAuth (Google/magic link) for production
-// Configure Supabase URL + anon key in the FormAssist options page.
+// Optionaler Supabase-Sync — Geräte-Trennung per UUID, ohne Auth
+// (bewusste Prototyp-Entscheidung, siehe memory/known_issues.md).
+// Supabase-URL + Anon-Key werden in den FormAssist-Einstellungen hinterlegt.
 
 let _sbConfig   = null;
 let _sbDeviceId = null;

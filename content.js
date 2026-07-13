@@ -8,20 +8,12 @@
   let _autoNavigate = true;
   let _keyPromise = null;
   let _onProviderFallback = null;
-  function normalizeProvider(value) {
-    return String(value || '').toLowerCase() === 'openrouter' ? 'openrouter' : 'groq';
+
+  // Anzeigename des gerade aktiven Providers (Konfiguration: fa-providers.js)
+  function currentProviderLabel() {
+    return providerLabel(_provider);
   }
-  function providerLabel(provider = _provider) {
-    return normalizeProvider(provider) === 'openrouter' ? 'OpenRouter' : 'Groq';
-  }
-  function getDefaultModel(provider = _provider) {
-    return normalizeProvider(provider) === 'openrouter' ? 'openrouter/auto' : 'llama-3.3-70b-versatile';
-  }
-  function normalizeAssistantMode(value) {
-    const v = String(value || '').toLowerCase();
-    if (v === 'context') return 'context';
-    return 'classic'; // Default: „Mit Vorschau"
-  }
+
   function loadKey() {
     if (_apiKey) return Promise.resolve(_apiKey);
     if (_keyPromise) return _keyPromise;
@@ -38,7 +30,7 @@
     return _keyPromise;
   }
 
-  // ── CSP-safe API helpers (routed via background service worker) ──────
+  // ── CSP-sichere API-Helfer (geroutet über den Background Service Worker) ──
   // fallbackModel: optionales Modell für den OpenRouter-Fallback (z. B. Vision-
   // Requests, die nicht auf das textbasierte Standard-Fallback-Modell dürfen)
   function groqRequest(key, body, fallbackModel) {
@@ -71,40 +63,54 @@
   if (window !== window.top) return;
   if (document.getElementById('formassist-host')) return;
 
-  // ── Modules loaded via manifest content_scripts (before this file): ──
-  // fa-utils.js   → clean, formatBytes, isVisible, textFromEl, parseDateToISO,
-  //                 isKendoWidget, getKendoWidget, getElementTextValue,
-  //                 findButtonByText, getAgentSelector, AGENT_SELECTOR_ATTR,
-  //                 AGENT_AUTO_SELECT_CONFIDENCE,
-  //                 detectLiveCheckKind, getLiveCheckResult (+ Validatoren)
-  // fa-profile.js → PROFILE_FIELDS, FAKE_DATA
-  // fa-scanner.js → SKIP_TYPES, getLabel, extractField, extractRichContext,
-  //                 buildSystemPrompt, getActiveFieldContext, matchProfile, …
-  // fa-fill.js    → FULL_WIDTH_KEYS, fillField, setKendoValue, tryDatePickerLib
-  // fa-styles.js  → FA_CSS
+  // ── Module aus manifest.json (laufen vor dieser Datei, globaler Scope): ──
+  // fa-utils.js     → clean, isVisible, parseDateToISO, getAgentSelector,
+  //                   downscaleImage, sleep, deterministische Validatoren, …
+  // fa-providers.js → PROVIDERS, normalizeProvider, providerLabel,
+  //                   getDefaultModel, getVisionModel, normalizeAssistantMode
+  // fa-profile.js   → PROFILE_FIELDS, FAKE_DATA
+  // fa-scanner.js   → SKIP_TYPES, getLabel, extractField, extractRichContext,
+  //                   getActiveFieldContext, matchProfile, getFormStepInfo, …
+  // fa-prompts.js   → buildSystemPrompt, buildAgentPrompt, buildScanPrompt,
+  //                   buildSubmitReviewPrompt
+  // fa-fill.js      → FULL_WIDTH_KEYS, fillField, setKendoValue, tryDatePickerLib
+  // fa-format.js    → escapeHtml, textToHtml, htmlToPlainText, renderMarkdown
+  // fa-actions.js   → splitActionBlock, sanitizeAgentActions, parseModelJsonArray,
+  //                   createSSEDecoder, parseScanReply
+  // fa-styles.js    → FA_CSS
+  // fa-templates.js → FA_HTML
 
-  // ── Run extraction ──────────────────────────────────────────────────
+  // ── Erst-Scan der Seite ──────────────────────────────────────────────
   let ctx = extractRichContext();
   let allFields   = ctx.forms.flatMap(f => f.allFields);
   let submitLabel = ctx.forms[0]?.submitText;
-  
-  // Multi-step form state
+
+  // Zustand mehrseitiger Formulare (Step-Erkennung)
   let stepInfo = getFormStepInfo();
 
-  // Safety: max pages the agent may auto-navigate in one session (loop guard)
+  // Loop-Schutz: maximale Seitenzahl, die der Agent in einer Sitzung
+  // selbstständig weiter navigieren darf
   const AGENT_MAX_PAGES = 12;
 
+  // Unbekannte Felder pro KI-Anfrage bündeln (1 API-Call statt 1 Call/Feld)
+  const AGENT_BATCH_SIZE = 12;
+
+  // Wie viele der letzten Chat-Nachrichten als Kontext mitgeschickt werden
+  const CHAT_HISTORY_WINDOW = 12;
+
   // ═══════════════════════════════════════════════════════════════════════
-  // INIT — load storage before building UI
+  // INIT — Einstellungen & Profil laden, dann UI aufbauen
   // ═══════════════════════════════════════════════════════════════════════
 
-  chrome.storage.sync.get(['faModel', 'faAssistantMode', 'faProvider', 'faAutoNavigate'], syncStored => {
+  async function init() {
+    const syncStored = await chrome.storage.sync.get(['faModel', 'faAssistantMode', 'faProvider', 'faAutoNavigate']);
     _provider = normalizeProvider(syncStored.faProvider);
     _model = syncStored.faModel || getDefaultModel(_provider);
     _assistantMode = normalizeAssistantMode(syncStored.faAssistantMode);
     _autoNavigate = syncStored.faAutoNavigate !== false; // Default an, sonst gespeicherter Wert
 
-  chrome.storage.local.get(['faProfile', 'faPosition', 'faDarkMode', 'faExtras', 'faProfiles', 'faActiveProfileId', 'faHistory'], stored => {
+    const stored = await chrome.storage.local.get(['faProfile', 'faPosition', 'faDarkMode', 'faExtras', 'faProfiles', 'faActiveProfileId', 'faHistory']);
+
     // ── Profile state ────────────────────────────────────────────────────
     let profiles        = stored.faProfiles || [];
     let activeProfileId = stored.faActiveProfileId || null;
@@ -139,10 +145,9 @@
     document.body.appendChild(hostEl);
     const shadow = hostEl.attachShadow({ mode: 'open' });
 
-    const fontLink = document.createElement('link');
-    fontLink.rel = 'stylesheet';
-    fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
-    shadow.appendChild(fontLink);
+    // Bewusst kein Webfont-Load: ein <link> auf Google Fonts würde auf jeder
+    // besuchten Seite einen Request an Google auslösen (Privacy). FA_CSS
+    // definiert einen System-Font-Stack als Fallback.
 
     // ── Styles ────────────────────────────────────────────────────────
     const style = document.createElement('style');
@@ -151,150 +156,10 @@
 
     // ── DOM ───────────────────────────────────────────────────────────
     const wrap = document.createElement('div');
-    wrap.innerHTML = `
-      <button class="trigger" id="fa-trigger" title="FormAssist öffnen">
-        <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-        <span class="trigger-badge" id="fa-trigger-badge" style="display:none"></span>
-      </button>
-      <div class="sidebar" id="fa-sidebar">
-        <div class="toast" id="fa-toast"></div>
-        <div class="undo-toast" id="fa-undo-toast">
-          <span class="undo-toast-msg" id="fa-undo-toast-msg"></span>
-          <button class="undo-toast-btn" id="fa-undo-toast-btn" type="button">Rückgängig</button>
-        </div>
-        <div class="resize-handle resize-n"  data-resize="n"></div>
-        <div class="resize-handle resize-e"  data-resize="e"></div>
-        <div class="resize-handle resize-s"  data-resize="s"></div>
-        <div class="resize-handle resize-w"  data-resize="w"></div>
-        <div class="resize-handle resize-ne" data-resize="ne"></div>
-        <div class="resize-handle resize-nw" data-resize="nw"></div>
-        <div class="resize-handle resize-se" data-resize="se"></div>
-        <div class="resize-handle resize-sw" data-resize="sw"></div>
-        <div class="header" id="fa-header">
-          <div class="logo">
-            <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><path d="M9 12h6M9 16h4"/></svg></div>
-            <div class="logo-text"><span class="logo-name">FormAssist</span><span class="logo-sub" id="fa-ctx-title"></span></div>
-          </div>
-          <div class="header-btns">
-            <button class="icon-btn" id="fa-new-chat" title="Neuer Chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-            <button class="icon-btn" id="fa-history-btn" title="Verlauf"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></button>
-            <button class="icon-btn" id="fa-profile-btn" title="Profil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke-width="2"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></button>
-            <button class="icon-btn" id="fa-dark-btn" title="Dark Mode"><svg viewBox="0 0 24 24" id="fa-dark-icon"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></button>
-            <button class="icon-btn" id="fa-close"    title="Schließen"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-          </div>
-        </div>
-        <div class="action-panel" id="fa-action-panel">
-          <button class="ap-primary" id="fa-ap-agent" disabled>
-            <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            Formular ausfüllen
-          </button>
-          <div class="ap-chips">
-            <button class="ap-chip" id="fa-ap-explain">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-              Erklären
-            </button>
-            <button class="ap-chip" id="fa-ap-fields">
-              <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><path d="M9 12h6M9 16h4"/></svg>
-              <span id="fa-ap-field-count">0 Felder</span>
-            </button>
-          </div>
-          <div class="ap-field-list" id="fa-ap-field-list">
-            <div class="field-list" id="fa-ap-field-inner"></div>
-          </div>
-          <button class="ap-options-toggle" id="fa-ap-options-toggle" type="button" aria-expanded="false" aria-controls="fa-ap-options">
-            <svg class="ap-options-gear" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
-            <span>Optionen</span>
-            <svg class="ap-options-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-          </button>
-          <div class="ap-options" id="fa-ap-options">
-            <div class="ap-mode-select-row">
-              <label class="ap-mode-label" for="fa-assistant-mode">Assistent-Modus</label>
-              <select class="ap-select" id="fa-assistant-mode">
-                <option value="classic">Mit Vorschau (empfohlen)</option>
-                <option value="context">Automatisch</option>
-              </select>
-            </div>
-            <div class="ap-mode-row">
-              <span class="ap-mode-label">Automatisch weiterklicken</span>
-              <label class="ap-toggle">
-                <input type="checkbox" id="fa-auto-nav" checked>
-                <span class="ap-toggle-track"></span>
-                <span class="ap-toggle-thumb"></span>
-              </label>
-            </div>
-          </div>
-          <div class="guided-progress" id="fa-guided-progress" style="display:none">
-            <div class="gp-bar-wrap"><div class="gp-bar" id="fa-gp-bar"></div></div>
-            <div class="gp-label" id="fa-gp-label"></div>
-          </div>
-          <div class="trust-row">
-            <span class="trust-dot"></span>
-            <span>Profil lokal gespeichert · KI nur bei Aktionen</span>
-          </div>
-        </div>
-        <div class="messages" id="fa-messages">
-          <div class="results-empty" id="fa-results-empty">Starte den Agenten oder stelle eine Frage unten.</div>
-        </div>
-        <div class="history-panel" id="fa-history-panel">
-          <div class="profile-hdr">
-            <span>Verlauf</span>
-            <button class="history-clear" id="fa-history-clear">Alles löschen</button>
-          </div>
-          <div class="history-list" id="fa-history-list"></div>
-        </div>
-        <div class="profile-panel" id="fa-profile-panel">
-          <div class="profile-hdr"><span>Mein Profil</span><span id="fa-pf-fill-count">Lokal gespeichert</span></div>
-          <div class="pf-switcher">
-            <select class="pf-select" id="fa-profile-select"></select>
-            <button class="pf-sw-btn" id="fa-pf-new" title="Neues Profil">+</button>
-            <button class="pf-sw-btn danger" id="fa-pf-del-profile" title="Profil löschen">×</button>
-          </div>
-          <div class="pf-scan">
-            <button class="pf-scan-btn" id="fa-pf-scan" type="button">
-              <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><circle cx="12" cy="12" r="3.5"/></svg>
-              Dokument scannen (KI liest Ausweis, Vertrag …)
-            </button>
-            <div class="pf-scan-confirm" id="fa-pf-scan-confirm">
-              <img id="fa-pf-scan-preview" alt="Dokument-Vorschau">
-              <div class="pf-scan-note" id="fa-pf-scan-note"></div>
-              <div class="pf-scan-actions">
-                <button class="pf-scan-go" id="fa-pf-scan-go" type="button">Analysieren</button>
-                <button class="pf-scan-cancel" id="fa-pf-scan-cancel" type="button">Abbrechen</button>
-              </div>
-            </div>
-          </div>
-          <div class="profile-grid" id="fa-profile-grid"></div>
-          <div class="profile-actions">
-            <button class="btn-primary" id="fa-pf-save">Speichern</button>
-            <div class="pf-actions-util">
-              <button id="fa-pf-fake">Fake-Daten</button>
-              <button class="btn-io" id="fa-pf-export">↓ Export</button>
-              <button class="btn-io" id="fa-pf-import">↑ Import</button>
-            </div>
-          </div>
-        </div>
-        <div class="input-area">
-          <div class="autofill-tip" id="fa-autofill-tip">
-            <strong id="fa-autofill-value"></strong>
-            <button class="autofill-btn" id="fa-autofill-btn">Ausfüllen</button>
-          </div>
-          <div class="live-check" id="fa-live-check">
-            <i class="lc-icon" id="fa-live-check-icon"></i>
-            <span class="lc-text" id="fa-live-check-text"></span>
-          </div>
-          <div class="field-tag" id="fa-field-tag">
-            <div class="dot-ind"></div>Aktives Feld: <span id="fa-field-name"></span>
-          </div>
-          <div class="input-row">
-            <textarea class="input-box" id="fa-input" placeholder="Frage zum Formular stellen…" rows="1"></textarea>
-            <button class="send-btn" id="fa-send"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg></button>
-          </div>
-          <div class="footer-note" id="fa-footer-note"></div>
-        </div>
-      </div>`;
+    wrap.innerHTML = FA_HTML; // statisches Sidebar-Markup aus fa-templates.js
     shadow.appendChild(wrap);
 
-    // ── Element refs ──────────────────────────────────────────────────
+    // ── Element-Referenzen ────────────────────────────────────────────
     const $          = id => shadow.getElementById(id);
     const triggerBtn  = $('fa-trigger');
     const sidebar     = $('fa-sidebar');
@@ -312,11 +177,11 @@
 
     const KBD_STYLE = 'font-family:var(--font);font-size:9px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:1px 4px;color:var(--text3)';
     function updateFooterNote() {
-      $('fa-footer-note').innerHTML = `<span class="footer-provider">${providerLabel()}</span><span class="footer-sep">·</span><span class="footer-model">${escapeHtml(_model)}</span><span class="footer-sep">·</span><kbd style="${KBD_STYLE}">Alt+Shift+F</kbd>`;
+      $('fa-footer-note').innerHTML = `<span class="footer-provider">${currentProviderLabel()}</span><span class="footer-sep">·</span><span class="footer-model">${escapeHtml(_model)}</span><span class="footer-sep">·</span><kbd style="${KBD_STYLE}">Alt+Shift+F</kbd>`;
     }
     updateFooterNote();
 
-    // ── Apply dark mode ───────────────────────────────────────────────
+    // ── Dark Mode anwenden ────────────────────────────────────────────
     if (darkMode) hostEl.classList.add('dark');
 
     // ── Toast ─────────────────────────────────────────────────────────
@@ -669,7 +534,9 @@
                 Object.keys(extras).forEach(k => delete extras[k]);
                 Object.assign(extras, data.extras);
               }
-              chrome.storage.local.set({ faProfile: profile, faExtras: extras });
+              // Über saveActiveProfileToStore statt roher Legacy-Keys — sonst
+              // fehlt der Import in faProfiles und ist nach dem Reload weg
+              saveActiveProfileToStore();
               loadProfileIntoInputs(profile);
               renderExtrasInProfile();
               updateProfileProgress();
@@ -687,70 +554,9 @@
     // Ablauf: Bild wählen → verkleinern (Datenminimierung) → expliziter
     // Bestätigungsschritt (Privacy) → Analyse → Felder nur VORbefüllen,
     // gespeichert wird erst durch den Nutzer über "Speichern".
-    const VISION_MODELS = {
-      groq:       'meta-llama/llama-4-scout-17b-16e-instruct',
-      openrouter: 'meta-llama/llama-4-scout',
-    };
-    const VISION_FALLBACK_MODEL = 'meta-llama/llama-4-scout:free';
-    const SCAN_MAX_DIM = 1400;
+    // Prompt: fa-prompts.js · Parsing: fa-actions.js · Modelle: fa-providers.js
+    const SCAN_MAX_DIM = 1400; // längste Bildkante in px vor dem Upload (Datenminimierung)
     let scanDataUrl = null;
-
-    function buildScanPrompt() {
-      const fieldList = PROFILE_FIELDS.map(pf => {
-        const syn = (pf.kw || []).slice(0, 5).join(', ');
-        return `- "${pf.key}" = ${pf.label}${syn ? ` (auch: ${syn})` : ''}`;
-      }).join('\n');
-      return [
-        'Du bist ein präziser Dokument-Extraktor. Lies das Bild (z. B. Ausweis, Führerschein, Visitenkarte, Rechnung, Vertrag, Bank-/Girocard) und extrahiere ALLE sichtbaren Personen- und Bankdaten.',
-        'Gehe JEDEN dieser Schlüssel einzeln durch und trage ihn ein, wenn der Wert irgendwo im Bild steht — Vorder- ODER Rückseite, jede Sprache, auch klein gedruckt:',
-        fieldList,
-        'Antworte NUR mit einem JSON-Objekt ohne weiteren Text und nutze exakt diese Schlüssel.',
-        'Nimm nur Schlüssel auf, deren Wert du sicher im Dokument liest — nichts raten, nichts erfinden. Nicht vorhandene Felder einfach weglassen.',
-        'Auf Bank-/Girocards ist die IBAN die lange Nummer mit Ländercode am Anfang (z. B. „DE" + 20 Ziffern) → "iban" ohne Leerzeichen; der aufgedruckte Name ist der Karteninhaber. Eine 16-stellige Kreditkartennummer, das Ablaufdatum und die Prüfziffer (CVV/CVC) NICHT übernehmen.',
-        'Datumsangaben im Format TT.MM.JJJJ. IBAN ohne Leerzeichen. Namen ohne Titel.',
-      ].join('\n');
-    }
-
-    function parseScanReply(text) {
-      let t = String(text || '').trim();
-      const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-      if (fence) t = fence[1].trim();
-      const start = t.indexOf('{');
-      const end   = t.lastIndexOf('}');
-      if (start === -1 || end <= start) return null;
-      let obj;
-      try { obj = JSON.parse(t.slice(start, end + 1)); } catch { return null; }
-      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
-      const values = {};
-      PROFILE_FIELDS.forEach(pf => {
-        const v = obj[pf.key];
-        if (v == null) return;
-        const s = clean(String(v));
-        if (s && s.length <= 120 && !/^(null|undefined|n\/a|unbekannt|-)$/i.test(s)) values[pf.key] = s;
-      });
-      return values;
-    }
-
-    function downscaleImage(file, maxDim = SCAN_MAX_DIM) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
-        reader.onload = () => {
-          const img = new Image();
-          img.onerror = () => reject(new Error('Bild konnte nicht geladen werden.'));
-          img.onload = () => {
-            const scale  = Math.min(1, maxDim / Math.max(img.width, img.height));
-            const canvas = document.createElement('canvas');
-            canvas.width  = Math.max(1, Math.round(img.width * scale));
-            canvas.height = Math.max(1, Math.round(img.height * scale));
-            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', 0.85));
-          };
-          img.src = reader.result;
-        };
-        reader.readAsDataURL(file);
-      });
-    }
 
     const scanBtn     = $('fa-pf-scan');
     const scanConfirm = $('fa-pf-scan-confirm');
@@ -770,10 +576,10 @@
         const file = e.target.files[0];
         if (!file) return;
         try {
-          scanDataUrl = await downscaleImage(file);
+          scanDataUrl = await downscaleImage(file, SCAN_MAX_DIM);
           scanPreview.src = scanDataUrl;
           $('fa-pf-scan-note').textContent =
-            `Das Bild wird verkleinert und einmalig zur Analyse an ${providerLabel()} gesendet, nicht gespeichert. ` +
+            `Das Bild wird verkleinert und einmalig zur Analyse an ${currentProviderLabel()} gesendet, nicht gespeichert. ` +
             'Erkannte Daten landen nur in den Profilfeldern unten — gespeichert wird erst mit "Speichern".';
           scanConfirm.classList.add('visible');
         } catch (err) {
@@ -793,9 +599,9 @@
       goBtn.textContent = 'Analysiere…';
       try {
         const key = await loadKey();
-        if (!key) throw new Error(`Kein ${providerLabel()}-API-Key hinterlegt — siehe Einstellungen.`);
+        if (!key) throw new Error(`Kein ${currentProviderLabel()}-API-Key hinterlegt — siehe Einstellungen.`);
         const body = {
-          model: VISION_MODELS[_provider] || VISION_MODELS.groq,
+          model: getVisionModel(_provider),
           messages: [{
             role: 'user',
             content: [
@@ -841,7 +647,7 @@
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // POSITION MEMORY
+    // POSITIONS-GEDÄCHTNIS
     // ═══════════════════════════════════════════════════════════════════════
 
     function savePosition() {
@@ -984,7 +790,7 @@
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // OPEN / CLOSE
+    // ÖFFNEN / SCHLIESSEN
     // ═══════════════════════════════════════════════════════════════════════
 
     let isOpen = false;
@@ -1150,46 +956,7 @@
     // MESSAGES
     // ═══════════════════════════════════════════════════════════════════════
 
-    function htmlToPlainText(html) {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = html || '';
-      return clean(tmp.textContent || '');
-    }
-
-    function escapeHtml(text) {
-      return String(text ?? '').replace(/[&<>"']/g, ch => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      }[ch]));
-    }
-
-    function textToHtml(text) {
-      return escapeHtml(text).replace(/\n/g, '<br>');
-    }
-
-    function renderMarkdown(raw) {
-      function fmt(s) {
-        s = escapeHtml(s);
-        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-        s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-        return s;
-      }
-      const parts = [];
-      let listItems = [];
-      function flushList() {
-        if (!listItems.length) return;
-        parts.push(`<ul style="margin:5px 0 5px 14px;padding:0;list-style:disc">${listItems.map(li => `<li style="margin:2px 0">${li}</li>`).join('')}</ul>`);
-        listItems = [];
-      }
-      for (const line of raw.split('\n')) {
-        const li = line.match(/^[\-\*•] (.+)/) || line.match(/^\d+\. (.+)/);
-        if (li) { listItems.push(fmt(li[1])); continue; }
-        flushList();
-        parts.push(line.trim() === '' ? '<br>' : fmt(line));
-      }
-      flushList();
-      return parts.join('<br>');
-    }
+    // Text-/HTML-Formatierung (escapeHtml, renderMarkdown, …): fa-format.js
 
     function copyText(text) {
       const value = String(text || '').trim();
@@ -1328,39 +1095,8 @@
       showToast('Neuer Chat — Gedächtnis für diese Seite geleert');
     }
 
-    // ── Chat actions: the AI can fill fields directly from a reply ───────
-    // Tolerant parsing: official <<<ACTIONS … ACTIONS>>> marker (also unclosed),
-    // ```json fenced arrays, or a bare trailing JSON array with "action" keys —
-    // smaller models don't always follow the marker format exactly.
-    function splitActionBlock(raw) {
-      const text = String(raw || '');
-      let payload = null;
-      let stripped = text;
-
-      const marker = text.match(/<<<ACTIONS([\s\S]*?)(?:ACTIONS>>>|$)/);
-      if (marker) {
-        payload = marker[1];
-        stripped = text.replace(marker[0], '');
-      } else {
-        const fence = text.match(/```(?:json|actions)?\s*(\[[\s\S]*?\])\s*```/i);
-        if (fence && /"action"/.test(fence[1])) {
-          payload = fence[1];
-          stripped = text.replace(fence[0], '');
-        } else {
-          const bare = text.match(/\[\s*\{[\s\S]*?"action"[\s\S]*?\}\s*\]\s*$/);
-          if (bare) {
-            payload = bare[0];
-            stripped = text.replace(bare[0], '');
-          }
-        }
-      }
-
-      if (!payload) return { text: text.trim(), actions: [] };
-      const actions = sanitizeAgentActions(parseModelJsonArray(payload))
-        .filter(a => ['fill', 'select', 'check'].includes(a.action));
-      return { text: stripped.trim(), actions };
-    }
-
+    // ── Chat-Aktionen: die KI kann Felder direkt aus der Antwort füllen ──
+    // Parsing/Härtung (splitActionBlock, sanitizeAgentActions): fa-actions.js
     async function executeChatActions(actions) {
       if (!actions.length) return;
       let applied = 0;
@@ -1412,101 +1148,9 @@
       return { div, bubble };
     }
 
-    function parseModelJsonArray(raw) {
-      const text = String(raw || '').trim();
-      if (!text) return [];
-
-      function tryParse(s) {
-        const candidates = [s, s.replace(/,\s*([\]}])/g, '$1')];
-        for (const c of candidates) {
-          try {
-            const parsed = JSON.parse(c);
-            if (Array.isArray(parsed)) return parsed;
-            if (parsed && typeof parsed === 'object') {
-              // Unwrap common wrappers: {actions:[...]}, {items:[...]}, {result:[...]}
-              for (const key of ['actions', 'items', 'result', 'data', 'fields']) {
-                if (Array.isArray(parsed[key])) return parsed[key];
-              }
-              return [parsed];
-            }
-          } catch {}
-        }
-        return null;
-      }
-
-      const direct = tryParse(text);
-      if (direct) return direct;
-
-      const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenced?.[1]) { const r = tryParse(fenced[1].trim()); if (r) return r; }
-
-      // Find outermost array
-      const arrMatch = text.match(/\[[\s\S]*\]/);
-      if (arrMatch) { const r = tryParse(arrMatch[0]); if (r) return r; }
-
-      // Last resort: extract individual objects that contain "action"
-      const objects = [];
-      const objRe = /\{[^{}]*"action"\s*:[^{}]*\}/g;
-      for (const m of text.matchAll(objRe)) {
-        try { const o = JSON.parse(m[0]); if (o) objects.push(o); } catch {}
-      }
-      if (objects.length) return objects;
-
-      return [];
-    }
-
-    function toSafeText(value, maxLen = 280) {
-      if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return '';
-      return String(value).replace(/\s+/g, ' ').trim().slice(0, maxLen);
-    }
-
-    function sanitizeAgentActions(parsed) {
-      if (!Array.isArray(parsed)) return [];
-      const allowedActions = new Set(['fill', 'select', 'check', 'click', 'submit', 'ask', 'done']);
-      const allowedSources = new Set(['profile', 'inferred', 'suggestion']);
-      const cleaned = [];
-      for (const item of parsed) {
-        if (!item || typeof item !== 'object') continue;
-        const action = toSafeText(item.action, 24).toLowerCase();
-        if (!allowedActions.has(action)) continue;
-        if (action === 'done') { cleaned.push({ action: 'done' }); break; }
-        if (action === 'ask') {
-          const label    = toSafeText(item.label,    120);
-          const question = toSafeText(item.question, 320);
-          if (!label && !question) continue;
-          const options = Array.isArray(item.options)
-            ? item.options.map(o => toSafeText(o, 120)).filter(Boolean).slice(0, 4)
-            : [];
-          cleaned.push({ action: 'ask', label, question, options });
-          continue;
-        }
-        const selector = toSafeText(item.selector, 320);
-        if (!selector) continue;
-        const label = toSafeText(item.label, 120);
-        const normalized = { action, selector, label };
-        const src = toSafeText(item.source, 24).toLowerCase();
-        if (allowedSources.has(src)) normalized.source = src;
-        const conf = Number(item.confidence);
-        if (Number.isFinite(conf)) normalized.confidence = Math.max(0, Math.min(1, conf));
-        if (action === 'fill' || action === 'select') {
-          const value = toSafeText(item.value, 280);
-          if (!value) continue;
-          normalized.value = value;
-        }
-        if (action === 'check') {
-          const value = toSafeText(item.value, 60);
-          if (value) normalized.value = value; // allows "nein"/"false" → uncheck
-        }
-        if (action === 'click') normalized.isNavigation = !!item.isNavigation;
-        cleaned.push(normalized);
-        if (cleaned.length >= 150) break;
-      }
-      return cleaned;
-    }
-
     async function askAI(userText, opts = {}) {
       const key = await loadKey();
-      if (!key) { addMsg('ai', `API-Schlüssel für ${providerLabel()} nicht gefunden. Bitte in den FormAssist-Einstellungen hinterlegen.`); return ''; }
+      if (!key) { addMsg('ai', `API-Schlüssel für ${currentProviderLabel()} nicht gefunden. Bitte in den FormAssist-Einstellungen hinterlegen.`); return ''; }
       const includeActive = opts.includeActive === false
         ? false
         : (opts.includeActive === true ? true : isContextualAssistantMode());
@@ -1517,17 +1161,18 @@
       const useStream = opts.render !== false;
 
       try {
-        // Re-scan the page so the model sees live field values (not the
-        // snapshot from page load) — required for accurate chat actions.
+        // Seite neu scannen, damit das Modell live Feldwerte sieht (nicht den
+        // Snapshot vom Seitenaufruf) — nötig für präzise Chat-Aktionen.
         let liveSystem = SYSTEM;
-        try { liveSystem = buildSystemPrompt(extractRichContext(), profile, extras); } catch {}
+        try { liveSystem = buildSystemPrompt(extractRichContext(), profile, extras); }
+        catch (err) { console.warn('[FormAssist] Live-Rescan fehlgeschlagen — nutze letzten Kontext:', err); }
 
         const reqBody = {
           model: _model, max_tokens: opts.maxTokens || 500, stream: useStream,
-          messages: [{ role: 'system', content: liveSystem }, ...history.slice(-12)],
+          messages: [{ role: 'system', content: liveSystem }, ...history.slice(-CHAT_HISTORY_WINDOW)],
         };
 
-        // ── Non-streaming path ────────────────────────────────────────
+        // ── Nicht-Streaming-Pfad ──────────────────────────────────────
         if (!useStream) {
           const data = await groqRequest(key, reqBody);
           removeTyping();
@@ -1536,30 +1181,19 @@
           addMsg('ai', 'Unbekannter Fehler.'); history.pop(); return '';
         }
 
-        // ── Streaming path (via background port) ──────────────────────
+        // ── Streaming-Pfad (via Background-Port) ──────────────────────
         removeTyping();
         const { div: msgDiv, bubble: streamBubble } = createStreamBubble();
         let rawText = '';
-        let buf = '';
+        const decodeSSE = createSSEDecoder();
 
         await groqStream(key, reqBody, chunk => {
-          buf += chunk;
-          const lines = buf.split('\n');
-          buf = lines.pop() || '';
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const payload = line.slice(6).trim();
-            if (payload === '[DONE]') return;
-            try {
-              const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
-              if (delta) {
-                rawText += delta;
-                // Hide a (possibly partial) action block while streaming
-                streamBubble.innerHTML = renderMarkdown(rawText.split('<<<ACTIONS')[0]);
-                messagesEl.scrollTop = messagesEl.scrollHeight;
-              }
-            } catch {}
-          }
+          const delta = decodeSSE(chunk);
+          if (!delta) return;
+          rawText += delta;
+          // Einen (evtl. unvollständigen) Aktionsblock beim Streamen ausblenden
+          streamBubble.innerHTML = renderMarkdown(rawText.split('<<<ACTIONS')[0]);
+          messagesEl.scrollTop = messagesEl.scrollHeight;
         });
 
         const fullText = rawText.trim();
@@ -1725,14 +1359,12 @@
     // AGENT MODE — vollautomatischer Formular-Agent
     // ═══════════════════════════════════════════════════════════════════════
 
-    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
     function normalizeForCompare(value) {
       return clean(String(value ?? '')).toLowerCase();
     }
 
-    // Fuzzy label comparison: exact → containment → token overlap (≥ 60 %).
-    // Lets learned answers like "Telefonnummer" match "Telefon (mobil)".
+    // Fuzzy-Label-Vergleich: exakt → enthalten → Token-Überlappung (≥ 60 %).
+    // So matcht eine gelernte Antwort wie „Telefonnummer" auch „Telefon (mobil)".
     function labelsRoughlyMatch(a, b) {
       const na = normalizeForCompare(a);
       const nb = normalizeForCompare(b);
@@ -1748,8 +1380,8 @@
       return common / Math.min(ta.size, tb.size) >= 0.6;
     }
 
-    // Look up a stored value for a field label: session answers first, then
-    // learned extras — exact match before fuzzy match.
+    // Gespeicherten Wert zu einem Feld-Label suchen: erst Session-Antworten,
+    // dann gelernte Extras — exakter Match vor Fuzzy-Match.
     function findStoredAnswer(label) {
       const sources = [agentState.sessionAnswers || {}, extras];
       const labelNorm = normalizeForCompare(label);
@@ -1766,8 +1398,8 @@
       return null;
     }
 
-    // Convert a free-form user answer ("nächster Monat", "zwanzigster Februar")
-    // into the exact value the field accepts — one small, fast AI call.
+    // Freitext-Antwort des Nutzers ("nächster Monat", "zwanzigster Februar") in
+    // den exakten Wert wandeln, den das Feld akzeptiert — ein kleiner KI-Call.
     async function aiNormalizeFieldValue(el, label, raw) {
       try {
         const key = await loadKey();
@@ -1798,8 +1430,8 @@
       } catch { return null; }
     }
 
-    // Fill + verify; if the raw value is rejected by the field, normalize it
-    // via AI and retry once. Returns the value that stuck, or null.
+    // Füllen + verifizieren; lehnt das Feld den Rohwert ab, wird er per KI
+    // normalisiert und einmal erneut versucht. Gibt den übernommenen Wert oder null.
     async function fillFieldVerified(el, label, raw) {
       await fillField(el, raw);
       if (isActionApplied(el, 'fill', raw)) return raw;
@@ -1896,8 +1528,8 @@
       if (!wanted) return null;
       const exact = allFields.find(f => f?.el && isVisible(f.el) && normalizeForCompare(f.label) === wanted)?.el;
       if (exact) return exact;
-      // Fuzzy fallback over a fresh scan — model labels rarely match 1:1,
-      // and SPA re-renders can detach the originally scanned elements.
+      // Fuzzy-Fallback über einen frischen Scan — Modell-Labels matchen selten
+      // 1:1, und SPA-Re-Renders können die ursprünglich gescannten Elemente lösen.
       const fresh = extractRichContext().forms.flatMap(f => f.allFields);
       return fresh.find(f => f?.el && isVisible(f.el) && labelsRoughlyMatch(f.label, act.label))?.el || null;
     }
@@ -2116,11 +1748,14 @@
       // handleGuidedNavigation routet und dort den manuellen „Weiter"-Button zeigt.
       const formEl = el.form || stepInfo?.form || document.querySelector('form');
       if (agentState.autoNavigate && clickNextButtonIfReady(formEl)) {
-        try {
-          chrome.storage.session?.set?.({
-            faAgentResume: { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 },
-          });
-        } catch {}
+        persistAgentResume({
+          filledFields: agentState.filledFields,
+          startUrl: agentState.startUrl,
+          guided: agentState.guided,
+          autoNavigate: agentState.autoNavigate,
+          sessionAnswers: agentState.sessionAnswers,
+          pages: (agentState.pages || 0) + 1,
+        });
         addMsg('ai', 'Danke — ich mache weiter und klicke auf "Weiter".', null, { copy: false });
         return;
       }
@@ -2128,121 +1763,17 @@
       await runAgentStep();
     }
 
-    function buildAgentPrompt() {
-      const freshCtx = extractRichContext();
-      const profileLines = PROFILE_FIELDS.filter(pf => profile[pf.key])
-        .map(pf => `${pf.label}: "${profile[pf.key]}"`).join('\n');
-      const extrasLines = Object.entries(extras)
-        .map(([k, v]) => `${k}: "${v}"`).join('\n');
-      const sessionAnswerLines = Object.entries(agentState.sessionAnswers || {})
-        .map(([k, v]) => `${k}: "${v}"`).join('\n');
-      const prevFillLines = (agentState.filledFields || [])
-        .filter(f => f.url && f.url !== location.href)
-        .slice(-24)
-        .map(f => `${f.label}: "${f.value}"`)
-        .join('\n');
-
-      const fieldLines = freshCtx.forms.flatMap(form => {
-        const rows = [];
-        if (form.submitText) rows.push(`[submit] "${form.submitText}"`);
-        form.sections.forEach(sec => {
-          if (sec.title) rows.push(`# ${sec.title}`);
-          sec.fields.forEach(f => {
-            if (!f.el || !isVisible(f.el)) return;
-            const el = f.el;
-            const sel = f.selector || getAgentSelector(el);
-            if (!sel) return;
-            let line = `${sel} ${f.type}${f.required ? ' ✱' : ''} "${f.label}"`;
-            if (f.options?.length) line += ` (${f.options.slice(0, 10).join(' | ')})`;
-            if (f.hint) line += ` → ${f.hint}`;
-            const curVal = el.tagName === 'SELECT'
-              ? (el.selectedIndex > 0 ? clean(el.options[el.selectedIndex].text) : '')
-              : clean(el.value || '');
-            if (curVal) line += ` [Wert="${curVal}"]`;
-            const err = getError(el);
-            if (err) line += ` ❌"${err}"`;
-            rows.push(line);
-          });
-        });
-        // navigation buttons
-        const navButtons = Array.from(form.formEl?.querySelectorAll?.('button, input[type="button"], input[type="submit"]') || [])
-          .filter(btn => isVisible(btn) && !btn.disabled);
-        navButtons.forEach(btn => {
-          const sel = getAgentSelector(btn);
-          const label = getElementTextValue(btn) || 'Button';
-          if (sel && label) rows.push(`${sel} button "${label}"`);
-        });
-        return rows;
-      }).join('\n');
-
-      const today = new Date();
-      const birthdate = profile.birthdate ? new Date(profile.birthdate) : null;
-      const age = birthdate ? Math.floor((today - birthdate) / (365.25 * 24 * 3600 * 1000)) : null;
-
-      return [
-        'Du bist ein Formular-Ausfüll-Agent. Gib einen JSON-Array mit Aktionen zurück — kein Markdown, keine Erklärung.',
-        '',
-        'NUTZERPROFIL:',
-        profileLines || '(leer)',
-        extrasLines ? '\nEXTRAS:\n' + extrasLines : '',
-        sessionAnswerLines ? '\nNUTZER-ANTWORTEN (direkt verwenden, nicht erneut fragen):\n' + sessionAnswerLines : '',
-        prevFillLines ? '\nBEREITS AUSGEFÜLLT (vorherige Seiten — konsistent halten):\n' + prevFillLines : '',
-        age != null ? `\n[Berechnetes Alter: ${age}]` : '',
-        '',
-        `SEITE: ${document.title} | ${location.hostname}`,
-        '',
-        'FELDER:',
-        fieldLines || '(keine Felder erkannt)',
-        '',
-        'FORMAT (ein Objekt pro Feld):',
-        '[{"action":"fill"|"select"|"check"|"click"|"submit"|"ask"|"done","selector":"[name=\\"x\\"]","value":"...","label":"...","source":"profile"|"inferred"|"suggestion","confidence":0.0-1.0,"isNavigation":true,"question":"...","options":["A","B"]}]',
-        '',
-        'action="ask": Wert nicht ableitbar → Frage an Nutzer. Felder: "label" (Feldname), "question" (verständliche Frage auf Deutsch), "options" (max. 4 wahrscheinliche Antworten als String-Array, leer wenn Freitext). NUR für Pflichtfelder verwenden, wenn wirklich kein Wert aus Profil/Kontext ableitbar ist — OPTIONALE Felder ohne ableitbaren Wert bekommen KEINE Aktion (einfach leer lassen, nicht nachfragen).',
-        '',
-        'AUSFÜLL-STRATEGIE — versuche JEDES Feld zu befüllen:',
-        '',
-        'source="profile"  → Wert 1:1 aus Profil',
-        '  Beispiele: Vorname→firstName, Nachname→lastName, Email, Telefon, IBAN, Straße, PLZ, Stadt, Land, Firma, Berufsbezeichnung',
-        '',
-        'source="inferred"  → logisch aus Profil herleitbar (IMMER versuchen!):',
-        '  Anrede/Titel: "Herr"/"Frau" aus Vorname (gängige deutsche Namen)',
-        '  Geschlecht: "männlich"/"weiblich"/"m"/"w" aus Vorname',
-        '  Vollständiger Name: firstName + " " + lastName',
-        '  Geburtsjahr/Monat/Tag: einzeln aus birthdate aufteilen',
-        '  Alter: berechnet aus birthdate (heute=' + today.toISOString().split('T')[0] + ')',
-        '  Altersgruppe: z.B. "25-34" aus Alter berechnen',
-        '  Nationalität/Staatsangehörigkeit: aus nationality oder birthplace ableiten',
-        '  Ländervorwahl: "+49" aus Deutschland, "+43" aus Österreich, "+41" aus Schweiz etc.',
-        '  Land: aus nationality (z.B. "deutsch" → "Deutschland")',
-        '  Bundesland: aus Stadt oder PLZ wenn eindeutig (München→Bayern, Berlin→Berlin etc.)',
-        '  Hausnummer: aus street trennen falls Format "Straße HNr"',
-        '  Straßenname: aus street trennen falls nötig',
-        '  Berufsfeld/Branche: aus jobTitle ableiten',
-        '  Akademischer Grad: aus jobTitle/Kontext',
-        '  Sprache: aus nationality (deutsch→Deutsch)',
-        '',
-        'source="suggestion"  → kein Profilwert, aber aus Kontext sinnvoll:',
-        '  Formularsprache/Land wenn offensichtlich (deutsches Formular → Deutschland, Deutsch)',
-        '  Standardwerte die fast immer zutreffen (z.B. "Nein" bei unbekannten Ja/Nein-Feldern)',
-        '',
-        'PFLICHTREGELN:',
-        '- Felder mit [Wert="..."] und ohne ❌ sind bereits korrekt ausgefüllt — überspringen',
-        '- Felder mit ❌ haben einen Validierungsfehler — korrigierten Wert liefern',
-        '- Alle anderen leeren Felder MÜSSEN befüllt werden wenn ein Wert ableitbar ist',
-        '- SELECT: value muss exakt einer der angegebenen Optionen entsprechen — wähle die am besten passende',
-        '- Datumsfelder IMMER als ISO: date→YYYY-MM-DD, month→YYYY-MM, time→HH:MM',
-        '- isNavigation:true für alle Weiter/Nächste/Fortfahren-Buttons',
-        '- action="submit" NUR für die finale Abgabe des Formulars',
-        '- confidence angeben: 0.0 (sehr unsicher) bis 1.0 (sehr sicher)',
-        '- Felder ohne jeden möglichen Wert weglassen',
-        '',
-        agentState.lastFailures?.length
-          ? 'LETZTE FEHLSCHLÄGE:\n' + agentState.lastFailures.map(f => `- ${f.label || f.selector}: ${f.reason || 'nicht angewendet'}`).join('\n')
-          : '',
-      ].join('\n');
-    }
+    // Agent-Prompt (Feldbestand + Strategie): buildAgentPrompt in fa-prompts.js
 
     let agentState = { active: false, guided: false, autoNavigate: true, sessionAnswers: {}, filledFields: [], startUrl: '', lastFailures: [], pages: 0 };
+
+    // Agent-Zustand für die Fortsetzung nach einer Seiten-Navigation sichern.
+    // chrome.storage.session kann fehlen (ältere Chrome-Versionen) — dann läuft
+    // der Agent ohne Resume weiter, alles andere bleibt funktionsfähig.
+    function persistAgentResume(resumeData) {
+      try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); }
+      catch (err) { console.warn('[FormAssist] Agent-Resume konnte nicht gesichert werden:', err); }
+    }
     let guidedAskState = { active: false, queue: [], navAction: null };
     let manualAssistState = { pending: null };
     let agentStatusBubble = null;
@@ -2250,7 +1781,7 @@
     async function runFieldByFieldAgent() {
       const key = await loadKey();
       if (!key) {
-        addMsg('ai', `API-Schlüssel für ${providerLabel()} fehlt. Bitte in den FormAssist-Einstellungen hinterlegen.`);
+        addMsg('ai', `API-Schlüssel für ${currentProviderLabel()} fehlt. Bitte in den FormAssist-Einstellungen hinterlegen.`);
         agentState.active = false;
         return;
       }
@@ -2287,7 +1818,7 @@
         }
       }
 
-      // Detect navigation / submit button
+      // Navigations-/Submit-Button erkennen
       let navAction = null;
       for (const form of freshCtx.forms) {
         const btns = Array.from(form.formEl?.querySelectorAll?.('button, input[type="button"], input[type="submit"]') || [])
@@ -2305,7 +1836,7 @@
         if (navAction) break;
       }
 
-      // Shared context block sent with every AI call
+      // Gemeinsamer Kontextblock für jeden KI-Aufruf
       const profileLines = PROFILE_FIELDS.filter(pf => profile[pf.key])
         .map(pf => `${pf.label}: "${profile[pf.key]}"`).join('\n');
       const extrasLines = Object.entries(extras).map(([k, v]) => `${k}: "${v}"`).join('\n');
@@ -2326,7 +1857,7 @@
       ].filter(Boolean).join('\n\n');
 
       if (fields.length === 0) {
-        // No unfilled fields — handle navigation directly
+        // Keine offenen Felder — direkt zur Navigation übergehen
         if (navAction) {
           updateGuidedProgress('Weiterklicken …');
           await handleGuidedNavigation(navAction);
@@ -2386,9 +1917,9 @@
         }
       }
 
-      // Phase 2: ONE batched AI call per 12 unknown fields instead of one call
-      // per field. Falls back to focused single-field prompts if the batch
-      // response cannot be parsed.
+      // Phase 2: EIN gebündelter KI-Call pro Batch unbekannter Felder statt ein
+      // Call pro Feld. Lässt sich die Batch-Antwort nicht parsen, folgt ein
+      // fokussierter Einzel-Prompt pro Feld.
       const describeField = (f, i) => {
         const opt  = f.options.length ? ` Optionen: ${f.options.slice(0, 12).join(' | ')}` : '';
         const hint = f.hint ? ` Hinweis: ${f.hint}` : '';
@@ -2440,11 +1971,14 @@
       const sanitizeValue = raw => String(raw).split('\n')[0].replace(/^["']|["']$/g, '').trim().slice(0, 200);
       const isUnknown = v => !v || v === '?' || /^unbekannt$/i.test(v);
 
-      for (let start = 0; start < aiFields.length && agentState.active; start += 12) {
-        const chunk = aiFields.slice(start, start + 12);
+      for (let start = 0; start < aiFields.length && agentState.active; start += AGENT_BATCH_SIZE) {
+        const chunk = aiFields.slice(start, start + AGENT_BATCH_SIZE);
         setAgentProgress(`Agent läuft… ${done}/${fields.length} · KI analysiert ${chunk.length} Felder`);
         let answers = null;
-        try { answers = await requestBatchValues(chunk); } catch {}
+        // Bei Fehlschlag bleibt answers null → die Felder laufen einzeln in
+        // den fokussierten Fallback-Prompt weiter unten
+        try { answers = await requestBatchValues(chunk); }
+        catch (err) { console.warn('[FormAssist] Batch-Anfrage fehlgeschlagen:', err); }
 
         for (let i = 0; i < chunk.length; i++) {
           if (!agentState.active) break;
@@ -2483,8 +2017,8 @@
 
       if (!agentState.active) return;
 
-      // Autonomous correction round: re-ask the AI for fields the page now
-      // marks as invalid, including the validation message — no user input.
+      // Autonome Korrektur-Runde: KI erneut fragen für Felder, die die Seite als
+      // ungültig markiert — inkl. Fehlermeldung der Seite, ohne Nutzereingriff.
       if (!agentState.correctionRound) {
         await sleep(400);
         const errFields = fields.filter(f =>
@@ -2578,22 +2112,11 @@
       }
     }
 
-    function parseSSEText(chunk) {
-      let text = '';
-      for (const line of chunk.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
-        try { text += JSON.parse(data)?.choices?.[0]?.delta?.content || ''; } catch {}
-      }
-      return text;
-    }
-
     async function runAgentStep(retry = false) {
       const key = await loadKey();
-      if (!key) { addMsg('ai', `API-Schlüssel für ${providerLabel()} fehlt. Bitte in den FormAssist-Einstellungen hinterlegen.`); agentState.active = false; return; }
+      if (!key) { addMsg('ai', `API-Schlüssel für ${currentProviderLabel()} fehlt. Bitte in den FormAssist-Einstellungen hinterlegen.`); agentState.active = false; return; }
       showTyping();
-      const prompt = buildAgentPrompt();
+      const prompt = buildAgentPrompt(profile, extras, agentState);
       const messages = retry
         ? [{ role: 'user', content: prompt },
            { role: 'assistant', content: 'Entschuldigung, ich habe die Ausgabe nicht korrekt formatiert.' },
@@ -2601,8 +2124,9 @@
         : [{ role: 'user', content: prompt }];
       try {
         let raw = '';
+        const decodeSSE = createSSEDecoder();
         await groqStream(key, { model: _model, max_tokens: 2048, stream: true, messages },
-          chunk => { raw += parseSSEText(chunk); });
+          chunk => { raw += decodeSSE(chunk); });
         removeTyping();
         raw = raw.trim();
         const actions = sanitizeAgentActions(parseModelJsonArray(raw));
@@ -2802,7 +2326,7 @@
       const navActions  = actions.filter(a => a.isNavigation || a.action === 'submit');
       const isDone      = actions.some(a => a.action === 'done');
 
-      // Execute fill + non-nav clicks immediately
+      // Fill- und Nicht-Navigations-Klicks sofort ausführen
       if (fillActions.length || clickActions.length) {
         await executeGuidedFillActions([...fillActions, ...clickActions]);
       }
@@ -2943,7 +2467,7 @@
 
       let storedValue = text;
 
-      // Field-by-field: fill the stored element, verify, normalize via AI if rejected
+      // Feld für Feld: gespeichertes Element füllen, verifizieren, bei Ablehnung per KI normalisieren
       if (ask.selector) {
         const el = resolveActionElement(ask);
         if (el) {
@@ -3003,7 +2527,7 @@
         const el = resolveActionElement(navAction);
         if (!el) { addMsg('ai', 'Weiter-Button nicht gefunden. Bitte manuell klicken.', null, { copy: false }); agentState.active = false; return; }
         addMsg('ai', `→ Klicke auf „${navAction.label || 'Weiter'}"…`, null, { copy: false });
-        try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+        persistAgentResume(resumeData);
         await sleep(350);
         el.click();
       } else {
@@ -3028,7 +2552,7 @@
         btn.disabled = true;
         const el = resolveActionElement(navAction);
         if (el) {
-          try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+          persistAgentResume(resumeData);
           el.click();
         }
       });
@@ -3099,7 +2623,7 @@
           appendAgentRow('→', act.label || act.selector, '');
           if (act.isNavigation) {
             const resumeData = { filledFields: agentState.filledFields, startUrl: agentState.startUrl, guided: agentState.guided, autoNavigate: agentState.autoNavigate, sessionAnswers: agentState.sessionAnswers, pages: (agentState.pages || 0) + 1 };
-            try { chrome.storage.session?.set?.({ faAgentResume: resumeData }); } catch {}
+            persistAgentResume(resumeData);
             // „Automatisch weiterklicken" respektieren: nur bei aktivem Toggle
             // selbst klicken, sonst manuellen „Weiter"-Button anbieten.
             if (agentState.autoNavigate) {
@@ -3124,7 +2648,7 @@
       learnAgentFields();
       if (!failedActions.length) agentState.lastFailures = [];
 
-      // Auto-correction: one extra round if validation errors found
+      // Auto-Korrektur: eine Extra-Runde, falls Validierungsfehler gefunden wurden
       if ((filled > 0 || failedActions.length > 0) && !agentState.correctionRound) {
         await sleep(700);
         const errFields = extractRichContext().forms.flatMap(f => f.allFields)
@@ -3291,7 +2815,9 @@
         } else {
           await runAgentStep();
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[FormAssist] Agent-Fortsetzung nach Navigation fehlgeschlagen:', err);
+      }
     }
 
     async function waitForFields(maxMs = 4000) {
@@ -3304,82 +2830,14 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SUBMIT REVIEW — intercept once, let the user continue consciously
+    // SUBMIT REVIEW — einmal abfangen, der Nutzer entscheidet bewusst weiter
     // ═══════════════════════════════════════════════════════════════════════
 
     const approvedSubmits = new WeakSet();
     const reviewingSubmits = new WeakSet();
 
-    function getFieldValueForReview(el) {
-      if (!el) return '';
-      if (isFileWidget(el)) return '';
-      const type = (el.type || '').toLowerCase();
-      if (type === 'password') return '[Passwortfeld nicht ausgelesen]';
-      if (type === 'file') return el.files?.length ? `${el.files.length} Datei(en) ausgewählt` : '';
-      if (type === 'checkbox') return el.checked ? (el.value && el.value !== 'on' ? el.value : 'ausgewählt') : '';
-      if (type === 'radio') {
-        const root = el.form || el.getRootNode?.() || document;
-        const checked = el.name ? root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`) : (el.checked ? el : null);
-        return checked ? (checked.value || getLabel(checked) || 'ausgewählt') : '';
-      }
-      if (el.tagName === 'SELECT') {
-        const selected = Array.from(el.selectedOptions || []).map(o => clean(o.text || o.value)).filter(Boolean);
-        return selected.join(', ');
-      }
-      if (isRichTextField(el) || (isAriaCombobox(el) && el.tagName !== 'INPUT')) {
-        return clean(el.textContent || '').slice(0, 240);
-      }
-      return clean(el.value || '').slice(0, 240);
-    }
-
-    function buildSubmitReviewPrompt(formEl) {
-      const sections = formEl && formEl.tagName === 'FORM' ? groupIntoSections(formEl) : ctx.forms.flatMap(f => f.sections);
-      const fields = sections.flatMap(s => s.fields);
-      const seenRadioGroups = new Set();
-      const lines = [
-        'Prüfe dieses Formular direkt vor dem Absenden auf fehlende Angaben, Browser-Validierungsfehler und logische Auffälligkeiten.',
-        'Prüfe AUSSERDEM auf logische Widersprüche ZWISCHEN Feldern, z. B.: Enddatum vor Startdatum,',
-        'Geburtsdatum passt nicht zu Alter/Anrede, PLZ passt nicht zu Stadt oder Land, E-Mail-Wiederholung weicht ab,',
-        'Kontodaten (IBAN/BIC) passen nicht zum angegebenen Land.',
-        'Zeilen mit "Lokale Prüfung" sind deterministische Prüfergebnisse (z. B. IBAN-Prüfsumme mod-97) — übernimm sie als Fakten.',
-        'Antworte strukturiert und knapp auf Deutsch mit diesen Überschriften:',
-        'Status, Fehlende Pflichtfelder, Logik-Check, Auffälligkeiten, Nächste Schritte.',
-        'Beginne die Antwort exakt mit "Status: OK", "Status: Warnung" oder "Status: Fehlt".',
-        'Wenn alles plausibel wirkt, sage klar: "Ich sehe keine offensichtlichen Probleme."',
-        '',
-        `Seite: ${ctx.page.title || ctx.page.hostname}`,
-        `URL: ${ctx.page.hostname}${ctx.page.pathname}`,
-      ];
-      const submitText = formEl && formEl.tagName === 'FORM' ? getSubmitText(formEl) : submitLabel;
-      if (submitText) lines.push(`Absende-Aktion: ${submitText}`);
-      lines.push('', 'Feldwerte:');
-
-      fields.forEach(f => {
-        const el = f.el;
-        if (!el) return;
-        const type = (el.type || '').toLowerCase();
-        if (type === 'radio' && el.name) {
-          const groupKey = `${el.form ? Array.from(document.forms).indexOf(el.form) : 'page'}:${el.name}`;
-          if (seenRadioGroups.has(groupKey)) return;
-          seenRadioGroups.add(groupKey);
-        }
-        const value = getFieldValueForReview(el);
-        let line = `- ${f.label}${f.required ? ' (Pflichtfeld)' : ''} [${f.type}]: ${value ? `"${value}"` : '[leer]'}`;
-        const err = getError(el);
-        if (err) line += ` | Seitenfehler: "${err}"`;
-        if (el.willValidate && !el.checkValidity()) line += ` | Browserfehler: "${el.validationMessage}"`;
-        if (f.hint) line += ` | Hinweis: "${f.hint}"`;
-        // Deterministische Validierung (fa-utils) als harten Fakt mitgeben
-        if (value && ['INPUT', 'TEXTAREA'].includes(el.tagName) && !['radio', 'checkbox', 'password', 'file'].includes(type)) {
-          const kind = detectLiveCheckKind(f.label, el.type, f.autocomplete);
-          const check = kind ? getLiveCheckResult(kind, el.value, { final: true }) : null;
-          if (check) line += ` | Lokale Prüfung: "${check.msg}"`;
-        }
-        lines.push(line);
-      });
-
-      return lines.join('\n');
-    }
+    // Feldwert-Auslese + Review-Prompt: getFieldValueForReview /
+    // buildSubmitReviewPrompt in fa-prompts.js
 
     function getReviewStatus(reply) {
       const text = String(reply || '').toLowerCase();
@@ -3454,7 +2912,7 @@
       if (profileVisible) hideProfile();
       open();
       addMsg('user', 'Bitte prüfe das Formular vor dem Absenden.');
-      const prompt = buildSubmitReviewPrompt(formEl);
+      const prompt = buildSubmitReviewPrompt(formEl, ctx, submitLabel);
       const reply = await askAI(prompt, { maxTokens: 700, includeActive: false, render: false });
       addSubmitReviewResult(
         reply || 'Status: Warnung\nDie KI-Prüfung konnte gerade nicht abgeschlossen werden. Prüfe die Angaben manuell oder versuche es erneut.',
@@ -3637,7 +3095,7 @@
     }, true);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SPA — dynamic form detection
+    // SPA — dynamische Formular-Erkennung
     // ═══════════════════════════════════════════════════════════════════════
 
     let domObserveTimer;
@@ -3649,9 +3107,9 @@
       }, 800);
     }).observe(document.body, { childList: true, subtree: true });
 
-    // Pull latest data from Supabase and merge into the running UI.
-    // Profiles: only replace if local is empty (cross-device first run).
-    // History: always merge (cross-device aggregation).
+    // Aktuelle Daten aus Supabase ziehen und in die laufende UI mergen.
+    // Profile: nur ersetzen, wenn lokal leer (geräteübergreifender Erststart).
+    // History: immer mergen (geräteübergreifende Aggregation).
     async function syncFromSupabase() {
       const [sbProfiles, sbHistory] = await Promise.all([
         sbFetchProfiles(),
@@ -3706,9 +3164,10 @@
       const list = $('fa-ap-field-list');
       const btn  = $('fa-ap-fields');
       if (!list) return;
-      const isOpen = list.classList.toggle('open');
-      btn.classList.toggle('open', isOpen);
-      if (isOpen) renderActionFieldList();
+      // Bewusst eigener Name — `isOpen` gehört dem Sidebar-Zustand
+      const listOpen = list.classList.toggle('open');
+      btn.classList.toggle('open', listOpen);
+      if (listOpen) renderActionFieldList();
     });
     $('fa-ap-options-toggle')?.addEventListener('click', () => {
       const box = $('fa-ap-options');
@@ -3793,7 +3252,8 @@
       requestAnimationFrame(() => requestAnimationFrame(() => sidebar.classList.remove('no-animate')));
     }
 
-  }); // end chrome.storage.local.get
-  }); // end chrome.storage.sync.get
+  } // end init()
+
+  init();
 
 })();

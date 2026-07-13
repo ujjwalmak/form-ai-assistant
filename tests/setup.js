@@ -43,10 +43,16 @@ try {
 // Die Extension-Module sind klassische Skripte im globalen Scope (kein import/export).
 // Für die Tests die modulübergreifenden Funktionen/Konstanten als Globals bereitstellen,
 // damit z. B. fa-scanner intern `clean()` und fa-fill intern `getLabel()` auflösen kann.
+// Reihenfolge wie in manifest.json (content_scripts).
 Object.assign(
   globalThis,
   require('../fa-utils.js'),
+  require('../fa-providers.js'),
   require('../fa-profile.js'),
   require('../fa-scanner.js'),
+  require('../fa-prompts.js'),
   require('../fa-fill.js'),
+  require('../fa-format.js'),
+  require('../fa-actions.js'),
+  require('../fa-templates.js'),
 );

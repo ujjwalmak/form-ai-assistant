@@ -10,6 +10,31 @@ function formatBytes(bytes) {
   return mb > 0 ? `${mb} MB` : `${n} B`;
 }
 
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// Bild clientseitig auf maxDim px (längste Kante) verkleinern, bevor es z. B.
+// an ein Vision-LLM geht — Datenminimierung + kleinere Requests
+function downscaleImage(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Bild konnte nicht geladen werden.'));
+      img.onload = () => {
+        const scale  = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // ── DOM visibility ───────────────────────────────────────────────────────────
 function isVisible(el) {
   if (el.disabled) return false;
@@ -280,7 +305,7 @@ function getAgentSelector(el) {
 // ── Test export (Node/Vitest only; `module` is undefined in the browser) ──────
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    clean, formatBytes, isVisible, textFromEl, getElementTextValue, findButtonByText,
+    clean, formatBytes, sleep, downscaleImage, isVisible, textFromEl, getElementTextValue, findButtonByText,
     parseDateToISO, toISODate, parseRelativeDate, isKendoWidget, getKendoWidget,
     getAgentSelector,
     isValidIBAN, isValidBIC, isValidEmail, isValidGermanZip, isValidPhone,
