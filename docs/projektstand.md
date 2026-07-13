@@ -26,7 +26,7 @@ Diese Seite fasst den Kursstand zusammen — die ausführliche, laufend gepflegt
 | E5 | Deployment & CI/CD | <span class="fa-pill fa-pill--waived">erlassen</span> |
 | E6 | LLM-APIs (Groq + OpenRouter) | <span class="fa-pill fa-pill--ok">erfüllt</span> |
 | E7 | Zwischenpräsentation | <span class="fa-pill fa-pill--ok">erfüllt</span> |
-| E8 | Testen & Debuggen (133 Tests, CI) | <span class="fa-pill fa-pill--ok">erfüllt</span> |
+| E8 | Testen & Debuggen (188 Tests, CI) | <span class="fa-pill fa-pill--ok">erfüllt</span> |
 | E9 | Orchestrierung (Doku-Agent) | <span class="fa-pill fa-pill--ok">erfüllt</span> |
 | E10 | Stakeholder-Interaktion (diese Webseite) | <span class="fa-pill fa-pill--ok">erfüllt</span> |
 | E11 | Model Context Protocol (MCP) | <span class="fa-pill fa-pill--concept">Konzept</span> |
@@ -118,6 +118,16 @@ gelassen und gesammelt gemeldet).
 <span class="fa-timeline__date">07.07.2026</span> **Tests verifiziert**
 
 **133/133 grün**, Branch-Coverage ~77 %.
+</div>
+
+<div class="fa-timeline__item" markdown>
+<span class="fa-timeline__date">13.07.2026</span> **Release v2.2 — Refactoring zur Abgabe**
+
+`content.js` in fokussierte Module zerlegt (`fa-providers`, `fa-prompts`, `fa-format`,
+`fa-actions`, `fa-templates`), Provider-Konfiguration als Single Source of Truth für
+Content-Script, Options-Seite und Service Worker. Profil-Import-Bug behoben, Google-Fonts-Request
+aus dem Content-Script entfernt (Privacy), Berechtigungen minimiert (`activeTab` entfernt).
+Testsuite auf **188 Tests** ausgebaut.
 </div>
 
 </div>

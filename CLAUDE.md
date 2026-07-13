@@ -21,7 +21,8 @@ npm-Dependencies zur Laufzeit.
 ## Architektur-Regeln
 
 - **Modul-Ladereihenfolge ist fix** (siehe `manifest.json` → `content_scripts.js`):
-  `fa-utils` → `fa-profile` → `fa-scanner` → `fa-fill` → `fa-styles` → `fa-supabase` → `content`.
+  `fa-utils` → `fa-providers` → `fa-profile` → `fa-scanner` → `fa-prompts` → `fa-fill` →
+  `fa-format` → `fa-actions` → `fa-styles` → `fa-templates` → `fa-supabase` → `content`.
   Reihenfolge nicht ändern; spätere Module setzen frühere voraus (kein Modulsystem, globaler Scope).
 - **Jede Datei hat einen klaren Zweck** (Tabelle in `README.md`). Neue Logik in das passende Modul,
   nicht alles in `content.js` kippen.

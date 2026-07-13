@@ -4,16 +4,21 @@ Chrome Extension (Manifest V3), die auf Seiten mit Formularen eine KI-Sidebar ei
 
 ## Architektur
 
-Das Content-Script ist in Module aufgeteilt, die das Manifest in dieser Reihenfolge lädt (`fa-utils` → `fa-profile` → `fa-scanner` → `fa-fill` → `fa-styles` → `fa-supabase` → `content`):
+Das Content-Script ist in Module aufgeteilt, die das Manifest in dieser Reihenfolge lädt (`fa-utils` → `fa-providers` → `fa-profile` → `fa-scanner` → `fa-prompts` → `fa-fill` → `fa-format` → `fa-actions` → `fa-styles` → `fa-templates` → `fa-supabase` → `content`):
 
 | Datei | Zweck |
 | --- | --- |
 | `content.js` | Orchestrierung der Laufzeit: Shadow-DOM-UI, Chat, Agent, Guided/Field-by-Field, Profil-Panel, Submit-Review |
-| `fa-utils.js` | Hilfsfunktionen: `clean`, `formatBytes`, `parseDateToISO`/`parseRelativeDate`, Kendo-Erkennung, `getAgentSelector`, deterministische Validatoren (`isValidIBAN` mod-97, BIC, E-Mail, PLZ, Telefon, Geburtsdatum) |
+| `fa-utils.js` | Hilfsfunktionen: `clean`, `sleep`, `downscaleImage`, `parseDateToISO`/`parseRelativeDate`, Kendo-Erkennung, `getAgentSelector`, deterministische Validatoren (`isValidIBAN` mod-97, BIC, E-Mail, PLZ, Telefon, Geburtsdatum) |
+| `fa-providers.js` | Provider-/Modell-Konfiguration als Single Source of Truth (`PROVIDERS`, `normalizeProvider`, `providerLabel`, `getDefaultModel`, Vision-/Fallback-Modelle) — geteilt von Content-Script, Options-Seite und Service Worker (`importScripts`) |
 | `fa-profile.js` | `PROFILE_FIELDS` (15 Standardfelder mit Keywords/Autocomplete) + `FAKE_DATA` |
-| `fa-scanner.js` | Feldanalyse: `getLabel`/`getHint`/`getError`, `extractField`, `matchProfile`, `buildSystemPrompt`, Step-Erkennung |
+| `fa-scanner.js` | Feldanalyse: `getLabel`/`getHint`/`getError`, `extractField`, `matchProfile`, `extractRichContext`, Step-Erkennung |
+| `fa-prompts.js` | Alle LLM-Kontrakte an einem Ort: `buildSystemPrompt`, `buildAgentPrompt`, `buildScanPrompt`, `buildSubmitReviewPrompt` |
 | `fa-fill.js` | `fillField` für alle Feldtypen inkl. Datepicker-Libs und temporaler Normalisierung |
+| `fa-format.js` | Pure Text-/HTML-Formatierung für die Chat-UI: `escapeHtml`, `textToHtml`, `renderMarkdown` (XSS-sicher) |
+| `fa-actions.js` | Parsen & Härten von LLM-Antworten: `splitActionBlock`, `sanitizeAgentActions` (Aktions-Whitelist), `parseModelJsonArray`, `createSSEDecoder`, `parseScanReply` |
 | `fa-styles.js` | Aurora-Glass-Stylesheet (`FA_CSS`), in den Shadow Root injiziert |
+| `fa-templates.js` | Statisches Sidebar-Markup (`FA_HTML`), Gegenstück zu `FA_CSS` |
 | `fa-supabase.js` | Optionaler Supabase-Sync von Profilen und History (`sbPushProfiles`, `sbFetchProfiles`, …) |
 | `background.js` | LLM-Transport (Groq + OpenRouter, Retry/Timeout, Streaming + Non-Streaming) via Service Worker |
 | `options.js/html` | Einstellungsseite: Provider, API-Keys, Modell, Assistent-Modus, Supabase-Sync |
@@ -165,11 +170,11 @@ npm run test:watch # Watch-Modus
 npm run coverage   # Tests + Abdeckungsbericht (coverage/index.html)
 ```
 
-- Tests liegen in `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`) — **133 Tests** (inkl. Live-Validierung IBAN/BIC/E-Mail/PLZ/Telefon/Geburtsdatum, Fehl-Match-Schutz, Shadow-DOM-Labels, Select-Priorität, ARIA-Combobox, Rich-Text), Branch-Coverage ~77 % der Logik-Module.
+- Tests liegen in `tests/unit/` (`fa-utils`, `fa-providers`, `fa-profile`, `fa-scanner`, `fa-prompts`, `fa-fill`, `fa-format`, `fa-actions`, `background`) — **188 Tests** (inkl. Live-Validierung IBAN/BIC/E-Mail/PLZ/Telefon/Geburtsdatum, Fehl-Match-Schutz, Shadow-DOM-Labels, Select-Priorität, ARIA-Combobox, Rich-Text, Aktions-Sanitizing inkl. Submit-Guardrail, SSE-Chunk-Pufferung, Prompt-Aufbau).
 - `tests/setup.js` stellt die Module als Globals bereit (die Extension-Dateien sind klassische Skripte ohne `import`/`export`) und polyfillt jsdom-Luecken (`CSS.escape`, `offsetWidth`).
 - Jede getestete Quelldatei hat am Ende einen `module.exports`-Shim, der im Browser (kein `module`) uebersprungen wird — die Extension-Laufzeit bleibt unveraendert.
 - CI: `.github/workflows/test.yml` fuehrt die Suite bei jedem Push/PR aus (Regression).
-- Bewusst nicht unit-getestet: Netzwerk-I/O, DOM-Orchestrierung in `content.js`, CSS — Kandidaten fuer E2E, siehe `docs/reference/testing-plan.md`.
+- Bewusst nicht unit-getestet: Netzwerk-I/O, DOM-Orchestrierung in `content.js`, CSS-/HTML-Strings — Kandidaten fuer E2E, siehe `docs/reference/testing-plan.md`.
 
 ## Weitere Bestandteile
 

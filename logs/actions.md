@@ -632,3 +632,21 @@ Prof. bittet um Test-Link im Zoom-Chat; Extension ist nicht im Chrome Web Store 
 4. GitHub-Release als Alternative wurde vom Permission-System blockiert — nicht nötig, ZIP via Pages reicht.
 
 **Link für den Zoom-Chat:** `https://ujjwalmak.github.io/form-ai-assistant/testen/`
+
+---
+
+## [2026-07-13] Abgabe-Refactoring v2.2: Modul-Split, Bugfixes, 188 Tests, Repo-Hygiene
+
+**Ziel:**
+Codebasis vor der Kursabgabe auf durchgehend professionelles Niveau bringen: `content.js`-Monolith zerlegen, Duplikate eliminieren, Repo von Präsentations-Ballast befreien.
+
+**Aktionen:**
+
+1. **Modul-Split** (Details in `memory/decisions.md`): 5 neue Module `fa-providers` / `fa-prompts` / `fa-format` / `fa-actions` / `fa-templates`; `content.js` von 3 799 auf ~2 900 Zeilen, Storage-Callback-Pyramide durch `async init()` ersetzt. Provider-Konfiguration jetzt Single Source of Truth für Content-Script, Options-Seite und Service Worker.
+2. **Bugfixes & Härtung:** Profil-Import persistierte nicht (`faProfiles` fehlte) — behoben; stumme `catch {}` auf LLM-/Storage-Pfaden loggen jetzt `console.warn`; SSE-Parsing dedupliziert (ein Decoder mit Zeilenpuffer statt zwei Implementierungen); Google-Fonts-Request aus dem Content-Script entfernt; `activeTab`-Berechtigung entfernt; tote Funktion `advanceToNextStep` gelöscht; ASCII-Umlaute in `options.js` korrigiert; Kommentare einheitlich Deutsch.
+3. **Tests:** Suite von 133 auf **188** ausgebaut (neue Dateien `fa-providers/-format/-actions/-prompts.test.js`); Branch-Coverage ~77 %, vier Module bei 100 %. Verifikation zusätzlich per Playwright-Smoke-Test mit echter geladener Extension gegen die Test-Site.
+4. **Repo-Hygiene:** `praesentation/` (~23 MB Folien/Fonts/Sprecherzettel) aus Git entfernt (bleibt lokal, `.gitignore`); Version einheitlich **2.2.0**; `docs/download/formassist-v2.2.zip` neu aus dem refaktorierten Stand gebaut; README/CLAUDE.md/Projektwebseite (Architektur, Entwicklung, Projektstand) nachgezogen.
+
+**Ergebnis:**
+
+- 188/188 Tests grün, `mkdocs build --strict` grün, Extension lädt und scannt auf der Test-Site (Playwright-verifiziert).

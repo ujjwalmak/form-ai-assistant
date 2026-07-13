@@ -456,3 +456,28 @@ Ziel "Agent funktioniert auf jeder Seite / jedem Formular". Größte verbleibend
 - +15 Unit-Tests (Detektoren, `pickOptionByText`, Combobox-Fill mit/ohne Treffer, MUI-div-Muster, Rich-Text, Scanner-Erfassung) — Suite: 133 grün, Branch-Coverage ~77 %
 - `fillField`-Aufrufer ohne Verifikation (z. B. Autofill-Tipp) funktionieren unverändert (Promise wird ignoriert, Wert ist synchron gesetzt)
 - Grenzen unverändert dokumentiert: closed Shadow Roots, Cross-Origin-iFrames, nativer PDF-Viewer
+
+---
+
+## [2026-07-13] Entscheidung: Abgabe-Refactoring v2.2 — Modul-Split von content.js
+
+**Kontext:**
+`content.js` war auf ~3 800 Zeilen gewachsen; ~97 % des Codes lagen in zwei verschachtelten `chrome.storage`-Callbacks (Mega-Closure). Provider-Konfiguration existierte 3-fach (content/background/options), Prompt-Builder und Parser waren nicht unit-testbar. Vor der Kursabgabe sollte der Code den eigenen Architektur-Regeln („jede Datei ein Zweck") wieder genügen — ohne Build-Step, ohne Verhaltensänderung.
+
+**Entscheidung:**
+
+1. **5 neue Module** im bestehenden Muster (klassische Skripte, globaler Scope, `module.exports`-Shim): `fa-providers` (Provider-/Modell-Konfiguration als Single Source of Truth — via content_scripts, `<script>` in options.html und `importScripts()` im Service Worker geteilt), `fa-prompts` (alle LLM-Kontrakte, mit expliziten Parametern statt Closure-Zugriff), `fa-format` (escapeHtml/renderMarkdown), `fa-actions` (Aktions-Whitelist, tolerante JSON-Parser, SSE-Decoder mit Zeilenpuffer), `fa-templates` (`FA_HTML`, Gegenstück zu `FA_CSS`).
+2. **content.js entschachtelt**: IIFE + `async function init()` mit `await chrome.storage.*.get()` (MV3-Promise-API) statt Callback-Pyramide — Logik identisch, Closure bleibt.
+3. **Bugfix**: Profil-Import schrieb nur die Legacy-Keys `faProfile`/`faExtras` → Import war nach Reload weg; jetzt über `saveActiveProfileToStore()` (schreibt `faProfiles` + Supabase-Push).
+4. **Privacy/Permissions**: Google-Fonts-`<link>` aus dem Content-Script entfernt (Request an Google auf jeder besuchten Seite); `activeTab` aus dem Manifest entfernt (Command-Relay braucht nur `tabs.query`→`tab.id` + `tabs.sendMessage`, beides permissionsfrei).
+
+**Alternativen:**
+
+- Kompletter Umbau auf explizites State-Objekt statt Closure: mehr „Lehrbuch", aber hohes Regressionsrisiko kurz vor Abgabe — verworfen.
+- ES-Module + Bundler: verletzt die „kein Build-Step"-Grundregel des Projekts.
+
+**Konsequenzen:**
+
+- Suite von 133 auf **188 Tests** ausgebaut (fa-providers/format/actions/prompts sind jetzt direkt testbar, 4 Module mit 100 % Coverage); Playwright-Smoke-Test mit echter geladener Extension gegen die Test-Site als Abnahme.
+- `praesentation/` (Folien, Fonts, Sprecherzettel, ~23 MB) aus der Versionierung entfernt — nicht Teil der bewerteten Codebasis.
+- Version einheitlich **2.2.0** (manifest/package/ZIP); `docs/download/formassist-v2.2.zip` neu gebaut.

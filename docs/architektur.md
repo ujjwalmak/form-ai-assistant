@@ -29,7 +29,7 @@ keine Laufzeit-Dependencies.
 ```mermaid
 flowchart LR
     subgraph Seite["Host-Seite (Shadow DOM)"]
-      CS["Content-Script-Module<br/>fa-utils → fa-profile → fa-scanner<br/>→ fa-fill → fa-styles → fa-supabase → content"]
+      CS["Content-Script-Module<br/>fa-utils → fa-providers → fa-profile → fa-scanner<br/>→ fa-prompts → fa-fill → fa-format → fa-actions<br/>→ fa-styles → fa-templates → fa-supabase → content"]
     end
     SW["background.js<br/>(Service Worker)"]
     Groq["Groq API"]
@@ -47,16 +47,21 @@ flowchart LR
 Das Content-Script ist in Module aufgeteilt, die das Manifest in **fester Reihenfolge** lädt
 (globaler Scope, kein Modulsystem — die Reihenfolge ist verbindlich):
 
-`fa-utils` → `fa-profile` → `fa-scanner` → `fa-fill` → `fa-styles` → `fa-supabase` → `content`
+`fa-utils` → `fa-providers` → `fa-profile` → `fa-scanner` → `fa-prompts` → `fa-fill` → `fa-format` → `fa-actions` → `fa-styles` → `fa-templates` → `fa-supabase` → `content`
 
 | Datei | Zweck |
 |---|---|
 | `content.js` | Orchestrierung: Shadow-DOM-UI, Chat, Agent, Guided/Field-by-Field, Profil-Panel, Dokument-Scan, Live-Validierung, Submit-Review |
 | `fa-utils.js` | Hilfsfunktionen: Datums-Parsing, Selektoren, Kendo-Erkennung, deterministische Validatoren |
+| `fa-providers.js` | Provider-/Modell-Konfiguration als Single Source of Truth — geteilt von Content-Script, Options-Seite und Service Worker |
 | `fa-profile.js` | `PROFILE_FIELDS` (15 Standardfelder) + `FAKE_DATA` |
-| `fa-scanner.js` | Feldanalyse: Label/Hinweis/Fehler, `matchProfile`, `buildSystemPrompt`, rekursiver Shadow-DOM-Scan |
+| `fa-scanner.js` | Feldanalyse: Label/Hinweis/Fehler, `matchProfile`, rekursiver Shadow-DOM-Scan |
+| `fa-prompts.js` | Alle LLM-Kontrakte an einem Ort: System-, Agent-, Scan- und Submit-Review-Prompt |
 | `fa-fill.js` | `fillField` für alle Feldtypen inkl. Datepicker-Libraries, Temporal-Normalisierung, priorisiertem Select-Matching |
+| `fa-format.js` | Pure Text-/HTML-Formatierung der Chat-UI (`escapeHtml`, `renderMarkdown`) |
+| `fa-actions.js` | Parsen & Härten von LLM-Antworten: Aktions-Whitelist, tolerante JSON-Parser, SSE-Decoder |
 | `fa-styles.js` | Aurora-Glass-Stylesheet (`FA_CSS`), in den Shadow Root injiziert |
+| `fa-templates.js` | Statisches Sidebar-Markup (`FA_HTML`) |
 | `fa-supabase.js` | Optionaler Profil-/History-Sync via Supabase |
 | `background.js` | LLM-Transport (Groq + OpenRouter), Retry, Timeout, Streaming, Fallback |
 

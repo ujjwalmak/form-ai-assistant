@@ -17,7 +17,7 @@ Commit selbst fortschreibt.
 </div>
 
 <div class="fa-stats" markdown>
-<div class="fa-stat"><b>133</b><span>Unit-Tests</span></div>
+<div class="fa-stat"><b>188</b><span>Unit-Tests</span></div>
 <div class="fa-stat"><b>~77 %</b><span>Branch-Coverage</span></div>
 <div class="fa-stat"><b>jeder Push</b><span>CI-Lauf</span></div>
 <div class="fa-stat"><b>0</b><span>Build-Steps</span></div>
@@ -62,13 +62,15 @@ npm run coverage   # Tests + Abdeckungsbericht
 ```
 
 <ul class="fa-checks">
-<li><b>133 Tests</b> in <code>tests/unit/</code> für <code>fa-utils</code>,
-<code>fa-profile</code>, <code>fa-scanner</code>, <code>fa-fill</code>,
-<code>background</code> — Branch-Coverage ~77 % der Logik-Module.</li>
+<li><b>188 Tests</b> in <code>tests/unit/</code> für <code>fa-utils</code>,
+<code>fa-providers</code>, <code>fa-profile</code>, <code>fa-scanner</code>,
+<code>fa-prompts</code>, <code>fa-fill</code>, <code>fa-format</code>,
+<code>fa-actions</code>, <code>background</code> — Branch-Coverage ~77 % der Logik-Module.</li>
 <li>Abgedeckt sind u. a. Live-Validatoren (IBAN/BIC/E-Mail/PLZ/Telefon/Geburtsdatum),
 Fehl-Match-Schutz, Shadow-DOM-Labels, Tabellen-Labels, Select-Priorität, Mehrfachauswahl,
 Dezimalkomma, <code>maxlength</code>, ARIA-Comboboxen (React-Select-/MUI-Muster),
-contenteditable-Rich-Text und Provider-/Fallback-Helfer.</li>
+contenteditable-Rich-Text, Provider-/Fallback-Helfer, Aktions-Sanitizing
+(inkl. Submit-Guardrail), tolerante JSON-/SSE-Parser und die Prompt-Builder.</li>
 <li><b>CI:</b> <code>.github/workflows/test.yml</code> führt die Suite bei jedem Push/PR
 aus (Regression).</li>
 </ul>

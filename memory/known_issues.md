@@ -65,6 +65,19 @@ Betriebsmodell ist für lokale Nutzung ok, für produktiven Rollout aber nicht a
 
 ---
 
+## Issue: Supabase-Sync trennt Geräte nur per UUID (keine echte Auth)
+
+**Problem:**
+Der optionale Supabase-Sync (`fa-supabase.js`) unterscheidet Geräte über eine zufällige UUID (`crypto.randomUUID()`), nicht über Nutzer-Accounts.
+
+**Ursache:**
+Bewusste Prototyp-Entscheidung — OAuth (Google/Magic Link) hätte den Rahmen der Kurs-Einheit gesprengt.
+
+**Auswirkung:**
+Für den Prototyp ausreichend (Anon-Key + eigene Projekt-Instanz); für einen produktiven Multi-User-Betrieb müsste echte Authentifizierung nachgerüstet werden.
+
+---
+
 ## Issue: Groq "Provider returned error" (503) — transient
 
 **Problem:**

@@ -11,7 +11,7 @@ hide:
 <p class="fa-lede" markdown>
 **Fallstudie:** KI-Assistent zur korrekten Eingabe von Daten in komplexe Browser-Formulare ·
 **Modul:** AI-Prototyping, SS2026 — Prof. Dr. Sebastian Dünnebeil (FK07) ·
-**Repository:** github.com/ujjwalmak/form-ai-assistant · **Stand:** 2026-07-05
+**Repository:** github.com/ujjwalmak/form-ai-assistant · **Stand:** 2026-07-13
 </p>
 </div>
 
@@ -24,10 +24,11 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Kennzahl | Stand |
 | --- | --- |
 | **Pflicht-Einheiten erfüllt** | Alle behandelten erfüllt (E2–E11; E5 erlassen) — keine offene Pflicht; E11 ohne neuen Pflichtpunkt |
-| **Größte offene Punkte** | Prototyp-Demo 09.07. (Reflexion 02.07. gehalten) |
-| **Nächster Meilenstein** | Prototyp-Demo 09.07.2026 |
+| **Größte offene Punkte** | Keine — Prototyp-Demo 09.07. und Reflexion 02.07. gehalten, Abgabe vorbereitet |
+| **Nächster Meilenstein** | Abgabe / Bewertung |
 | **Deployment** | Mit Prof abgestimmt entfallen (Chrome-Extension-Case) |
 | **Neu (05.–07.07., v2.1)** | Dokument-Scan (Vision-OCR), Live-Validierung beim Tippen (IBAN mod-97 u. a.), Pre-Submit-Logik-Check + Robustheits-Paket (Shadow-DOM/iFrame-Labels, Fehl-Match-Schutz, Select-Priorität) + Custom-Widget-Support (ARIA-Combobox/React-Select, contenteditable) + Rückfragen nur bei Pflichtfeldern — 133 Unit-Tests grün |
+| **Neu (12.–13.07., v2.2)** | Abgabe-Refactoring: `content.js` in fokussierte Module zerlegt (`fa-providers`, `fa-prompts`, `fa-format`, `fa-actions`, `fa-templates`), Provider-Konfiguration als Single Source of Truth (Content-Script + Options + Service Worker), Profil-Import-Bug behoben, Google-Fonts-Request entfernt (Privacy), Berechtigungen minimiert — **188 Unit-Tests grün** |
 
 ---
 
@@ -86,7 +87,7 @@ im Dialog, damit auch komplexe Behörden- und Anmeldeformulare fehlerfrei ausgef
 | Anforderung | Status | Beleg / Anmerkung |
 | --- | :-: | --- |
 | Relevante Tests identifiziert | ✅ | [`testing-plan.md`](testing-plan.md) |
-| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-profile`, `fa-scanner`, `fa-fill`, `background`), **133 Tests grün**, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
+| Tests in die Entwicklung eingebunden | ✅ | Vitest-Suite `tests/unit/` (`fa-utils`, `fa-providers`, `fa-profile`, `fa-scanner`, `fa-prompts`, `fa-fill`, `fa-format`, `fa-actions`, `background`), **188 Tests grün**, Branch-Coverage ~77 % der Logik-Module (`npm run coverage`) + GitHub-Actions-Workflow (`.github/workflows/test.yml`, Regression bei jedem Push) |
 
 ### Einheit 9 — Orchestrierung von Agenten (11.06.2026)
 

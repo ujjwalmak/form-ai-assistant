@@ -8,7 +8,7 @@ FormAssist ist eine Chrome-Extension und (noch) nicht im Chrome Web Store. Zum T
 als **„entpackte Erweiterung"** geladen — das dauert etwa **2 Minuten** und funktioniert in
 Chrome, Edge und Brave.
 
-[:material-download: Extension herunterladen (ZIP, ~90 KB)](download/formassist-v2.1.zip){ .md-button .md-button--primary }
+[:material-download: Extension herunterladen (ZIP, ~95 KB)](download/formassist-v2.2.zip){ .md-button .md-button--primary }
 [:material-form-select: Test-Formulare öffnen](https://test-site-gray-zeta.vercel.app){ .md-button }
 
 ---
@@ -48,8 +48,8 @@ Auf der [Test-Seite](https://test-site-gray-zeta.vercel.app) liegen mehrere Beis
   einfacher Sprache erklären lassen, per Chat nachfragen.
 - ++alt+shift+s++ (Mac: ++cmd+shift+s++) — **Smart Fill**: Der Agent füllt das Formular
   autonom mit dem hinterlegten Profil aus.
-- Im Optionen-Tab ein **Profil** anlegen (Name, Adresse …) — damit hat der Agent Daten zum
-  Ausfüllen. Es funktionieren auch erfundene Daten.
+- In der Sidebar über das Profil-Symbol ein **Profil** anlegen (Name, Adresse …) — damit hat
+  der Agent Daten zum Ausfüllen. Es funktionieren auch erfundene Daten.
 
 !!! note "Sicherheits-Guardrail"
     FormAssist sendet **niemals selbst ein Formular ab** — das Absenden bleibt immer bei dir.
